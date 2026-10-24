@@ -251,7 +251,8 @@ def main():
                     "--package-smoke-test", env=env)
         if (smoke.returncode != 0 or "Package smoke frame rendered" not in smoke.stdout
                 or "Package smoke profile: status=" not in smoke.stdout
-                or "flushed=true" not in smoke.stdout):
+                or "flushed=true" not in smoke.stdout
+                or "Package smoke title: ok continue_slot=" not in smoke.stdout):
             print(f"package smoke failed (exit {smoke.returncode}): "
                   f"{smoke.stdout}{smoke.stderr}", file=sys.stderr)
             return 1

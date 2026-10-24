@@ -158,6 +158,9 @@ typedef struct RowlEngine_ApiVersion {
 /* D01c-1: native player profile (preferences + read set), RowlEngine_Profile*.
  * Additive. */
 #define ROWL_ENGINE_CAPABILITY_PLAYER_PROFILE UINT64_C(16777216)
+/* D02: native title screen (RowlEngine_OpenTitleScreen / IsTitleScreenActive;
+ * pause-menu mode 3 = title, 4 = preferences). Additive. */
+#define ROWL_ENGINE_CAPABILITY_TITLE_SCREEN UINT64_C(33554432)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -1284,6 +1287,22 @@ ROWL_API void RowlEngine_SetPaused(RowlEngineHandle handle, int paused);
 
 /** Returns 1 while the pause menu is open, 0 otherwise. */
 ROWL_API int RowlEngine_IsPaused(RowlEngineHandle handle);
+
+/**
+ * D02 (ROWL_ENGINE_CAPABILITY_TITLE_SCREEN): opens the native title screen
+ * (New Game / Continue / Load / Preferences / Exit) over the frozen story.
+ * It is driven through the pause-menu API (RowlEngine_PauseMenuCommand,
+ * RowlEngine_GetPauseMenuJson: mode 3 = title root, 4 = preferences).
+ * Esc/Back never start the story; RowlEngine_SetPaused(0) closes it.
+ * ROWL_RESULT_OK, or STATE_ERROR (not initialized), INVALID_HANDLE,
+ * WRONG_THREAD.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle);
+
+/** *outActive = 1 while the title screen is active, else 0. NULL outActive:
+ *  ROWL_RESULT_INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(
+    RowlEngineHandle handle, int32_t* outActive);
 
 /** Pause-menu navigation commands for RowlEngine_PauseMenuCommand. */
 enum RowlPauseMenuCommand {

@@ -90,6 +90,8 @@ def smoke_profile(done):
     require(done.returncode == 0,
             f"--package-smoke-test exited {done.returncode}: {done.stdout}{done.stderr}")
     require("Package smoke frame rendered" in done.stdout, f"no smoke frame:\n{done.stdout}")
+    require("Package smoke title: ok continue_slot=" in done.stdout,
+            f"no smoke title line:\n{done.stdout}")
     match = SMOKE_PROFILE_RE.search(done.stdout)
     require(match is not None, f"smoke printed no profile line:\n{done.stdout}")
     return {"status": match.group(1), "read_only": match.group(2) == "true",

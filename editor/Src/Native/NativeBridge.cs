@@ -233,6 +233,13 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int RowlEngine_IsPaused(IntPtr handle);
 
+        // D02: native title screen (pause-menu mode 3 = title, 4 = preferences).
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_OpenTitleScreen(IntPtr handle);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_IsTitleScreenActive(IntPtr handle, out int isActive);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern uint RowlEngine_GetChoiceCount(IntPtr handle);
 

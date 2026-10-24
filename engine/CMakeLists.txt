@@ -313,6 +313,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/chapter_loader.cpp
     src/core/engine.cpp
     src/core/engine_pause_mixer.cpp  # D15: pause-menu/mixer dörtlüsü (davranışsız taşıma)
+    src/core/engine_title_menu.cpp  # D02: native title screen / Devam Et / Tercihler
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     src/core/engine_parity_presenter.cpp  # Dilim-7 parity (P1-C): salt-okunur slot/backlog/semantik sunum (additive)

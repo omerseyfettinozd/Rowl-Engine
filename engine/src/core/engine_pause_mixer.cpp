@@ -50,12 +50,15 @@ void Engine::setPauseMenuVolume(int row, float volume) {
 }
 
 void Engine::pauseMenuAdjustSelected(int direction) {
-    if (m_pauseMode != PauseMenuMode::Main) return;
-    const int row = m_pauseSelected;
+    // D02: the preferences page (title) maps its rows onto main rows 3..7.
+    if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;
+    const int row = pauseMenuValueRow();
     if (row >= 3 && row <= 6) {
         setPauseMenuVolume(row, pauseMenuVolume(row) + direction * 0.05f);
+        persistPauseMenuPreference(row);
     } else if (row == 7) {
         setTextSpeedMultiplier(m_textSpeedMultiplier + direction * 0.25f);
+        persistPauseMenuPreference(row);
     }
     m_pauseConfirmQuit = false;
 }

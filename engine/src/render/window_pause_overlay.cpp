@@ -6,6 +6,7 @@
 // Kosul, sira ve renkler birebirdir. D10 test_frame_hash_lock kilidi korunur.
 // Yeni export YOK, `RowlEngine_` sembolu YOK.
 
+#include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
 
 #include "rowl/core/pause_menu.hpp"
@@ -16,6 +17,54 @@
 #include <SDL3/SDL.h>
 
 namespace Rowl::Render {
+
+void Window::releasePauseThumbnail() {
+    if (m_pauseThumbTexture) {
+        SDL_DestroyTexture(m_pauseThumbTexture);
+        m_pauseThumbTexture = nullptr;
+    }
+    m_pauseThumbKey.clear();
+    m_pauseThumbFailedKey.clear();
+}
+
+void Window::drawPauseThumbnail(const Rowl::Core::PauseMenuView& view,
+                                const ViewportMetrics& metrics) {
+    using LM = Rowl::Core::PauseMenuLayout;
+    if (!view.thumbnailPng || view.thumbnailPng->empty() || view.thumbnailKey.empty()) return;
+    // D02: decoded once per (slot, saved_at) and kept as a single texture.
+    if (m_pauseThumbKey != view.thumbnailKey) {
+        if (m_pauseThumbFailedKey == view.thumbnailKey) return;
+        releasePauseThumbnail();
+        int w = 0, h = 0, channels = 0;
+        unsigned char* data = nullptr;
+        int infoW = 0, infoH = 0, infoC = 0;
+        const auto* bytes = reinterpret_cast<const unsigned char*>(view.thumbnailPng->data());
+        const int count = static_cast<int>(view.thumbnailPng->size());
+        if (stbi_info_from_memory(bytes, count, &infoW, &infoH, &infoC) &&
+            infoW > 0 && infoH > 0 && infoW <= 4096 && infoH <= 4096) {
+            data = stbi_load_from_memory(bytes, count, &w, &h, &channels, 4);
+        }
+        if (data) {
+            if (SDL_Surface* surface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, data, w * 4)) {
+                m_pauseThumbTexture = SDL_CreateTextureFromSurface(m_sdlRenderer, surface);
+                SDL_DestroySurface(surface);
+            }
+            stbi_image_free(data);
+        }
+        if (m_pauseThumbTexture) {
+            m_pauseThumbKey = view.thumbnailKey;
+        } else {
+            m_pauseThumbFailedKey = view.thumbnailKey;
+            return;
+        }
+    }
+    float tx = 0.0f, ty = 0.0f;
+    AspectGuardian::virtualToPhysical(LM::kThumbX, LM::kThumbY, metrics, tx, ty);
+    const SDL_FRect dst{tx, ty, LM::kThumbW * metrics.scaleFactor, LM::kThumbH * metrics.scaleFactor};
+    SDL_RenderTexture(m_sdlRenderer, m_pauseThumbTexture, nullptr, &dst);
+    SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+    SDL_RenderRect(m_sdlRenderer, &dst);
+}
 
 void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     if (!m_sdlRenderer || !view.open) return;
@@ -43,11 +92,14 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     SDL_RenderFillRect(m_sdlRenderer, &panel);
     SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
     SDL_RenderRect(m_sdlRenderer, &panel);
+    drawPauseThumbnail(view, metrics);  // D02: selected slot's thumbnail
 
     // C02 BUG-2: gorunur pencerede overlay her kare dim basar; donmus hikaye
     // karesi onbellekten atlanirsa arka tampon bos kalir / dim ust uste biner
     // (siyah ekran, resize sonrasi dahil). Sonraki kare hikayeyi tam cizsin.
-    if (!m_isOffscreen) invalidateFrameCache();
+    // Offscreen yuzeyde de ayni: onbellekteki kare onceki overlay'i tasir —
+    // dim her karede koyulasir, sayfa degisince eski menu soluk kalirdi.
+    invalidateFrameCache();
 
     // Offscreen software path: flush queued rects before direct text writes.
     if (m_isOffscreen) {
@@ -97,11 +149,21 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
             }
         }
         const float fontPx = 24.0f * metrics.scaleFactor;
-        const float textY = ry + rowH * 0.5f - fontPx * 0.35f;
+        // D02: a row with a detail line lifts label/value to make room for it;
+        // detail-less rows keep the exact pre-D02 geometry.
+        const bool hasDetail = !row.detail.empty();
+        const float textY = ry + rowH * 0.5f - fontPx * 0.35f -
+                            (hasDetail ? 9.0f * metrics.scaleFactor : 0.0f);
+        const SDL_Color labelColor = !row.enabled ? dimColor : (selected ? titleColor : textColor);
         drawText(row.label, rx + 18.0f * metrics.scaleFactor, textY, fontPx,
-                 selected ? titleColor : textColor, rowW * 0.55f, rowH);
+                 labelColor, rowW * 0.55f, rowH);
         if (!row.value.empty()) {
             drawText(row.value, rx + rowW * 0.55f, textY, fontPx, dimColor, rowW * 0.4f, rowH);
+        }
+        if (hasDetail) {
+            drawText(row.detail, rx + 18.0f * metrics.scaleFactor,
+                     ry + rowH - 22.0f * metrics.scaleFactor, 16.0f * metrics.scaleFactor,
+                     dimColor, rowW - 36.0f * metrics.scaleFactor, 20.0f * metrics.scaleFactor);
         }
     }
 

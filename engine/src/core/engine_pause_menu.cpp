@@ -22,6 +22,7 @@
 
 #include "rowl/core/logger.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -30,6 +31,10 @@ namespace Rowl::Core {
 void Engine::setPaused(bool paused) {
     if (m_paused == paused) return;
     m_paused = paused;
+    // D02: a host closing the menu also closes the title screen; the hint
+    // of the previous session never leaks into a fresh menu.
+    if (!paused) m_titleActive = false;
+    m_titleHint.clear();
     // Opening always lands on a predictable main page; closing resumes.
     // Pausing never quits — exit requires the two-step menu confirmation.
     m_pauseMode = PauseMenuMode::Main;
@@ -43,8 +48,12 @@ void Engine::setPaused(bool paused) {
 }
 
 int Engine::pauseMenuRowCount() const {
-    return m_pauseMode == PauseMenuMode::Main ? PauseMenuLayout::kMainRows
-                                             : PauseMenuLayout::kSlotRows;
+    switch (m_pauseMode) {
+        case PauseMenuMode::Main: return PauseMenuLayout::kMainRows;
+        case PauseMenuMode::Title: return PauseMenuLayout::kTitleRows;
+        case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
+        default: return PauseMenuLayout::kSlotRows;
+    }
 }
 
 void Engine::pauseMenuMoveSelection(int direction) {
@@ -52,11 +61,17 @@ void Engine::pauseMenuMoveSelection(int direction) {
     if (count <= 0) return;
     m_pauseSelected = (m_pauseSelected + direction + count) % count;
     m_pauseConfirmQuit = false;
+    m_titleHint.clear();
 }
 
 void Engine::menuChooseSlot(int32_t slotIndex) {
-    if (m_pauseMode == PauseMenuMode::Main) return;
+    if (m_pauseMode != PauseMenuMode::SaveSlots &&
+        m_pauseMode != PauseMenuMode::LoadSlots) return;
     if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) return;
+    if (m_titleActive) {  // D02: title Load page leaves the title on success
+        titleLoadSlot(slotIndex);
+        return;
+    }
     if (m_pauseMode == PauseMenuMode::SaveSlots) {
         if (saveGameSlot(slotIndex)) {
             ROWL_LOG_INFO("[Player] Saved to slot #" + std::to_string(slotIndex) + " from pause menu.");
@@ -71,6 +86,11 @@ void Engine::menuChooseSlot(int32_t slotIndex) {
 
 void Engine::menuActivateSelected() {
     if (!m_paused) return;
+    if (m_titleActive || m_pauseMode == PauseMenuMode::Title ||
+        m_pauseMode == PauseMenuMode::Preferences) {
+        titleActivateSelected();
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main) {
         menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
         return;
@@ -79,7 +99,17 @@ void Engine::menuActivateSelected() {
         case 0: setPaused(false); break;
         case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
         case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
-        case 8:
+        case PauseMenuLayout::kMainTitleRow:
+            // D02: back to the title screen; unsaved progress is lost, so it
+            // takes the same two-step confirmation as exit.
+            if (m_pauseConfirmQuit) {
+                ROWL_LOG_INFO("[Player] Returning to the title screen from pause menu.");
+                openTitleScreen();
+            } else {
+                m_pauseConfirmQuit = true;
+            }
+            break;
+        case PauseMenuLayout::kMainExitRow:
             if (m_pauseConfirmQuit) {
                 ROWL_LOG_INFO("[Player] Exit confirmed from pause menu.");
                 m_isRunning = false;
@@ -97,6 +127,10 @@ void Engine::menuActivateSelected() {
 
 void Engine::menuBack() {
     if (!m_paused) return;
+    if (m_titleActive) {  // D02: Back never starts the story from the title
+        titleBack();
+        return;
+    }
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
         return;
@@ -127,7 +161,10 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
     m_pauseSelected = row;
-    if (m_pauseMode == PauseMenuMode::Main && row >= 3 && row <= 7) {
+    // A confirmation armed on one row never carries over to another row
+    // (keyboard moves disarm the same way in pauseMenuMoveSelection).
+    if (!alreadySelected) m_pauseConfirmQuit = false;
+    if (pauseMenuValueRow() >= 0) {
         const int dir = PauseMenuLayout::adjustDirection(virtualX);
         if (dir != 0) {
             pauseMenuAdjustSelected(dir);
@@ -142,11 +179,11 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     menuActivateSelected();
 }
 
-static std::string pauseMenuPercent(float volume) {
+std::string pauseMenuPercent(float volume) {
     return std::to_string(static_cast<int>(volume * 100.0f + 0.5f)) + "%";
 }
 
-static std::string pauseMenuSpeedText(float multiplier) {
+std::string pauseMenuSpeedText(float multiplier) {
     const int quarters = static_cast<int>(multiplier * 4.0f + 0.5f);
     const int whole = quarters / 4;
     const int frac = (quarters % 4) * 25;
@@ -157,8 +194,15 @@ PauseMenuView Engine::getPauseMenuView() const {
     PauseMenuView view;
     view.open = m_paused;
     if (!m_paused) return view;
+    if (m_pauseMode == PauseMenuMode::Title || m_pauseMode == PauseMenuMode::Preferences) {
+        return getTitleMenuView();
+    }
     view.selected = m_pauseSelected;
+    view.titleActive = m_titleActive;
     if (m_pauseMode == PauseMenuMode::Main) {
+        const bool confirmTitle =
+            m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
+        const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
         view.title = "Duraklatildi";
         view.rows = {
             {"Devam Et", "", false},
@@ -169,9 +213,12 @@ PauseMenuView Engine::getPauseMenuView() const {
             {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
             {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
             {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
-            {"Cikis", m_pauseConfirmQuit ? "emin misin?" : "", false},
+            {"Ana Menu", confirmTitle ? "emin misin?" : "", false},
+            {"Cikis", confirmExit ? "emin misin?" : "", false},
         };
-        view.hint = m_pauseConfirmQuit
+        view.hint = confirmTitle
+            ? "ENTER: ana menuye don (kaydedilmemis ilerleme kaybolur)   ESC: vazgec"
+            : confirmExit
             ? "ENTER: cikisi onayla   ESC: vazgec"
             : "YUKARI/ASAGI: sec   SOL/SAG: ayar   ENTER: tamam   ESC: devam et";
     } else {
@@ -181,22 +228,29 @@ PauseMenuView Engine::getPauseMenuView() const {
         // page holds 10 rows and this view rebuilds per UI refresh.
         static_assert(kPauseMenuQuickSlotMax - kPauseMenuQuickSlotMin + 1 ==
                       10, "pause slot cache assumes the 0..9 quick-slot window");
-        if (!m_pauseSlotCacheValid) {
-            for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
-                m_pauseSlotPresent[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)] =
-                    hasSaveSlot(slot);
-            }
-            m_pauseSlotCacheValid = true;
-        }
+        ensureSlotCache();
         for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
+            const PauseSlotInfo& info =
+                m_pauseSlotInfo[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)];
             PauseMenuRow row;
             row.label = "Yuva " + std::to_string(slot);
-            row.value = m_pauseSlotPresent[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)]
-                ? "dolu" : "bos";
+            row.value = info.state == PauseSlotInfo::State::Valid ? "dolu"
+                      : info.state == PauseSlotInfo::State::Corrupt ? "bozuk" : "bos";
+            row.detail = pauseSlotDetail(info);
             view.rows.push_back(row);
         }
-        view.hint = "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
+        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(
+            std::clamp(m_pauseSelected, 0, kPauseMenuQuickSlotMax))];
+        if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.thumbnailPng &&
+            !selectedInfo.thumbnailPng->empty()) {
+            view.thumbnailPng = selectedInfo.thumbnailPng;
+            view.thumbnailKey = std::to_string(m_pauseSelected) + "|" + selectedInfo.savedAt;
+        }
+        view.hint = (m_titleActive && !m_titleHint.empty())
+            ? m_titleHint
+            : "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
     }
+    view.continueSlot = m_pauseSlotCacheValid ? m_continueSlot : -1;
     return view;
 }
 
@@ -227,8 +281,11 @@ std::string Engine::getPauseMenuJson() const {
     out += std::to_string(static_cast<int>(m_pauseMode));
     out += ",\"selected\":";
     out += std::to_string(view.selected);
+    // D02: one armed flag serves both confirm rows; JSON tells them apart.
+    const bool confirmTitle = m_pauseConfirmQuit && m_pauseMode == PauseMenuMode::Main &&
+                              m_pauseSelected == PauseMenuLayout::kMainTitleRow;
     out += ",\"confirm_quit\":";
-    out += m_pauseConfirmQuit ? "true" : "false";
+    out += (m_pauseConfirmQuit && !confirmTitle) ? "true" : "false";
     out += ",\"quick_slot\":";
     out += std::to_string(m_activeQuickSlot);
     out += ",\"title\":";
@@ -244,9 +301,21 @@ std::string Engine::getPauseMenuJson() const {
         appendPauseMenuJsonString(out, view.rows[i].value);
         out += ",\"selected\":";
         out += (static_cast<int>(i) == view.selected) ? "true" : "false";
+        out += ",\"detail\":";
+        appendPauseMenuJsonString(out, view.rows[i].detail);
+        out += ",\"enabled\":";
+        out += view.rows[i].enabled ? "true" : "false";
         out.push_back('}');
     }
-    out += "]}";
+    out += "],\"title_active\":";
+    out += view.titleActive ? "true" : "false";
+    out += ",\"continue_slot\":";
+    out += std::to_string(view.continueSlot);
+    out += ",\"confirm_title\":";
+    out += confirmTitle ? "true" : "false";
+    out += ",\"selected_has_thumbnail\":";
+    out += view.thumbnailPng ? "true" : "false";
+    out += "}";
     return out;
 }
 

@@ -164,6 +164,10 @@ struct ChoiceButtonRenderData {
     std::string textAlignment = "Center";
     std::string fontFamily = "Default";
     bool enabled = true;
+    /// Author's own "enabled" flag, before the Lua condition was applied.
+    bool authorEnabled = true;
+    /// Lua gate ("" / "true" / "1" = always open). Re-checked at selection.
+    std::string condition;
 };
 
 class Window {
@@ -306,6 +310,8 @@ public:
     /// MS-6: pause-menu overlay (dim + panel + rows + hint) in virtual
     /// 1920x1080 layout. No-op unless view.open; safe on offscreen surfaces.
     void renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view);
+    /// D02: frees the cached slot-thumbnail texture (renderer teardown).
+    void releasePauseThumbnail();
     void endFrame();
 
     /// Last-frame profile accessors also report a cache hit: when an identical
@@ -435,6 +441,11 @@ private:
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
+    // D02: pause/title slot thumbnail, one texture keyed "slot|saved_at".
+    SDL_Texture* m_pauseThumbTexture = nullptr;
+    std::string m_pauseThumbKey;
+    std::string m_pauseThumbFailedKey;
+    void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureLastUsed;
     std::unordered_set<std::string> m_missingTextureCache;

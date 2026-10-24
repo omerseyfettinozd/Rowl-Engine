@@ -290,7 +290,9 @@ static void printHelp(const char* progName) {
               << "  -w, --width <pixels>     Window width in pixels (default: 1920)\n"
               << "      --height <pixels>    Window height in pixels (default: 1080)\n"
               << "  -t, --title <name>       Window title (default: \"Rowl Game\")\n"
-              << "      --title-state <name> Title-screen selection, read-only (default: \"title\")\n"
+              << "      --title-state <name> Start on the \"title\" screen (New Game / Continue / Load /\n"
+              << "                           Preferences / Exit; default) or jump straight into the\n"
+              << "                           \"story\" (development)\n"
               << "      --slot <N>           Active quick-save slot 0-9 for F5/F9 (default: 0)\n"
               << "      --no-vsync           Disable vertical sync\n\n"
               << "      --gpu-smoke-test     Render one standalone frame, then exit (CI)\n\n"
@@ -332,9 +334,8 @@ int rowlPlayerMain(int argc, char* argv[]) {
     std::string projectDir = ".";
     std::string storyGraphPath = "";
     std::string appTitle = "Rowl Game";
-    // Dilim-4 P1-A: title-state seçim iskeleti (salt-okunur). Argüman
-    // ayrıştırma + validasyon mesajından ibarettir; motor akışına yazma/
-    // silme yok, sahne akışı değişmez. Yeni dosya yok.
+    // D02: "title" (default) opens the native title screen before the
+    // interactive loop; "story" skips it (development).
     std::string titleState = "title";
     uint32_t winWidth = 1920;
     uint32_t winHeight = 1080;
@@ -393,14 +394,14 @@ int rowlPlayerMain(int argc, char* argv[]) {
         }
     }
 
-    // Dilim-4 P1-A: title-state dallanma iskeleti (salt-okunur). Geçerli
-    // seçim yalnızca doğrulanıp raporlanır; sahne/motor akışı değişmez.
-    if (titleState != "title") {
-        std::cerr << "Invalid --title-state value '" << titleState << "' (expected one of: title)\n";
+    if (titleState != "title" && titleState != "story") {
+        std::cerr << "Invalid --title-state value '" << titleState << "' (expected one of: title, story)\n";
         return 1;
     }
     if (!printGameIdentity) {
-        std::cout << "[Player] Title state selected: '" << titleState << "' (read-only; scene flow unchanged).\n";
+        std::cout << "[Player] Title state selected: '" << titleState << "'"
+                  << (titleState == "title" ? " (title screen opens before the story).\n"
+                                            : " (title screen skipped).\n");
     }
 
     // A2b: argv UTF-8 sözleşmesi. POSIX'te argv zaten UTF-8'dir; Windows'ta
@@ -583,6 +584,30 @@ int rowlPlayerMain(int argc, char* argv[]) {
             RowlEngine_Destroy(engine);
             return 1;
         }
+        // D02: the title screen opens, New Game closes it again.
+        {
+            bool titleOk = RowlEngine_OpenTitleScreen(engine) == ROWL_RESULT_OK;
+            nlohmann::json menu = playerParseObject(RowlEngine_GetPauseMenuJson(engine));
+            titleOk = titleOk && menu.value("mode", -1) == 3 && menu.value("title_active", false);
+            const int continueSlot = menu.value("continue_slot", -1);
+            if (titleOk) {
+                // Continue is preselected when the game already has a save.
+                for (int i = 0; i < 5 && menu.value("selected", 0) != 0; ++i) {
+                    RowlEngine_PauseMenuCommand(engine, ROWL_PAUSE_MENU_UP);
+                    menu = playerParseObject(RowlEngine_GetPauseMenuJson(engine));
+                }
+                RowlEngine_PauseMenuCommand(engine, ROWL_PAUSE_MENU_CONFIRM);
+                int32_t titleActive = 1;
+                titleOk = RowlEngine_IsTitleScreenActive(engine, &titleActive) == ROWL_RESULT_OK &&
+                          titleActive == 0 && RowlEngine_IsPaused(engine) == 0;
+            }
+            if (!titleOk) {
+                std::cerr << "[Player] Package smoke failed: the title screen did not open/close.\n";
+                RowlEngine_Destroy(engine);
+                return 1;
+            }
+            std::cout << "[Player] Package smoke title: ok continue_slot=" << continueSlot << "\n";
+        }
         std::cout << "[Player] Package smoke frame rendered from VFS story graph.\n";
     } else if (gpuSmokeTest) {
         // This travels through the same standalone window, VFS-mounted atlas,
@@ -591,6 +616,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
         RowlEngine_Step(engine, 1.0F / 60.0F);
         std::cout << "[Player] GPU MSDF smoke frame rendered.\n";
     } else {
+        // D02: the packaged player opens on the title screen.
+        if (titleState == "title" && RowlEngine_OpenTitleScreen(engine) != ROWL_RESULT_OK) {
+            std::cerr << "[Player] Title screen could not be opened; starting the story.\n";
+        }
         // Start standalone interactive game loop
         RowlEngine_Run(engine);
     }

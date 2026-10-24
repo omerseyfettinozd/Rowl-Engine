@@ -69,14 +69,38 @@ hepsini aynen iletir):
 | `-s, --story <file>` | Hikâye grafiği JSON yolu |
 | `-w, --width <px>` / `--height <px>` | Pencere boyutu (varsayılan: 1920x1080) |
 | `-t, --title <ad>` | Pencere başlığı |
+| `--title-state <ad>` | `title` (varsayılan): oyun başlık ekranıyla açılır · `story`: başlık ekranını atla, hikâyeye doğrudan gir (geliştirme) |
 | `--slot <N>` | Hızlı-kayıt slotu 0-9 (F5/F9, varsayılan: 0) |
 | `--no-vsync` | Dikey senkronu kapat |
 | `--gpu-smoke-test` | Tek kare çiz, çık (CI) |
-| `--package-smoke-test` | Paketli VFS grafiğinden tek kare çiz, oyuncu profilini dene (ilk satırı okundu say, bir tercihi değiştirip geri al, kaydet), çık. Oyunun profiline yazar (tercihler aynı kalır, ilk satır okundu sayılır); deneme için `XDG_DATA_HOME`'u geçici bir dizine ver |
+| `--package-smoke-test` | Paketli VFS grafiğinden tek kare çiz, oyuncu profilini dene (ilk satırı okundu say, bir tercihi değiştirip geri al, kaydet), başlık ekranını açıp Yeni Oyun ile kapat (`Package smoke title: ok`), çık. Oyunun profiline yazar (tercihler aynı kalır, ilk satır okundu sayılır); deneme için `XDG_DATA_HOME`'u geçici bir dizine ver |
 | `--print-game-identity` | Projeyi bağla, tek satır JSON yaz (oyun kimliği, kimlik kaynağı, veri/kayıt/profil yolları, profil durumu), çık; pencere açmaz |
 
 Kontroller: Space/Enter/Click ilerler · F5 hızlı-kayıt · F9 hızlı-yükleme ·
 0-9 slot seçer · Backspace/Z 1 adım geri · Escape/P duraklatma menüsü.
+
+### Başlık ekranı
+
+Oyun, hikâyeye girmeden önce başlık ekranıyla açılır (başlık = oyunun adı):
+
+| Satır | Ne yapar |
+|---|---|
+| Yeni Oyun | Başlangıç düğümünden başlar |
+| Devam Et | En yeni **geçerli** kaydı (`saved_at`'e göre, 0-99 yuvaları) yükler; satırda yuva ve tarih görünür. Kayıt yoksa ya da hepsi bozuksa devre dışıdır (`kayit yok`) |
+| Oyunu Yukle | Yuva sayfası: her yuvada tarih, bölüm ve özet, seçili yuvanın küçük resmi. Boş yuva `bos yuva`, bozuk yuva `bozuk kayit` der ve hiçbir şeyi değiştirmez |
+| Tercihler | Ana ses, müzik, SFX, seslendirme, metin hızı (Sol/Sağ); değişiklikler oyuncu profiline yazılır |
+| Cikis | İki adımlı onay (Enter, Enter) |
+
+Escape/P ve Geri başlık ekranından hikâyeyi **başlatmaz**: alt sayfada
+başlığa döner, başlıkta yalnız çıkış onayını bırakır. Bir kayıt yüklenemezse
+başlıkta kalınır (`kayit yuklenemedi`) ve sonraki Devam Et bir önceki geçerli
+kaydı dener. Duraklatma menüsündeki ses ve metin hızı değişiklikleri de
+profile yazılır.
+
+Duraklatma menüsündeki **Ana Menu** satırı başlık ekranına döner. Kaydedilmemiş
+ilerleme kaybolacağı için Çıkış gibi iki adımlı onay ister (Enter, Enter; Esc
+vazgeçer). Bir satırda kurulan onay başka satıra taşınmaz: fareyle başka bir
+satıra tıklamak onu yalnız ilk adıma getirir.
 
 ### Kayıtlar ve oyuncu profili nerede?
 

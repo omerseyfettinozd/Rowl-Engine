@@ -12,16 +12,16 @@ workflows are not equivalent.
 
 | Player capability | Editor PlayerWindow | Exported RowlGame | Assessment |
 | --- | --- | --- | --- |
-| Start a new story from a title screen | Title state and New Game command | Loads a graph and enters the native run loop directly | Missing in exported player |
-| Continue latest progress | Continue command backed by profile/save discovery | No title-level continue action; quick-load is available during play | Missing as a user-facing flow |
-| Load a chosen save | Save/load overlay with paged slots and metadata | Pause menu exposes slots 0–9; F9 loads the active slot | Partial |
+| Start a new story from a title screen | Title state and New Game command | Native title screen (D02): New Game / Continue / Load / Preferences / Exit before the story; `--title-state story` skips it | Present |
+| Continue latest progress | Continue command backed by profile/save discovery | Title-level Continue loads the newest valid save (`saved_at`, slots 0-99); corrupt/empty saves are skipped or reported | Present (D02) |
+| Load a chosen save | Save/load overlay with paged slots and metadata | Pause menu and title Load page expose slots 0–9 with date, chapter, summary and thumbnail; F9 loads the active slot | Partial (paged slots 10+ missing) |
 | Save a chosen save | Save/load overlay with paged slots and metadata | Pause menu exposes slots 0–9; F5 saves the active slot | Partial |
 | Pause, resume, adjust sound/text, exit safely | Pause overlay | Native SDL pause menu, volume/text-speed rows, two-step quit confirmation | Present |
 | Story rewind | Player commands and runtime rewind | Backspace/Z rewinds one step | Present |
 | Backlog | Scrollable speaker/dialogue history panel | Runtime history and C API JSON snapshot exist; no native backlog screen. Voice replay is absent from both surfaces. | Partial; native UI missing |
 | Persistent profile | Versioned atomic profile stores language, read IDs, audio/text/accessibility and auto/skip preferences | Native profile store + `RowlEngine_Profile*` C API exist (D01c-1); the player does not apply the stored preferences yet | Partial; player wiring missing |
 | Global auto and read-aware skip | Profile-driven AutoPlayDriver and SkipDriver | Per-node auto_advance exists; no global read-aware skip workflow | Partial |
-| Accessibility and language selection | Text scale, contrast, reduced motion, language preference | No equivalent player preferences screen | Missing in exported player |
+| Accessibility and language selection | Text scale, contrast, reduced motion, language preference | Native Preferences page (volumes, text speed) persisting into the profile (D02); text scale, contrast, reduced motion, language are not on it | Partial |
 | Semantic input | Editor player semantic mapper | SDL keyboard/mouse controls; native pause menu handles keyboard/pointer; controller/touch parity is not established here | Partial / needs target proof |
 
 Evidence locations:
@@ -74,5 +74,6 @@ controls after launch:
 4. Align slot metadata and semantic inputs, then run the package acceptance
    flow on Linux and Windows.
 
-This is the P1 planning and parity-baseline slice. It does not claim that the
-native title screen, backlog, or full profile has been implemented.
+This is the P1 planning and parity-baseline slice. The native title screen
+(New Game / Continue / Load / Preferences / Exit) is implemented by D02; the
+backlog and the full profile wiring are not claimed.

@@ -35,6 +35,8 @@ add_executable(rowl_tests
     test_native_player_profile.cpp
     test_boot_story_diagnostics.cpp
     test_project_mount_cwd.cpp
+    test_choice_input_guard.cpp
+    test_title_screen.cpp
     test_graph_vnext.cpp
     test_localization.cpp
     test_locale_cluster.cpp
