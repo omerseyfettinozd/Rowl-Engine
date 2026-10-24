@@ -410,23 +410,24 @@ void test_title_screen() {
     }
     TEST_PASS("Offscreen pause overlay redraws on a clean story frame");
 
-    // Pause menu "Ana Menu" (row 8): two-step back to the title. An exit
-    // confirmation armed on row 9 must not carry over to a click on row 8
+    // Pause menu "Ana Menu" (row 9): two-step back to the title. An exit
+    // confirmation armed on row 10 must not carry over to a click on row 9
     // (it used to: one click then skipped the confirmation).
     {
         cmd(h, ROWL_PAUSE_MENU_BACK);  // load page -> main pause page
-        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 10, "pause main has 10 rows");
-        req(menu(h)["rows"][8]["label"] == "Ana Menu" && menu(h)["rows"][9]["label"] == "Cikis",
-            "Ana Menu sits before Cikis");
-        selectRow(h, 9);
+        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 11, "pause main has 11 rows");
+        req(menu(h)["rows"][8]["label"] == "Gecmis" && menu(h)["rows"][9]["label"] == "Ana Menu" &&
+                menu(h)["rows"][10]["label"] == "Cikis",
+            "Gecmis, Ana Menu, Cikis close the main page");
+        selectRow(h, 10);
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);
         req(menu(h)["confirm_quit"] == true && menu(h)["confirm_title"] == false, "exit armed");
-        const float row8Y = Rowl::Core::PauseMenuLayout::kRowY0 +
-                            8 * (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
+        const float row9Y = Rowl::Core::PauseMenuLayout::kRowY0 +
+                            9 * (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
                             Rowl::Core::PauseMenuLayout::kRowH * 0.5f;
         // The engine surface is 320x180: map the 1920x1080 virtual point.
         constexpr float kToPhysical = 320.0f / 1920.0f;
-        req(RowlEngine_PointerDown(h, 960.0f * kToPhysical, row8Y * kToPhysical) == 1,
+        req(RowlEngine_PointerDown(h, 960.0f * kToPhysical, row9Y * kToPhysical) == 1,
             "paused click is consumed by the menu");
         req(!titleActive(h), "a click on Ana Menu used the exit row's armed confirmation");
         req(menu(h)["confirm_title"] == true && menu(h)["confirm_quit"] == false,

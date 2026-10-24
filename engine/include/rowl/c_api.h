@@ -162,7 +162,8 @@ typedef struct RowlEngine_ApiVersion {
  * pause-menu mode 3 = title, 4 = preferences). Additive. */
 #define ROWL_ENGINE_CAPABILITY_TITLE_SCREEN UINT64_C(33554432)
 /* D03-1: backlog rows carry their voice clip ("voice" in the history JSON);
- * RowlEngine_ReplayBacklogVoice replays only that clip. Additive. */
+ * RowlEngine_ReplayBacklogVoice replays only that clip; D03-2 adds the native
+ * backlog screen (RowlEngine_OpenBacklog). Additive. */
 #define ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY UINT64_C(67108864)
 
 /** Current additive C API version. This query does not require an engine handle. */
@@ -1316,6 +1317,22 @@ ROWL_API int RowlEngine_IsPaused(RowlEngineHandle handle);
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle);
 
+/**
+ * D03-2 (ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY): opens the native dialogue
+ * backlog ("Gecmis") over the frozen story, exactly like the player's B key /
+ * mouse-wheel-up. The page is a pause-menu mode (RowlEngine_GetPauseMenuJson:
+ * mode 5, a "backlog" object with total / selected / scroll / entries[] of
+ * speaker, dialogue, has_voice) driven by RowlEngine_PauseMenuCommand
+ * (UP/DOWN move, CONFIRM replays the selected row's voice clip when it has
+ * one, BACK closes). Opened here, BACK returns straight to the story; opened
+ * from the pause menu's "Gecmis" row (or while the menu is up), BACK returns
+ * to the pause main page. Read-only: variables, step id, history, read marks
+ * and save slots never change.
+ * ROWL_RESULT_OK (also when it is already open); STATE_ERROR before
+ * RowlEngine_Init and on the title screen; INVALID_HANDLE; WRONG_THREAD.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenBacklog(RowlEngineHandle handle);
+
 /** *outActive = 1 while the title screen is active, else 0. NULL outActive:
  *  ROWL_RESULT_INVALID_ARGUMENT. */
 ROWL_API RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(
@@ -1338,7 +1355,8 @@ enum RowlPauseMenuCommand {
 ROWL_API void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command);
 
 /**
- * Pause-menu snapshot JSON: open, mode (0=main,1=save,2=load), selected row,
+ * Pause-menu snapshot JSON: open, mode (0=main,1=save,2=load,3=title,
+ * 4=preferences,5=backlog), selected row,
  * confirm_quit arm, quick_slot, title, hint, and rows[] with label/value.
  * Same ownership rules as RowlEngine_GetDialogueHistoryJson.
  */

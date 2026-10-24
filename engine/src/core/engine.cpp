@@ -165,7 +165,8 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
     switch (event.type) {
         case Type::PauseToggle:
             // D02: Esc/P on the title screen never starts the story.
-            if (m_titleActive) menuBack();
+            // D03-2: on the backlog page it is Back (to the pause menu or the story).
+            if (m_titleActive || isBacklogOpen()) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
@@ -216,15 +217,32 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::SwipeBack:
             if (!m_paused) rewind(1);
             break;
+        case Type::Backlog:
+            // D03-2: B opens the backlog from the story and closes it again;
+            // the pause menu and the title ignore it.
+            if (isBacklogOpen()) menuBack();
+            else if (!m_paused) openBacklog();
+            break;
+        case Type::SecondaryClick:
+            // D03-2: right click closes the backlog; elsewhere it carries no action.
+            if (isBacklogOpen()) menuBack();
+            break;
+        case Type::Scroll:
+            // D03-2: wheel up (y > 0) opens the backlog from the story; on the
+            // backlog page the wheel moves the selection (down at the newest
+            // row closes it). Every other state still consumes it silently.
+            if (event.y == 0.0f || !std::isfinite(event.y)) break;
+            if (isBacklogOpen()) backlogScroll(event.y);
+            else if (!m_paused && event.y > 0.0f) openBacklog();
+            break;
         case Type::PointerUp:
         case Type::KeyUp:
         case Type::PointerMotion:
-        case Type::Scroll:
         case Type::TextInput:
         case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
             // handler fires observably) but carrying no story action:
-            // releases, hover/drag positions, scroll deltas, committed
+            // releases, hover/drag positions, committed
             // text and IME composition must never advance dialogue,
             // toggle pause, rewind, or touch save slots.
             break;
@@ -2782,6 +2800,8 @@ void Engine::resetSessionProfile() {
     m_pauseConfirmQuit = false;
     m_pauseMode   = PauseMenuMode::Main;
     m_pauseSelected = 0;
+    m_backlogTop = 0;  // D03-2
+    m_backlogFromPause = false;
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02

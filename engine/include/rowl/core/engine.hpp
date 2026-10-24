@@ -369,6 +369,13 @@ public:
     /// from the host closes it.
     bool openTitleScreen();
     bool isTitleScreenActive() const { return m_titleActive; }
+    /// D03-2: opens the dialogue backlog (Gecmis) over the frozen story.
+    /// Fails (false, StateError) before init and on the title screen. Opened
+    /// from the story, Back returns straight to it; opened while the pause
+    /// menu is up, Back returns to the pause main page. Read-only: touches no
+    /// variable, step id, history row or save slot.
+    bool openBacklog();
+    bool isBacklogOpen() const { return m_paused && m_pauseMode == PauseMenuMode::Backlog; }
     /// Keyboard-equivalent menu navigation (window arrows / C API / tests).
     /// Confirm activates the selected row; Back leaves sub-pages, disarms the
     /// exit confirmation, or resumes from the main page.
@@ -528,6 +535,11 @@ private:
     bool m_pauseConfirmQuit = false;
     PauseMenuMode m_pauseMode = PauseMenuMode::Main;
     int m_pauseSelected = 0;
+    // D03-2: backlog page. m_pauseSelected is the selected history index;
+    // m_backlogTop the first visible one (kept consistent by backlogEnsureVisible,
+    // mutable because the const view builder re-fits it after a font/scale change).
+    mutable int m_backlogTop = 0;
+    bool m_backlogFromPause = false;
     int32_t m_activeQuickSlot = 0;
     // A2b: pause slot-page occupancy cache. getPauseMenuView runs per UI
     // refresh (up to every frame from the editor preview); 10 slots x 2
@@ -588,6 +600,19 @@ private:
     void menuActivateSelected();
     void menuChooseSlot(int32_t slotIndex);
     void menuBack();
+    // D03-2 (engine_backlog.cpp)
+    struct BacklogCell {
+        std::vector<std::string> lines;
+        float height = 0.0f;
+    };
+    BacklogCell backlogCell(size_t index) const;
+    void backlogEnsureVisible() const;
+    void backlogMoveSelection(int direction);
+    void backlogScroll(float deltaY);
+    void backlogActivateSelected();
+    void backlogClose();
+    bool backlogClick(float virtualX, float virtualY);
+    PauseBacklogView buildBacklogView() const;
     // D02 (engine_title_menu.cpp)
     void ensureSlotCache() const;
     void titleActivateSelected();

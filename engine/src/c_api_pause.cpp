@@ -108,6 +108,20 @@ RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle) {
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
+RowlEngine_ResultCode RowlEngine_OpenBacklog(RowlEngineHandle handle) {
+    // D03-2: OpenTitleScreen emsali claim-or-reject; salt-okunur ekran.
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "open_backlog");
+        return ROWL_RESULT_WRONG_THREAD;
+    }
+    if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
+    return invokeNoexcept<RowlEngine_ResultCode>([&] {
+        auto checked = toEngineChecked(handle);
+        if (!checked) return ROWL_RESULT_INVALID_HANDLE;
+        return checked->openBacklog() ? ROWL_RESULT_OK : ROWL_RESULT_STATE_ERROR;
+    }, ROWL_RESULT_UNKNOWN_ERROR);
+}
+
 RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(RowlEngineHandle handle, int32_t* outActive) {
     if (outActive) *outActive = 0;
     if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {

@@ -16,6 +16,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+
 namespace Rowl::Render {
 
 void Window::releasePauseThumbnail() {
@@ -128,7 +130,65 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor, titleColor,
              LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor);
 
-    const int rows = static_cast<int>(view.rows.size());
+    // D03-2: backlog page — engine-laid-out entries (wrapped lines, y/h in the
+    // virtual canvas) instead of the fixed-pitch row list. An empty history
+    // falls through to the generic loop with its single dim "Gecmis bos" row.
+    const bool backlogEntries = view.backlog.active && !view.backlog.entries.empty();
+    if (view.backlog.active) {
+        float cx = 0.0f, cy = 0.0f;
+        toPhys(LM::kRowX + LM::kRowW - 150.0f, 178.0f, cx, cy);
+        drawText(view.backlog.counter, cx, cy, 24.0f * metrics.scaleFactor, dimColor,
+                 150.0f * metrics.scaleFactor, 40.0f * metrics.scaleFactor);
+    }
+    if (backlogEntries) {
+        // The font's accessibility scale grows glyphs and line pitch alike
+        // (the engine laid the list out with the same factor).
+        const float textScale = std::max(1.0f, m_fontRenderer->textScale());
+        const float lineH = LM::kBacklogLineH * textScale;
+        for (const auto& entry : view.backlog.entries) {
+            float rx = 0.0f, ry = 0.0f;
+            toPhys(LM::kRowX, entry.y, rx, ry);
+            const float rowW = LM::kRowW * metrics.scaleFactor;
+            const float rowH = entry.h * metrics.scaleFactor;
+            if (entry.selected) {
+                const SDL_FRect highlight{rx, ry, rowW, rowH};
+                SDL_SetRenderDrawColor(m_sdlRenderer, 14, 116, 144, 255);
+                SDL_RenderFillRect(m_sdlRenderer, &highlight);
+                const SDL_FRect bar{rx, ry, 6.0f * metrics.scaleFactor, rowH};
+                SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+                SDL_RenderFillRect(m_sdlRenderer, &bar);
+                if (m_isOffscreen) {
+                    SDL_RenderPresent(m_sdlRenderer);
+                }
+            }
+            const float textX = rx + LM::kBacklogPadX * metrics.scaleFactor;
+            // Pre-wrapped lines are drawn one by one inside a generous box so
+            // the renderer never re-wraps them (width slack, one-line height).
+            const float boxW = (LM::kRowW - LM::kBacklogPadX) * metrics.scaleFactor;
+            const float boxH = lineH * 1.5f * metrics.scaleFactor;
+            float lineY = ry + LM::kBacklogPadY * metrics.scaleFactor;
+            if (!entry.speaker.empty()) {
+                drawText(entry.speaker, textX, lineY, 20.0f * metrics.scaleFactor, titleColor,
+                         boxW * 0.7f, boxH);
+            }
+            if (entry.hasVoice) {
+                // Small "(ses)" mark at the right edge of the first text row.
+                drawText("(ses)", rx + rowW - 74.0f * metrics.scaleFactor, lineY,
+                         LM::kBacklogSmallPx * metrics.scaleFactor, dimColor,
+                         64.0f * metrics.scaleFactor, boxH);
+            }
+            if (!entry.speaker.empty()) lineY += lineH * metrics.scaleFactor;
+            for (const auto& line : entry.lines) {
+                if (!line.empty()) {
+                    drawText(line, textX, lineY, LM::kBacklogFontPx * metrics.scaleFactor,
+                             textColor, boxW, boxH);
+                }
+                lineY += lineH * metrics.scaleFactor;
+            }
+        }
+    }
+
+    const int rows = backlogEntries ? 0 : static_cast<int>(view.rows.size());
     for (int i = 0; i < rows; ++i) {
         const auto& row = view.rows[i];
         const float rowTop = LM::kRowY0 + i * (LM::kRowH + LM::kRowGap);

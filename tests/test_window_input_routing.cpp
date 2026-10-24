@@ -301,6 +301,38 @@ void test_window_input_routing_release_motion_wheel_text() {
         }
     }
 
+    // 3b. D03-2: BUTTON_DOWN right is SecondaryClick (closes the backlog), never
+    // PointerDown; left stays PointerDown.
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.button = SDL_BUTTON_RIGHT;
+        event.button.windowID = wid;
+        event.button.x = 12.0f;
+        event.button.y = 34.0f;
+        pushOrDie(event, "BUTTON_DOWN/right");
+        seen.clear();
+        step();
+        bool secondary = false;
+        for (const auto& e : seen) {
+            if (e.type == Type::SecondaryClick && std::abs(e.x - 12.0f) < 0.001f && std::abs(e.y - 34.0f) < 0.001f) {
+                secondary = true;
+            }
+        }
+        if (!secondary || containsType(Type::PointerDown)) {
+            std::cerr << "Right BUTTON_DOWN must produce SecondaryClick (and no PointerDown)" << std::endl;
+            exit(1);
+        }
+        event.button.button = SDL_BUTTON_LEFT;
+        pushOrDie(event, "BUTTON_DOWN/left");
+        seen.clear();
+        step();
+        if (!containsType(Type::PointerDown) || containsType(Type::SecondaryClick)) {
+            std::cerr << "Left BUTTON_DOWN must stay PointerDown (no SecondaryClick)" << std::endl;
+            exit(1);
+        }
+    }
+
     // 4. MOUSE_MOTION: hover position through the input channel.
     {
         SDL_Event event{};

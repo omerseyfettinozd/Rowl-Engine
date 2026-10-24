@@ -38,6 +38,7 @@ add_executable(rowl_tests
     test_choice_input_guard.cpp
     test_title_screen.cpp
     test_backlog_replay.cpp
+    test_backlog_screen.cpp
     test_graph_vnext.cpp
     test_localization.cpp
     test_locale_cluster.cpp

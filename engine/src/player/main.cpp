@@ -307,12 +307,17 @@ static void printHelp(const char* progName) {
               << "  F9                       Quick Load (active slot)\n"
               << "  0-9                      Select the active quick-save slot\n"
               << "  Backspace / Z            Rewind 1 step back in history\n"
+              << "  B / Mouse wheel up       Backlog (Gecmis): past lines, replay a line's voice\n"
               << "  Escape / P               Pause menu (save/load slots, volumes,\n"
-              << "                           text speed, exit confirmation)\n"
+              << "                           text speed, backlog, exit confirmation)\n"
               << "Pause menu:\n"
               << "  Up / Down / Click        Select item    Left / Right  Adjust value\n"
               << "  Enter / Space / Click    Confirm        Escape        Back / resume\n"
               << "  Exit needs a second confirmation so a stray Escape never quits.\n"
+              << "Backlog:\n"
+              << "  Up / Down / Wheel        Move through the lines (newest at the bottom)\n"
+              << "  Enter / Space / Click    Replay the selected line's voice (if it has one)\n"
+              << "  Escape / B / Right click Close    Wheel down on the newest line  Close\n"
               << "=========================================================================\n";
 }
 

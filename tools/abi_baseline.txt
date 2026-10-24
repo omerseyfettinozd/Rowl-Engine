@@ -167,6 +167,7 @@ RowlEngine_LoadGameSlot
 RowlEngine_LoadGameSlotResult
 RowlEngine_LoadStoryGraph
 RowlEngine_LoadStoryGraphFromVfs
+RowlEngine_OpenBacklog
 RowlEngine_OpenTitleScreen
 RowlEngine_ParseMarkup
 RowlEngine_PauseMenuCommand
