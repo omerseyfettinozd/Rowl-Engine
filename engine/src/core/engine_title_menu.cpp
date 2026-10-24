@@ -1,5 +1,5 @@
 // engine_title_menu.cpp — D02: native title screen (Yeni Oyun / Devam Et /
-// Oyunu Yukle / Tercihler / Cikis), slot-metadata memo and preference
+// Oyunu Yükle / Tercihler / Çıkış), slot-metadata memo and preference
 // persistence for the pause/title menu.
 //
 // Title is a pause-menu mode (PauseMenuMode::Title/Preferences) that reuses
@@ -123,7 +123,7 @@ bool Engine::openTitleScreen() {
     resetAutoWait();
     m_pauseMode = PauseMenuMode::Title;
     m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
     m_pauseSelected = m_continueSlot >= 0 ? 1 : 0;
@@ -164,11 +164,11 @@ bool Engine::titleLoadSlot(int32_t slotIndex) {
     const PauseSlotInfo& info =
         m_pauseSlotInfo[static_cast<size_t>(slotIndex - kPauseMenuQuickSlotMin)];
     if (info.state == PauseSlotInfo::State::Empty) {
-        m_titleHint = "bos yuva";
+        m_titleHint = UiText::HintEmptySlot;
         return false;
     }
     if (info.state == PauseSlotInfo::State::Corrupt) {
-        m_titleHint = "bozuk kayit";
+        m_titleHint = UiText::HintCorruptSave;
         return false;
     }
     if (loadGameSlot(slotIndex)) {
@@ -179,14 +179,14 @@ bool Engine::titleLoadSlot(int32_t slotIndex) {
     m_slotLoadFailed.set(static_cast<size_t>(slotIndex));
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
-    m_titleHint = "kayit yuklenemedi";
+    m_titleHint = UiText::HintLoadFailed;
     return false;
 }
 
 bool Engine::titleContinue() {
     ensureSlotCache();
     if (m_continueSlot < 0) {
-        m_titleHint = "devam icin kayit yok";
+        m_titleHint = UiText::HintNoSaveToContinue;
         return false;
     }
     const int32_t slot = m_continueSlot;
@@ -199,14 +199,14 @@ bool Engine::titleContinue() {
     m_slotLoadFailed.set(static_cast<size_t>(slot));
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
-    m_titleHint = "kayit yuklenemedi";
+    m_titleHint = UiText::HintLoadFailed;
     return false;
 }
 
 void Engine::titleActivateSelected() {
     const bool quitRow = (m_pauseMode == PauseMenuMode::Title && m_pauseSelected == 4);
     if (!quitRow) m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     switch (m_pauseMode) {
         case PauseMenuMode::Title:
             switch (m_pauseSelected) {
@@ -241,7 +241,7 @@ void Engine::titleActivateSelected() {
 }
 
 void Engine::titleBack() {
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
         return;
@@ -301,46 +301,49 @@ PauseMenuView Engine::getTitleMenuView() const {
     view.titleActive = m_titleActive;
     ensureSlotCache();
     view.continueSlot = m_continueSlot;
+    const UiLang lang = getUiLanguage();
+    auto T = [lang](UiText id) { return std::string(uiText(id, lang)); };
     if (m_pauseMode == PauseMenuMode::Preferences) {
-        view.title = "Tercihler";
+        view.title = T(UiText::PreferencesTitle);
         view.rows = {
-            {"Ana Ses", pauseMenuPercent(pauseMenuVolume(3)), true},
-            {"Muzik", pauseMenuPercent(pauseMenuVolume(4)), true},
-            {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
-            {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
-            {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
-            {"Otomatik Hizi", pauseMenuDelayText(m_autoDelay), true, "", true},
-            {"Atlama", m_skipPolicy == SkipPolicy::Off ? "Kapali"
-                     : m_skipPolicy == SkipPolicy::All ? "Hepsi" : "Okunan", true, "", true},
-            {"Geri", "", false},
+            {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true},
+            {T(UiText::Music), pauseMenuPercent(pauseMenuVolume(4)), true},
+            {T(UiText::Sfx), pauseMenuPercent(pauseMenuVolume(5)), true},
+            {T(UiText::Voice), pauseMenuPercent(pauseMenuVolume(6)), true},
+            {T(UiText::TextSpeed), pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {T(UiText::AutoSpeed), pauseMenuDelayText(m_autoDelay, lang), true, "", true},
+            {T(UiText::Skip), T(m_skipPolicy == SkipPolicy::Off ? UiText::Off
+                              : m_skipPolicy == SkipPolicy::All ? UiText::All : UiText::ReadOnly),
+             true, "", true},
+            {T(UiText::Back), "", false},
         };
-        view.hint = "YUKARI/ASAGI: sec   SOL/SAG: ayar   ESC: geri";
+        view.hint = T(UiText::HintPreferences);
         return view;
     }
     const std::string& name = m_gameIdentity.name;
     view.title = name.empty() ? "Rowl Engine" : name;
     PauseMenuRow cont;
-    cont.label = "Devam Et";
+    cont.label = T(UiText::Continue);
     if (m_continueSlot >= 0) {
-        cont.value = "Yuva " + std::to_string(m_continueSlot) + "  " +
+        cont.value = T(UiText::SlotLabel) + " " + std::to_string(m_continueSlot) + "  " +
                      pauseSlotDateText(m_continueSavedAt);
     } else {
-        cont.value = "kayit yok";
+        cont.value = T(UiText::NoSaveValue);
         cont.enabled = false;
     }
     view.rows = {
-        {"Yeni Oyun", "", false},
+        {T(UiText::NewGame), "", false},
         cont,
-        {"Oyunu Yukle", "yuva sec >", false},
-        {"Tercihler", ">", false},
-        {"Cikis", m_pauseConfirmQuit ? "emin misin?" : "", false},
+        {T(UiText::LoadGame), T(UiText::PickSlotValue), false},
+        {T(UiText::Preferences), ">", false},
+        {T(UiText::Quit), m_pauseConfirmQuit ? T(UiText::AreYouSure) : "", false},
     };
     if (m_pauseConfirmQuit) {
-        view.hint = "ENTER: cikisi onayla   ESC: vazgec";
-    } else if (!m_titleHint.empty()) {
-        view.hint = m_titleHint;
+        view.hint = T(UiText::HintTitleQuit);
+    } else if (m_titleHint != UiText::None) {
+        view.hint = T(m_titleHint);
     } else {
-        view.hint = "YUKARI/ASAGI: sec   ENTER: tamam";
+        view.hint = T(UiText::HintTitle);
     }
     return view;
 }

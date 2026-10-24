@@ -39,7 +39,7 @@ void Engine::setPaused(bool paused) {
     // D02: a host closing the menu also closes the title screen; the hint
     // of the previous session never leaks into a fresh menu.
     if (!paused) m_titleActive = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     // Opening always lands on a predictable main page; closing resumes.
     // Pausing never quits — exit requires the two-step menu confirmation.
     m_pauseMode = PauseMenuMode::Main;
@@ -73,7 +73,7 @@ void Engine::pauseMenuMoveSelection(int direction) {
     if (count <= 0) return;
     m_pauseSelected = (m_pauseSelected + direction + count) % count;
     m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
 }
 
 void Engine::menuChooseSlot(int32_t slotIndex) {
@@ -223,9 +223,10 @@ std::string pauseMenuSpeedText(float multiplier) {
     return std::to_string(whole) + "." + (frac < 10 ? "0" : "") + std::to_string(frac) + "x";
 }
 
-std::string pauseMenuDelayText(float seconds) {
+std::string pauseMenuDelayText(float seconds, UiLang lang) {
     const int tenths = static_cast<int>(seconds * 10.0f + 0.5f);
-    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " sn";
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " " +
+           uiText(UiText::SecondsUnit, lang);
 }
 
 PauseMenuView Engine::getPauseMenuView() const {
@@ -237,50 +238,49 @@ PauseMenuView Engine::getPauseMenuView() const {
     }
     view.selected = m_pauseSelected;
     view.titleActive = m_titleActive;
+    const UiLang lang = getUiLanguage();
+    auto T = [lang](UiText id) { return std::string(uiText(id, lang)); };
     if (m_pauseMode == PauseMenuMode::Backlog) {
         // D03-2: entries (visible window) ride in view.backlog; an empty history
         // shows one dim line instead and selects nothing.
-        view.title = "Gecmis";
+        view.title = T(UiText::History);
         view.backlog = buildBacklogView();
         view.selected = view.backlog.selected;
         if (view.backlog.total == 0) {
             PauseMenuRow empty;
-            empty.label = "Gecmis bos";
+            empty.label = T(UiText::HistoryEmpty);
             empty.enabled = false;
             view.rows.push_back(empty);
         }
         const bool voiced = view.backlog.selected >= 0 &&
             !getDialogueHistory()[static_cast<size_t>(view.backlog.selected)].voice.empty();
-        view.hint = voiced ? "YUKARI/ASAGI: gez   ENTER: sesi dinle   ESC/B: kapat"
-                           : "YUKARI/ASAGI: gez   ESC/B: kapat";
+        view.hint = T(voiced ? UiText::HintBacklogVoiced : UiText::HintBacklog);
         return view;
     }
     if (m_pauseMode == PauseMenuMode::Main) {
         const bool confirmTitle =
             m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
         const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
-        view.title = "Duraklatildi";
+        view.title = T(UiText::Paused);
         view.rows = {
-            {"Devam Et", "", false},
-            {"Oyunu Kaydet", "yuva sec >", false},
-            {"Oyunu Yukle", "yuva sec >", false},
-            {"Ana Ses", pauseMenuPercent(pauseMenuVolume(3)), true},
-            {"Muzik", pauseMenuPercent(pauseMenuVolume(4)), true},
-            {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
-            {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
-            {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
-            {"Gecmis", "satirlar >", false, "", true},
-            {"Ana Menu", confirmTitle ? "emin misin?" : "", false},
-            {"Cikis", confirmExit ? "emin misin?" : "", false},
+            {T(UiText::Resume), "", false},
+            {T(UiText::SaveGame), T(UiText::PickSlotValue), false},
+            {T(UiText::LoadGame), T(UiText::PickSlotValue), false},
+            {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true},
+            {T(UiText::Music), pauseMenuPercent(pauseMenuVolume(4)), true},
+            {T(UiText::Sfx), pauseMenuPercent(pauseMenuVolume(5)), true},
+            {T(UiText::Voice), pauseMenuPercent(pauseMenuVolume(6)), true},
+            {T(UiText::TextSpeed), pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {T(UiText::History), T(UiText::LinesValue), false, "", true},
+            {T(UiText::MainMenu), confirmTitle ? T(UiText::AreYouSure) : "", false},
+            {T(UiText::Quit), confirmExit ? T(UiText::AreYouSure) : "", false},
         };
-        view.hint = confirmTitle
-            ? "ENTER: ana menuye don (kaydedilmemis ilerleme kaybolur)   ESC: vazgec"
-            : confirmExit
-            ? "ENTER: cikisi onayla   ESC: vazgec"
-            : "YUKARI/ASAGI: sec   SOL/SAG: ayar   ENTER: tamam   ESC: devam et";
+        view.hint = confirmTitle ? T(UiText::HintConfirmMainMenu)
+                  : confirmExit ? T(UiText::HintConfirmQuit)
+                  : T(UiText::HintPauseMain);
     } else {
         const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
-        view.title = saving ? "Kayit Yuvasi Sec" : "Yukleme Yuvasi Sec";
+        view.title = T(saving ? UiText::SaveSlotTitle : UiText::LoadSlotTitle);
         // A2b: occupancy is memoized (see m_pauseSlotCacheValid) — a slot
         // page holds 10 rows and this view rebuilds per UI refresh.
         static_assert(kPauseMenuQuickSlotMax - kPauseMenuQuickSlotMin + 1 ==
@@ -290,9 +290,10 @@ PauseMenuView Engine::getPauseMenuView() const {
             const PauseSlotInfo& info =
                 m_pauseSlotInfo[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)];
             PauseMenuRow row;
-            row.label = "Yuva " + std::to_string(slot);
-            row.value = info.state == PauseSlotInfo::State::Valid ? "dolu"
-                      : info.state == PauseSlotInfo::State::Corrupt ? "bozuk" : "bos";
+            row.label = T(UiText::SlotLabel) + " " + std::to_string(slot);
+            row.value = T(info.state == PauseSlotInfo::State::Valid ? UiText::SlotFull
+                        : info.state == PauseSlotInfo::State::Corrupt ? UiText::SlotCorrupt
+                        : UiText::SlotEmpty);
             row.detail = pauseSlotDetail(info);
             view.rows.push_back(row);
         }
@@ -303,9 +304,9 @@ PauseMenuView Engine::getPauseMenuView() const {
             view.thumbnailPng = selectedInfo.thumbnailPng;
             view.thumbnailKey = std::to_string(m_pauseSelected) + "|" + selectedInfo.savedAt;
         }
-        view.hint = (m_titleActive && !m_titleHint.empty())
-            ? m_titleHint
-            : "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
+        view.hint = (m_titleActive && m_titleHint != UiText::None)
+            ? T(m_titleHint)
+            : T(UiText::HintSlots);
     }
     view.continueSlot = m_pauseSlotCacheValid ? m_continueSlot : -1;
     return view;
@@ -320,7 +321,8 @@ static void appendPauseMenuJsonString(std::string& out, const std::string& text)
             default:
                 if (static_cast<unsigned char>(c) < 0x20) {
                     char buf[7];
-                    std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    std::snprintf(buf, sizeof(buf), "\\u%04x",
+                                  static_cast<unsigned>(static_cast<unsigned char>(c)));
                     out += buf;
                 } else {
                     out.push_back(c);

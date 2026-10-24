@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rowl/core/player_ui_strings.hpp"
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -80,6 +82,7 @@ struct PauseBacklogView {
     int selected = -1;        // history index, -1 when empty
     int scroll = 0;           // history index of the first visible entry
     std::string counter;      // "12 / 40"
+    std::string voiceMark;    // "(ses)" / "(voice)": entries that carry a voice line
     std::vector<PauseBacklogEntryView> entries;
 };
 
@@ -103,8 +106,8 @@ struct PauseMenuView {
 /// "55%" / "1.25x" row values (engine_pause_menu.cpp), shared with D02 pages.
 std::string pauseMenuPercent(float volume);
 std::string pauseMenuSpeedText(float multiplier);
-/// D04-2: "2.0 sn" (one decimal) auto-advance delay row value.
-std::string pauseMenuDelayText(float seconds);
+/// D04-2: "2.0 sn" / "2.0 s" (one decimal) auto-advance delay row value.
+std::string pauseMenuDelayText(float seconds, UiLang lang);
 /// D02: "<YYYY-MM-DD HH:MM>  <chapter>  <summary ~48 bytes>" of a valid slot,
 /// empty otherwise (engine_title_menu.cpp).
 std::string pauseSlotDetail(const PauseSlotInfo& info);

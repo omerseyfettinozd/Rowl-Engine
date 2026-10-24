@@ -1,5 +1,5 @@
 /**
- * test_backlog_screen.cpp — D03-2: the player's native backlog ("Gecmis")
+ * test_backlog_screen.cpp — D03-2: the player's native backlog ("Geçmiş")
  * screen: entry points, navigation, voice replay and the read-only contract.
  *
  * Kilit:
@@ -8,7 +8,7 @@
  *     duraklatma menusu aciksken tekerlek/B eskisi gibi tuketilir (mod, secim
  *     ayni); B anahtari Type::Backlog'a eslenir.
  *  2. Cikis: B, sag tik, Esc (PauseToggle), Geri, en yeni satirda tekerlek-asagi
- *     kapatir; hikayeden acilan hikayeye, duraklatma menusundeki "Gecmis"
+ *     kapatir; hikayeden acilan hikayeye, duraklatma menusundeki "Geçmiş"
  *     satirindan acilan duraklatma ana menusune (satir 8) doner.
  *  3. Gezinme: Yukari/Asagi sarmaz, sinirda durur; kaydirma ofseti secimi
  *     gorunur tutar; tekerlek-yukari/asagi secimi tasir; girdiler sutuna
@@ -20,7 +20,7 @@
  *  5. Salt-okunur: ac-gez-tekrar-oynat-kapat boyunca degiskenler, stepId, mevcut
  *     dugum, gecmis, okundu profili, yuva dosyalari ve SFX sayaci degismez
  *     (D03 kabulunun ucten uca kilidi); acikken zaman ilerlemez.
- *  6. Bos gecmis: "Gecmis bos" satiri, Enter/Yukari/Asagi etkisiz, tekerlek-asagi
+ *  6. Bos gecmis: "Geçmiş boş" satiri, Enter/Yukari/Asagi etkisiz, tekerlek-asagi
  *     kapatir.
  *  7. C API: RowlEngine_OpenBacklog (Init oncesi STATE_ERROR, null INVALID_HANDLE,
  *     baslikta STATE_ERROR, zaten aciksa OK); JSON backlog nesnesi (total,
@@ -336,7 +336,7 @@ void test_backlog_screen() {
     {
         req(rig.open(), "B opens the backlog even when it is empty");
         const json m = menu(h);
-        req(m["title"] == "Gecmis" && m["rows"].size() == 1 && m["rows"][0]["label"] == "Gecmis bos" &&
+        req(m["title"] == "Geçmiş" && m["rows"].size() == 1 && m["rows"][0]["label"] == "Geçmiş boş" &&
                 m["rows"][0]["enabled"] == false,
             "empty backlog shows a single dim 'Gecmis bos' row: " + m.dump());
         req(m["backlog"]["total"] == 0 && m["backlog"]["entries"].empty() && m["backlog"]["selected"] == -1,
@@ -428,7 +428,7 @@ void test_backlog_screen() {
         RowlEngine_SetPaused(h, 1);
         {
             const json m = menu(h);
-            req(m["rows"].size() == 11 && m["rows"][8]["label"] == "Gecmis" && m["rows"][9]["label"] == "Ana Menu",
+            req(m["rows"].size() == 11 && m["rows"][8]["label"] == "Geçmiş" && m["rows"][9]["label"] == "Ana Menü",
                 "main page lists Gecmis before Ana Menu");
         }
         cmd(h, ROWL_PAUSE_MENU_DOWN, 8);

@@ -133,7 +133,7 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
 
     // D03-2: backlog page — engine-laid-out entries (wrapped lines, y/h in the
     // virtual canvas) instead of the fixed-pitch row list. An empty history
-    // falls through to the generic loop with its single dim "Gecmis bos" row.
+    // falls through to the generic loop with its single dim "history is empty" row.
     const bool backlogEntries = view.backlog.active && !view.backlog.entries.empty();
     if (view.backlog.active) {
         float cx = 0.0f, cy = 0.0f;
@@ -173,8 +173,8 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
                          boxW * 0.7f, boxH);
             }
             if (entry.hasVoice) {
-                // Small "(ses)" mark at the right edge of the first text row.
-                drawText("(ses)", rx + rowW - 74.0f * metrics.scaleFactor, lineY,
+                // Small voice mark ("(ses)" / "(voice)") at the right edge of the first text row.
+                drawText(view.backlog.voiceMark, rx + rowW - 74.0f * metrics.scaleFactor, lineY,
                          LM::kBacklogSmallPx * metrics.scaleFactor, dimColor,
                          64.0f * metrics.scaleFactor, boxH);
             }

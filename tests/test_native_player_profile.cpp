@@ -190,7 +190,7 @@ void test_native_player_profile() {
         profReq(store.status() == PlayerProfileStatus::Missing && !store.readOnly() && store.readCount() == 0,
                 "no file must give Missing defaults, writable");
         const auto& defaults = store.preferences();
-        profReq(defaults.language == "en" && defaults.masterVolume == 1.0f && defaults.textSpeedMultiplier == 1.0f &&
+        profReq(defaults.language.empty() && defaults.masterVolume == 1.0f && defaults.textSpeedMultiplier == 1.0f &&
                     defaults.autoAdvanceDelay == 2.0f && defaults.textScale == 1.0f && defaults.skipMode == "read_only" &&
                     !defaults.autoEnabled && defaults.mixerFadeCurve == "Linear" && defaults.sfxPoolDepth == 8 &&
                     !defaults.highContrast && !defaults.reducedMotion,
@@ -211,7 +211,7 @@ void test_native_player_profile() {
 
         const json written = readJson(dir / "player-profile.json");
         profReq(written.value("version", 0) == 1 && written.value("game_id", "") == idA &&
-                    written.value("language", "") == "tr" && written.value("skip_mode", "") == "all" &&
+                    written.value("language", "") == "tr-tr" && written.value("skip_mode", "") == "all" &&
                     written.value("mixer_fade_curve", "") == "EqualPower" && written.value("sfx_pool_depth", 0) == 12 &&
                     written.value("text_scale", 0.0) == 1.5 && written.value("auto_enabled", false) &&
                     written["unlocks"].is_array() && written["unlocks"].empty(),
@@ -230,7 +230,7 @@ void test_native_player_profile() {
         profReq(reopened.status() == PlayerProfileStatus::Loaded && !reopened.readOnly() && reopened.diagnostic().empty(),
                 "reopen must load cleanly: " + reopened.diagnostic());
         const auto& p = reopened.preferences();
-        profReq(p.masterVolume == 0.1f && p.bgmVolume == 0.3f && p.language == "tr" && p.skipMode == "all" &&
+        profReq(p.masterVolume == 0.1f && p.bgmVolume == 0.3f && p.language == "tr-tr" && p.skipMode == "all" &&
                     p.autoEnabled && p.highContrast && p.textScale == 1.5f && p.sfxPoolDepth == 12 &&
                     p.mixerFadeCurve == "EqualPower" && p.autoAdvanceDelay == 4.5f,
                 "preferences did not round-trip");
@@ -252,7 +252,7 @@ void test_native_player_profile() {
         store.open(dir, "");
         const auto& p = store.preferences();
         profReq(store.status() == PlayerProfileStatus::Loaded, "clamp file must load");
-        profReq(p.language == "en" && p.masterVolume == 1.0f && p.bgmVolume == 0.0f && p.voiceVolume == 1.0f &&
+        profReq(p.language == "fr" && p.masterVolume == 1.0f && p.bgmVolume == 0.0f && p.voiceVolume == 1.0f &&
                     p.ambienceVolume == 0.5f && p.uiVolume == 1.0f && p.textSpeedMultiplier == 4.0f &&
                     p.autoAdvanceDelay == 0.0f && p.textScale == 1.25f && p.skipMode == "off" && !p.autoEnabled &&
                     p.mixerFadeCurve == "EqualPower" && p.sfxPoolDepth == 16 && !p.highContrast && p.reducedMotion,
@@ -340,7 +340,7 @@ void test_native_player_profile() {
             store.open(dir, idA);
             profReq(store.status() == PlayerProfileStatus::UnsupportedVersion && store.readOnly(),
                     "future version must be UnsupportedVersion + read-only");
-            profReq(store.preferences().language == "en" && store.readCount() == 0 && !store.isRead(kC3) &&
+            profReq(store.preferences().language.empty() && store.readCount() == 0 && !store.isRead(kC3) &&
                         store.diagnostic().find("v2") != std::string::npos,
                     "future version must load defaults with a diagnostic");
             profReq(store.markRead(kC1) == ProfileMutation::ReadOnly &&

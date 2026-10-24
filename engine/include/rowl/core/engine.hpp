@@ -4,6 +4,7 @@
 #include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
 #include "rowl/core/pause_menu.hpp"
+#include "rowl/core/player_ui_strings.hpp"
 #include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
 #include "rowl/state/game_data_layout.hpp"
@@ -329,6 +330,11 @@ public:
     const Rowl::I18n::LocalizationManager& getLocalization() const {
         return m_localization;
     }
+    /// D05-1: language of the player's own menus, derived from the current
+    /// locale on every call (never cached: SetLocale flips the next frame).
+    UiLang getUiLanguage() const {
+        return uiLangForLocale(m_localization.getLocale(), m_localization.isLocaleDeclared());
+    }
     /// Re-resolves every live dialogue line (speaker + text) from its
     /// stored original against the current locale, re-syncs the legacy
     /// single-dialogue state, and invalidates the shape cache. Called by
@@ -597,7 +603,7 @@ private:
     // shown as corrupt and skipped by Continue until they are saved again.
     mutable std::bitset<100> m_slotLoadFailed;
     bool m_titleActive = false;
-    std::string m_titleHint;
+    UiText m_titleHint = UiText::None;  // D05-1: a key, resolved per view (locale-safe)
     bool m_windowAudioSuspended = false;
     // #160: stall-signal edge latch. Set on the first zero-dt step observed
     // while a camera tween is in flight, cleared when the tween progresses

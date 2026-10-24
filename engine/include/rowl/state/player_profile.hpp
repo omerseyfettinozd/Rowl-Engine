@@ -46,7 +46,9 @@ const char* playerProfileStatusName(PlayerProfileStatus status);
 
 /// Sanitized preference values (defaults match the managed PlayerProfile).
 struct PlayerPreferences {
-    std::string language = "en";            ///< "en" | "tr"
+    /// "" = the player never chose (the game's default locale applies); else a
+    /// lowercase locale tag, see profile_language.hpp. New profiles start "".
+    std::string language;
     float masterVolume = 1.0f;              ///< [0,1]
     float bgmVolume = 1.0f;
     float voiceVolume = 1.0f;

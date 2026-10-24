@@ -127,6 +127,7 @@ void Engine::backlogEnsureVisible() const {
 PauseBacklogView Engine::buildBacklogView() const {
     PauseBacklogView view;
     view.active = true;
+    view.voiceMark = uiText(UiText::VoiceMark, getUiLanguage());
     const auto& history = getDialogueHistory();
     const int total = static_cast<int>(history.size());
     view.total = total;
@@ -183,7 +184,7 @@ bool Engine::openBacklog() {
     m_backlogFromPause = wasPaused;   // Back returns to the pause menu then
     m_pauseMode = PauseMenuMode::Backlog;
     m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
     m_backlogTop = 0;
     backlogEnsureVisible();  // newest row at the bottom, as many above as fit
@@ -197,7 +198,7 @@ void Engine::backlogMoveSelection(int direction) {
     if (total <= 0) return;
     m_pauseSelected = std::clamp(std::clamp(m_pauseSelected, 0, total - 1) + direction, 0, total - 1);
     m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     backlogEnsureVisible();
 }
 

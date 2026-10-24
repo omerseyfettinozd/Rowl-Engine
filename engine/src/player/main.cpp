@@ -1,5 +1,6 @@
 #include "rowl/c_api.h"
 #include "rowl/platform/crash_handler.hpp"
+#include "rowl/state/profile_language.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <string>
@@ -158,10 +159,9 @@ void printGameIdentityBlock(const nlohmann::json& info) {
 // D04-1: auto_enabled, skip_mode and auto_advance_delay go through the native
 // player-driver setters (the delay is the player's absolute Auto base delay,
 // clamped by the engine to [0, 10] s; the old per-line offset knob is unrelated).
-// language is applied only when it is not the profile
-// default "en": the profile cannot tell "never chosen" from "chose en", and a
-// project whose own default locale is not "en" must keep it until the player
-// explicitly picks another language (explicit marker: D02).
+// D05-1: language "" means the player never chose, so the game's own default
+// locale stays; any chosen tag ("en" included) is applied when the game supports
+// it (SetLocale decides) and otherwise logged, keeping the default.
 std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
     std::vector<std::string> applied;
     const nlohmann::json status = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetStatusJson));
@@ -237,16 +237,15 @@ std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
         RowlEngine_SetSfxPoolDepth(engine, it->get<int>());
         note("sfx_pool_depth", std::to_string(RowlEngine_GetSfxPoolDepth(engine)));
     }
-    const std::string language = prefs.value("language", std::string{"en"});
-    if (language != "en") {
-        const std::string current = playerQueryText(engine, RowlEngine_GetLocale);
-        if (language != current) {
-            if (RowlEngine_SetLocale(engine, language.c_str()) == ROWL_RESULT_OK) {
-                note("language", playerQueryText(engine, RowlEngine_GetLocale));
-            } else {
-                std::cout << "[Player] Stored language '" << language
-                          << "' is not available in this game; keeping '" << current << "'.\n";
-            }
+    const std::string current = playerQueryText(engine, RowlEngine_GetLocale);
+    const std::string language =
+        Rowl::State::profileLanguageToApply(prefs.value("language", std::string{}), current);
+    if (!language.empty()) {
+        if (RowlEngine_SetLocale(engine, language.c_str()) == ROWL_RESULT_OK) {
+            note("language", playerQueryText(engine, RowlEngine_GetLocale));
+        } else {
+            std::cout << "[Player] Stored language '" << language
+                      << "' is not available in this game; keeping '" << current << "'.\n";
         }
     }
     return applied;

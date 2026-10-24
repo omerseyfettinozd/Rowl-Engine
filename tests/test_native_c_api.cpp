@@ -559,7 +559,7 @@ void test_native_c_api() {
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_CONFIRM);
         menu = menuJson();
         if (menu["mode"].get<int>() != 1 || menu["rows"].size() != 10 ||
-            menu["title"].get<std::string>() != "Kayit Yuvasi Sec") {
+            menu["title"].get<std::string>() != "Kayıt Yuvası Seç") {
             std::cerr << "MS-6: save slot page did not open" << std::endl;
             exit(1);
         }
@@ -572,7 +572,7 @@ void test_native_c_api() {
         }
         menu = menuJson();
         if (menu["rows"][1]["value"].get<std::string>() != "dolu" ||
-            menu["rows"][2]["value"].get<std::string>() != "bos") {
+            menu["rows"][2]["value"].get<std::string>() != "boş") {
             std::cerr << "MS-6: slot occupancy did not refresh in the menu" << std::endl;
             exit(1);
         }

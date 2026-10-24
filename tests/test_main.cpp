@@ -215,6 +215,7 @@ int main(int argc, char* argv[]) {
     test_backlog_screen();
     test_auto_skip();
     test_auto_skip_ui();
+    test_player_ui_language();
     test_graph_vnext();
     test_localization();
     test_locale_cluster();

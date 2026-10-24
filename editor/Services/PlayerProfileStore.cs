@@ -179,6 +179,10 @@ public static class PlayerProfileStore
                     profile.ExtraKeys[property.Name] = JsonNode.Parse(property.Value.GetRawText());
             }
             profile.Language = ReadString(root, "language", PlayerProfile.DefaultLanguage);
+            // D05-1: an invalid tag resets to "not chosen" (Sanitized below); say so.
+            PlayerProfile.NormalizeLanguage(profile.Language, out bool languageValid);
+            if (!languageValid)
+                notes.Add($"Invalid language '{(profile.Language.Length > 32 ? profile.Language[..32] : profile.Language)}' reset to \"\" (not chosen).");
             profile.MasterVolume = ReadSingle(root, "master_volume", 1);
             profile.BgmVolume = ReadSingle(root, "bgm_volume", 1);
             profile.VoiceVolume = ReadSingle(root, "voice_volume", 1);

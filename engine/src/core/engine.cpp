@@ -2849,7 +2849,7 @@ void Engine::resetSessionProfile() {
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     m_slotLoadFailed.reset();
     m_textSpeedMultiplier = 1.0f;
     m_autoAdvanceDelayOffset = 0.0f;

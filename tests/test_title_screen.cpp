@@ -14,7 +14,7 @@
  *  5. Tercihler: metin hizi / ses degisimi player profile'a yazilir (title
  *     ve duraklatma menusu); sayfa Geri ile title'a doner.
  *  6. Yuva satirinda tarih + ozet (detail), secili yuvanin kucuk resmi
- *     (selected_has_thumbnail); "dolu"/"bos" degerleri korunur.
+ *     (selected_has_thumbnail); "dolu"/"boş" degerleri korunur.
  *
  * Bilerek-boz: ensureSlotCache'te saved_at karsilastirmasini '<' yapmak 3'u,
  * titleBack'in kok sayfada setPaused(false) cagirmasi 1'i, Preferences
@@ -187,8 +187,8 @@ void test_title_screen() {
         const json m = menu(h);
         req(m["rows"].size() == 5, "title must have 5 rows");
         req(m["title"] == "Kayip Tablo Test", "title row text is the game name: " + m["title"].dump());
-        req(m["rows"][0]["label"] == "Yeni Oyun" && m["rows"][4]["label"] == "Cikis", "title labels");
-        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayit yok",
+        req(m["rows"][0]["label"] == "Yeni Oyun" && m["rows"][4]["label"] == "Çıkış", "title labels");
+        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayıt yok",
             "Continue must be disabled without saves");
         req(m["continue_slot"].get<int>() == -1, "continue_slot must be -1");
         req(m["selected"].get<int>() == 0, "New Game is preselected without saves");
@@ -284,17 +284,17 @@ void test_title_screen() {
         req(m["rows"].size() == 10, "load page lists 10 slots");
         req(m["rows"][3]["value"] == "bozuk", "corrupt slot value is bozuk");
         req(m["rows"][5]["value"] == "dolu", "valid slot value stays dolu");
-        req(m["rows"][0]["value"] == "bos", "empty slot value stays bos");
+        req(m["rows"][0]["value"] == "boş", "empty slot value stays bos");
     }
     // 4. Load page behaviours.
     selectRow(h, 0);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
     expectTitle(h, 2, "empty slot");
-    req(menu(h)["hint"] == "bos yuva", "empty slot hint");
+    req(menu(h)["hint"] == "boş yuva", "empty slot hint");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
     expectTitle(h, 2, "corrupt slot");
-    req(menu(h)["hint"] == "bozuk kayit", "corrupt slot hint");
+    req(menu(h)["hint"] == "bozuk kayıt", "corrupt slot hint");
     expectNode(h, 2, "no load happened");
     cmd(h, ROWL_PAUSE_MENU_BACK);
     expectTitle(h, 3, "back from load page");
@@ -315,7 +315,7 @@ void test_title_screen() {
     {
         const json m = menu(h);
         req(m["continue_slot"].get<int>() == -1, "no valid save left");
-        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayit yok",
+        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayıt yok",
             "Continue disabled when every save is corrupt");
     }
     selectRow(h, 1);
@@ -329,8 +329,8 @@ void test_title_screen() {
     expectTitle(h, 4, "preferences page");
     {
         const json m = menu(h);
-        req(m["rows"].size() == 8 && m["rows"][4]["label"] == "Metin Hizi" &&
-                m["rows"][5]["label"] == "Otomatik Hizi" && m["rows"][6]["label"] == "Atlama" &&
+        req(m["rows"].size() == 8 && m["rows"][4]["label"] == "Metin Hızı" &&
+                m["rows"][5]["label"] == "Otomatik Hızı" && m["rows"][6]["label"] == "Atlama" &&
                 m["rows"][7]["label"] == "Geri",
             "preferences rows");
     }
@@ -412,14 +412,14 @@ void test_title_screen() {
     }
     TEST_PASS("Offscreen pause overlay redraws on a clean story frame");
 
-    // Pause menu "Ana Menu" (row 9): two-step back to the title. An exit
+    // Pause menu "Ana Menü" (row 9): two-step back to the title. An exit
     // confirmation armed on row 10 must not carry over to a click on row 9
     // (it used to: one click then skipped the confirmation).
     {
         cmd(h, ROWL_PAUSE_MENU_BACK);  // load page -> main pause page
         req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 11, "pause main has 11 rows");
-        req(menu(h)["rows"][8]["label"] == "Gecmis" && menu(h)["rows"][9]["label"] == "Ana Menu" &&
-                menu(h)["rows"][10]["label"] == "Cikis",
+        req(menu(h)["rows"][8]["label"] == "Geçmiş" && menu(h)["rows"][9]["label"] == "Ana Menü" &&
+                menu(h)["rows"][10]["label"] == "Çıkış",
             "Gecmis, Ana Menu, Cikis close the main page");
         selectRow(h, 10);
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);

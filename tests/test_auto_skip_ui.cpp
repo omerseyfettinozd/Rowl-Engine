@@ -1,6 +1,6 @@
 /**
  * test_auto_skip_ui.cpp — D04-2: the Auto / Skip surface of the player: the
- * two Preferences rows ("Otomatik Hizi", "Atlama") and the AUTO / SKIP
+ * two Preferences rows ("Otomatik Hızı", "Atlama") and the AUTO / SKIP
  * capsules on the story frame.
  *
  * Kilit:
@@ -277,8 +277,8 @@ void test_auto_skip_ui() {
             req(m["mode"].get<int>() == 4, "Tercihler is mode 4");
             const json& rows = m["rows"];
             req(rows.size() == 8 && LM::kPreferenceRows == 8, "8 preference rows: " + m.dump());
-            const char* labels[] = {"Ana Ses", "Muzik", "SFX", "Seslendirme", "Metin Hizi",
-                                    "Otomatik Hizi", "Atlama", "Geri"};
+            const char* labels[] = {"Ana Ses", "Müzik", "SFX", "Seslendirme", "Metin Hızı",
+                                    "Otomatik Hızı", "Atlama", "Geri"};
             for (int i = 0; i < 8; ++i) {
                 req(rows[i]["label"] == labels[i], std::string("row ") + std::to_string(i) + " label");
             }
@@ -327,11 +327,11 @@ void test_auto_skip_ui() {
         rig.cmd(ROWL_PAUSE_MENU_RIGHT);
         expectSkip("Hepsi", "all", "all");
         rig.cmd(ROWL_PAUSE_MENU_RIGHT);
-        expectSkip("Kapali", "off", "off");
+        expectSkip("Kapalı", "off", "off");
         rig.cmd(ROWL_PAUSE_MENU_RIGHT);
         expectSkip("Okunan", "read_only", "read_only");
         rig.cmd(ROWL_PAUSE_MENU_LEFT);
-        expectSkip("Kapali", "off", "off");
+        expectSkip("Kapalı", "off", "off");
         rig.cmd(ROWL_PAUSE_MENU_LEFT);
         expectSkip("Hepsi", "all", "all");
         rig.cmd(ROWL_PAUSE_MENU_LEFT);
@@ -343,7 +343,7 @@ void test_auto_skip_ui() {
         // Policy is live in the story: Kapali refuses S / Ctrl, Hepsi starts them.
         rig.selectRow(6);
         rig.cmd(ROWL_PAUSE_MENU_RIGHT);  // Kapali
-        expectSkip("Kapali", "off", "off");
+        expectSkip("Kapalı", "off", "off");
         rig.cmd(ROWL_PAUSE_MENU_BACK);   // title root
         RowlEngine_SetPaused(h, 0);      // host override closes the title
         req(RowlEngine_IsPaused(h) == 0, "menu closed");
@@ -394,8 +394,8 @@ void test_auto_skip_ui() {
         RowlEngine_SetPaused(h, 1);
         {
             const json m = rig.menu();
-            req(m["mode"].get<int>() == 0 && m["rows"].size() == 11 && m["rows"][7]["label"] == "Metin Hizi" &&
-                    m["rows"][8]["label"] == "Gecmis",
+            req(m["mode"].get<int>() == 0 && m["rows"].size() == 11 && m["rows"][7]["label"] == "Metin Hızı" &&
+                    m["rows"][8]["label"] == "Geçmiş",
                 "pause main page keeps its 11 rows: " + m.dump());
         }
         RowlEngine_SetPaused(h, 0);

@@ -11,6 +11,7 @@
 
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
+#include "rowl/state/profile_language.hpp"
 #include "rowl/state/save_durability.hpp"
 
 #include <nlohmann/json.hpp>
@@ -80,13 +81,6 @@ float snapTextScale(float value) {
         }
     }
     return best;
-}
-
-std::string normalizeLanguage(std::string_view language) {
-    std::string candidate = trimmedLower(language);
-    const size_t dash = candidate.find_first_of("-_");
-    if (dash != std::string::npos && dash > 0) candidate.resize(dash);
-    return (candidate == "en" || candidate == "tr") ? candidate : "en";
 }
 
 std::string normalizeFadeCurve(std::string_view name) {
@@ -457,7 +451,13 @@ void PlayerProfileStore::loadFromDisk() {
     float number = 0.0f;
     bool flag = false;
     int integer = 0;
-    if (readString(root, "language", text)) prefs.language = normalizeLanguage(text);
+    if (readString(root, "language", text)) {
+        bool validLanguage = true;
+        prefs.language = normalizeProfileLanguage(text, &validLanguage);
+        if (!validLanguage) {
+            notes.push_back("Invalid language '" + text.substr(0, 32) + "' reset to \"\" (not chosen).");
+        }
+    }
     auto volume = [&](const char* key, float& field) {
         if (readFloat(root, key, number)) field = clampFloat(number, 0.0f, 1.0f);
     };
@@ -596,7 +596,14 @@ ProfileMutation PlayerProfileStore::setPreferencesJson(std::string_view json, st
         bool ok = true;
         if (key == "language") {
             ok = value.is_string();
-            if (ok) next.language = normalizeLanguage(value.get<std::string>());
+            if (ok) {
+                bool validLanguage = true;
+                next.language = normalizeProfileLanguage(value.get<std::string>(), &validLanguage);
+                if (!validLanguage) {
+                    ROWL_LOG_WARN("[PlayerProfile] Invalid language '" + value.get<std::string>() +
+                                  "' reset to \"\" (not chosen).");
+                }
+            }
         } else if (key == "master_volume") ok = number(next.masterVolume, 0.0f, 1.0f);
         else if (key == "bgm_volume") ok = number(next.bgmVolume, 0.0f, 1.0f);
         else if (key == "voice_volume") ok = number(next.voiceVolume, 0.0f, 1.0f);

@@ -2052,6 +2052,9 @@
     "Player.Prefs.Language": {
       "text": "Dil:"
     },
+    "Player.Prefs.LanguageDefault": {
+      "text": "Oyun varsayılanı"
+    },
     "Player.Prefs.MasterVolume": {
       "text": "Ana Ses:"
     },

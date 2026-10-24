@@ -2052,6 +2052,9 @@
     "Player.Prefs.Language": {
       "text": "Language:"
     },
+    "Player.Prefs.LanguageDefault": {
+      "text": "Game default"
+    },
     "Player.Prefs.MasterVolume": {
       "text": "Master:"
     },
