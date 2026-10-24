@@ -320,8 +320,10 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ProfileGetStatusJson(
  *  "counts":{"gallery"|"music"|"achievements":{"total","unlocked"}},
  *  "pending_notices":[{"kind","id"}]}. Titles follow the player UI language
  *  ("tr" / "en"); "at" is the UTC ISO-8601 unlock time or null.
- *  "pending_notices" lists achievements unlocked since the host last cleared the
- *  queue (a later slice adds the acknowledge call). Same caller-buffer contract
+ *  "pending_notices" lists achievements unlocked that the player has not yet
+ *  been shown: the native toast (D07-2) takes each one off the queue when it
+ *  starts showing it, and "toast" ({"kind","id","visible","remaining_seconds"}
+ *  or null) is the notice currently on screen. Same caller-buffer contract
  *  as RowlEngine_GetSaveDirectoryUtf8. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetExtrasJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
@@ -340,6 +342,20 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ProfileUnlock(
  *  ROWL_RESULT_INVALID_ARGUMENT. */
 ROWL_API RowlEngine_ResultCode RowlEngine_ProfileIsUnlocked(
     RowlEngineHandle handle, const char* kind, const char* id, int32_t* outIsUnlocked);
+
+/** D07-2: opens the title screen's "Ekstralar" root page (Galeri / Muzik Odasi /
+ *  Basarimlar / Geri; pause-menu modes 6 = root, 7 = gallery, 8 = music room,
+ *  9 = achievements). Opens the title screen first when it is not up. The
+ *  state is the pause-menu JSON: "mode", "rows" and an "extras" object (page,
+ *  selected, scroll, total, counter; gallery "cells" / "viewing"; music
+ *  "items" / "playing"; achievement "items" with description and date). A
+ *  locked gallery cell carries no image path. Input is the pause-menu command
+ *  funnel (UP/DOWN/LEFT/RIGHT/BACK/CONFIRM) plus RowlEngine_PauseMenuClick.
+ *  Viewing and music playback change no variable, save slot, read mark,
+ *  history row, unlock or GameState. ROWL_RESULT_OK (also when already open);
+ *  STATE_ERROR before RowlEngine_Init and when extras.json lists no item;
+ *  INVALID_HANDLE; WRONG_THREAD. Needs ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS. */
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenExtras(RowlEngineHandle handle);
 
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 

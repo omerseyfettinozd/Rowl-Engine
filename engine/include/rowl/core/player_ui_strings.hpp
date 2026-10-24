@@ -38,6 +38,12 @@ enum class UiText : unsigned char {
     // D05-2: language / accessibility rows
     Language, TextSize, HighContrast, ReduceMotion, On,
 
+    // D07-2: Ekstralar (title screen) and the achievement toast
+    Extras, Gallery, MusicRoom, Achievements,
+    LockedMark, NothingYet, NowPlaying,
+    HintExtras, HintGallery, HintGalleryViewer, HintMusicRoom, HintAchievements,
+    ToastAchievement,
+
     // Units
     SecondsUnit,
 

@@ -43,6 +43,7 @@ add_executable(rowl_tests
     test_auto_skip_ui.cpp
     test_condition_component.cpp
     test_extras_unlocks.cpp
+    test_extras_screens.cpp
     test_chapter_boundary_persistence.cpp
     test_player_ui_language.cpp
     test_player_preferences_menu.cpp

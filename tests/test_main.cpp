@@ -217,6 +217,7 @@ int main(int argc, char* argv[]) {
     test_auto_skip_ui();
     test_condition_component();
     test_extras_unlocks();
+    test_extras_screens();
     test_chapter_boundary_persistence();
     test_player_ui_language();
     test_player_preferences_menu();

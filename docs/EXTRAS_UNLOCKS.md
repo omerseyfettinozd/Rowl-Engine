@@ -1,7 +1,7 @@
 # Unlockable content: CG gallery, music room, achievements (D07-1)
 
-Native core only: the catalog file, the profile records, the triggers and the C API. The player
-menus that show the gallery, the music room and the achievement list are D07-2; the editor
+Native core (D07-1: the catalog file, the profile records, the triggers and the C API) and the
+player screens (D07-2, section 6: the title's "Ekstralar" pages and the achievement toast). The editor
 surface (the `unlock` component, an extras editor, lint) is D07-3. "Replay a scene" is **not**
 part of this feature (it needs a side-effect-free sub-session; `docs/PRODUCTIZATION_BASELINE.md`
 lists it for 1.x). The gallery and the music room only ever show or play media, so they cannot
@@ -80,8 +80,8 @@ whole scene update succeeded.
   (or a bad `kind`, or a missing field) writes nothing and logs one warning per node and graph.
   A disabled component does nothing.
 - A newly unlocked achievement is appended to a notice queue (at most 64) that the toast of D07-2
-  will drain; this slice only exposes it (`pending_notices` in the extras JSON,
-  `Engine::pendingUnlockNotices` / `clearUnlockNotices`). Unlocking is idempotent: repeating it
+  drains (`pending_notices` in the extras JSON, `Engine::pendingUnlockNotices` /
+  `clearUnlockNotices`; section 6). Unlocking is idempotent: repeating it
   changes nothing, keeps the first `at` and queues no second notice.
 - Nodes without `components` (the legacy flat payload) carry no unlock triggers.
 - The start node counts as an entry, so a game that shows a CG on its first node unlocks it when
@@ -97,7 +97,7 @@ whole scene update succeeded.
 
 Owner-thread API like the profile family; before `RowlEngine_Init` every call is `STATE_ERROR`;
 `WRONG_THREAD` / `INVALID_HANDLE` as elsewhere. There is no Lua `rowl.unlock` (the sandbox bridge
-stays untouched) and `NativeBridge` does not bind these functions yet (D07-3).
+stays untouched) and `NativeBridge` does not bind these functions (nor `RowlEngine_OpenExtras`, section 6) yet (D07-3).
 
 ## 5. Tests
 
@@ -106,4 +106,59 @@ legacy forms, unknown keys, limits, read-only), triggers on real entries, the gu
 backlog voice replay, condition skip, rolled-back update), explicit component warnings, restart
 persistence, the C API, and the shipped sample `samples/kayip_tablo` (clean catalog, every file in
 the VFS, every catalog entry reachable from the story). The managed round trip of an object
-`unlocks` is `EditorPlayerProfilePerGameTests`.
+`unlocks` is `EditorPlayerProfilePerGameTests`. The player screens (section 6) are locked by
+`tests/test_extras_screens.cpp`: title row with / without a catalog, page flow and Back rules, grid and viewer
+pixels (a locked cell is the flat box colour, an open one its picture), thumbnail cache bounds, music-room
+audio state (title, continued game, no GameState), achievement texts, the toast (capsule pixels, clean frame
+after, queue order, hidden and frozen under menus, Auto), isolation (variables, GameState object, save bytes,
+profile, history, unlocks) and tr/en.
+
+## 6. Player screens (D07-2: `engine_extras_menu.cpp`, `window_extras_overlay.cpp`)
+
+**Entry.** The title screen lists **Ekstralar** / **Extras** between Oyunu Yükle and Tercihler when the
+catalog has at least one item (six rows; Tercihler and Çıkış move down one row). No `extras.json`, or one
+without items, keeps the older five rows. The pause menu never lists it. `RowlEngine_OpenExtras(handle)` opens
+the title screen when it is not up and lands on the root page (`STATE_ERROR` before init and for an empty
+catalog). Pause-menu modes: 6 root, 7 gallery, 8 music room, 9 achievements.
+
+**Pages.** Root: Galeri / Müzik Odası / Başarımlar / Geri, each value `unlocked/total`. Back, Esc and a right
+click go one level up; from the root Esc / Geri returns to the title with Ekstralar selected (the story never
+starts from here).
+
+- *Gallery*: a 4-column grid of 16:9 thumbnails with a caption; whole grid rows scroll (4 rows visible; keys and
+  wheel). A locked item is a dark box with "?" and the caption "???"; its picture is never loaded and its path
+  is never part of the view or the JSON. Arrow keys / mouse select; Enter or a click opens an unlocked item
+  full screen (aspect ratio kept, centred, caption below). In the viewer Left / Right step through the
+  **unlocked** items only (wrapping); Esc, any click or a right click returns to the grid with that item
+  selected. Grid thumbnails live in a small downscaled cache of their own (at most 24, 356x200, a few decoded
+  per frame) so a page of 1920x1080 pictures never touches the 64 MB texture cache; the viewer uses
+  `Window::loadTexture` for one image at a time. Drawn on the offscreen surface as well as the GPU window.
+- *Music room*: a list (11 rows visible, scrolls); a locked track shows "???". Enter or a click plays an
+  unlocked track on the audio engine's BGM channel (the project's BGM transition applies) and marks the row;
+  the same row again stops it. The track keeps playing across Ekstralar pages. `GameState.activeBgm` is never
+  written. Leaving Ekstralar (back to the title, closing the menu, re-opening the title) stops it and brings
+  the sound back: `restoreAudioStateFromGameState()` when there is a GameState, silence otherwise - and only
+  if the room actually played or stopped something.
+- *Achievements*: a read-only list: title, description and the unlock date (`YYYY-MM-DD`, UTC). Locked: the
+  title shows and the description is "???"; a locked `hidden` achievement shows "???" for both. The page has
+  its own two-line row layout (`PauseMenuLayout::kAch*`): 96 px boxes at a 104 px pitch (6 rows visible, the
+  list scrolls beyond that), the title on top, the description below with at least 6 design pixels of clear
+  band between the two lines, the date at the right edge on the title line, and a highlight that covers both
+  lines. Rows come from `extras.items` (`y`, `h` in the JSON), not from the generic one-line row list, so
+  the slot-page detail rows, Tercihler and the title keep their layout.
+
+**Toast.** While the story runs (not paused) the first queued achievement notice is taken off the queue and
+shown for 3 s as a semi-transparent capsule at the top centre ("Başarım: <title>" / "Achievement: <title>").
+More notices follow one by one without a clean frame between them. Any menu (pause, title, backlog,
+preferences, Ekstralar) hides it and freezes its clock; notices wait in the queue. Auto and Skip do not hold
+the story up (the clock is real time). The window tracks the baked capsule text like the AUTO / SKIP badges
+(cache invalidation), so no stale capsule survives. `RowlEngine_GetExtrasJson` keeps `pending_notices`
+(not yet shown) consistent and adds `toast` (`{kind, id, visible, remaining_seconds}` or `null`).
+
+**State JSON.** `RowlEngine_GetPauseMenuJson` gains an `extras` object in the Ekstralar modes: `page`,
+`total`, `unlocked`, `selected` (catalog index), `scroll`, `counter`; gallery `columns`, `viewing`,
+`view_index`, `view_title`, `cells[{index,x,y,w,h,unlocked,selected,title,thumbnail?}]` (`thumbnail` only for
+unlocked cells); music `playing`, `items`; achievements `items[{description,at}]`.
+
+**Isolation.** Viewing, playing and scrolling write nothing: variables, GameState (`activeBgm` included), save
+slots (byte for byte), read marks, history and unlocks stay as they were.

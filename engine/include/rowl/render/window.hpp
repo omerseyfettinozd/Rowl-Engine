@@ -313,8 +313,15 @@ public:
     /// D04-2: AUTO / SKIP capsules, drawn on a freshly rendered story frame
     /// (renderComposedFrame decides when).
     void renderPlayerBadges(bool autoBadge, bool skipBadge);
+    /// D07-2: achievement toast capsule, top-centre of the 1920x1080 canvas
+    /// ("Basarim: X"); drawn on a freshly rendered story frame like the badges.
+    void renderUnlockToast(const std::string& text);
     /// D02: frees the cached slot-thumbnail texture (renderer teardown).
     void releasePauseThumbnail();
+    /// D07-2: frees the gallery thumbnail cache (renderer teardown).
+    void releaseGalleryThumbnails();
+    /// Test seam: gallery thumbnail textures currently cached.
+    size_t getGalleryThumbnailCount() const { return m_galleryThumbs.size(); }
     void endFrame();
 
     /// Last-frame profile accessors also report a cache hit: when an identical
@@ -452,6 +459,30 @@ private:
     std::string m_pauseThumbKey;
     std::string m_pauseThumbFailedKey;
     void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    // D07-2: gallery thumbnails. Each visible cell needs a small texture; going
+    // through loadTexture would hold 1920x1080 RGBA (8 MB) per cell and thrash
+    // the 64 MB cache, so the grid keeps its own downscaled copies (at most
+    // kMaxGalleryThumbs, least-recently-used out). The full-screen viewer uses
+    // loadTexture (one image at a time).
+    struct GalleryThumb {
+        SDL_Texture* texture = nullptr;
+        uint64_t lastUsed = 0;
+    };
+    std::unordered_map<std::string, GalleryThumb> m_galleryThumbs;
+    std::unordered_set<std::string> m_galleryThumbFailed;
+    uint64_t m_galleryThumbClock = 0;
+    int m_galleryThumbDecodesThisFrame = 0;
+    SDL_Texture* galleryThumbnail(const std::string& filename);
+    void drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawExtrasText(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void renderGalleryViewer(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawOverlayText(const std::string& text, float x, float y, float px, SDL_Color color,
+                         float w, float h, const char* align);
+    std::string fitOverlayText(const std::string& text, float px, float maxWidth);
+    static void fillCapsule(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color);
+    // D07-2: toast text currently baked into the cached frame pixels (see
+    // m_bakedBadges); a different wanted text forces a re-render.
+    std::string m_bakedToast;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureLastUsed;
     std::unordered_set<std::string> m_missingTextureCache;

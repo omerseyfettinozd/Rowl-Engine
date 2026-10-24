@@ -503,6 +503,18 @@ public:
     std::string getExtrasJson() const;
     const std::vector<UnlockNotice>& pendingUnlockNotices() const { return m_unlockNotices; }
     void clearUnlockNotices() { m_unlockNotices.clear(); }
+
+    // ── D07-2: Ekstralar pages + achievement toast (engine_extras_menu.cpp) ──
+    /// Opens the title screen's "Ekstralar" root page (opening the title screen
+    /// first when it is not up). StateError before init and while the catalog
+    /// has no item at all. Read-only: viewing the gallery / achievements and
+    /// playing a music-room track change no variable, save slot, read mark,
+    /// history row, unlock or GameState (activeBgm included).
+    bool openExtras();
+    bool isExtrasOpen() const { return m_paused && isExtrasMode(m_pauseMode); }
+    /// Text of the achievement toast that is on screen right now ("Basarim: X"),
+    /// empty when none is showing (menus open, nothing queued, story not playing).
+    std::string unlockToastText() const;
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -602,6 +614,18 @@ private:
     std::vector<std::string> m_extrasMusicKeys;
     std::vector<UnlockNotice> m_unlockNotices;
     std::unordered_set<uint64_t> m_unlockWarnedNodes;
+    // D07-2: Ekstralar session. m_extrasTop = first visible gallery grid row /
+    // list item; the viewer shows catalog item m_pauseSelected; the music room
+    // remembers the playing track and whether it ever touched the audio engine
+    // (so leaving restores sound only when something was changed). The toast is
+    // the achievement notice currently on screen (already off the queue).
+    mutable int m_extrasTop = 0;
+    bool m_galleryViewing = false;
+    std::string m_musicPlayingId;
+    bool m_musicRoomTouchedAudio = false;
+    bool m_toastActive = false;
+    UnlockNotice m_toastNotice;
+    float m_toastRemaining = 0.0f;
     // D06-1: the last advanceStory moved the cursor through a condition
     // redirect (advanceToChoice must still report the choice as taken).
     bool m_lastAdvanceRedirected = false;
@@ -749,6 +773,27 @@ private:
     void backlogClose();
     bool backlogClick(float virtualX, float virtualY);
     PauseBacklogView buildBacklogView() const;
+    // D07-2 (engine_extras_menu.cpp)
+    void extrasMove(int direction);
+    void extrasAdjust(int direction);
+    void extrasActivateSelected();
+    void extrasBack();
+    void extrasClick(float virtualX, float virtualY);
+    void extrasScroll(float deltaY);
+    void extrasEnsureVisible() const;
+    int extrasItemCount() const;
+    void galleryOpenViewer(int index);
+    void galleryStepViewer(int direction);
+    void musicRoomToggle(int index);
+    void playBgmWithDefaultTransition(const std::string& track);
+    /// Ends the Ekstralar session: stops a music-room track and brings the
+    /// pre-Extras sound back (GameState audio, or silence without a state).
+    void endExtrasSession();
+    PauseExtrasView buildExtrasView() const;
+    PauseMenuView getExtrasMenuView() const;
+    void updateUnlockToast(float deltaTime);
+    int titleRowCount() const;
+    int titlePrefsRow() const;
     // D02 (engine_title_menu.cpp)
     void ensureSlotCache() const;
     void titleActivateSelected();

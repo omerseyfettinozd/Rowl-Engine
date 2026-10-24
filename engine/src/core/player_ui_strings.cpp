@@ -93,6 +93,29 @@ constexpr std::array<Entry, static_cast<std::size_t>(UiText::Count)> kTable = {{
     /* ReduceMotion */ {"Hareketi Azalt", "Reduce Motion"},
     /* On */ {"Açık", "On"},
 
+    /* Extras */ {"Ekstralar", "Extras"},
+    /* Gallery */ {"Galeri", "Gallery"},
+    /* MusicRoom */ {"Müzik Odası", "Music Room"},
+    /* Achievements */ {"Başarımlar", "Achievements"},
+    /* LockedMark */ {"???", "???"},
+    /* NothingYet */ {"Henüz bir şey yok", "Nothing here yet"},
+    /* NowPlaying */ {"çalıyor", "playing"},
+    /* HintExtras */
+    {"YUKARI/AŞAĞI: seç   ENTER: aç   ESC: geri",
+     "UP/DOWN: select   ENTER: open   ESC: back"},
+    /* HintGallery */
+    {"OKLAR: gez   ENTER/tık: büyüt   ESC: geri",
+     "ARROWS: browse   ENTER/click: enlarge   ESC: back"},
+    /* HintGalleryViewer */
+    {"SOL/SAĞ: önceki/sonraki   ESC/tık: kapat",
+     "LEFT/RIGHT: previous/next   ESC/click: close"},
+    /* HintMusicRoom */
+    {"YUKARI/AŞAĞI: seç   ENTER: çal/durdur   ESC: geri",
+     "UP/DOWN: select   ENTER: play/stop   ESC: back"},
+    /* HintAchievements */
+    {"YUKARI/AŞAĞI: gez   ESC: geri", "UP/DOWN: scroll   ESC: back"},
+    /* ToastAchievement */ {"Başarım: ", "Achievement: "},
+
     /* SecondsUnit */ {"sn", "s"},
 }};
 

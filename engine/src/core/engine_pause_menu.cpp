@@ -30,6 +30,7 @@ namespace Rowl::Core {
 
 void Engine::setPaused(bool paused) {
     if (m_paused == paused) return;
+    endExtrasSession();  // D07-2: a music-room track never outlives the menu
     m_paused = paused;
     // D04-1: opening any menu (pause / backlog / preferences) ends Skip.
     if (paused) {
@@ -58,7 +59,11 @@ void Engine::setPaused(bool paused) {
 int Engine::pauseMenuRowCount() const {
     switch (m_pauseMode) {
         case PauseMenuMode::Main: return PauseMenuLayout::kMainRows;
-        case PauseMenuMode::Title: return PauseMenuLayout::kTitleRows;
+        case PauseMenuMode::Title: return titleRowCount();
+        case PauseMenuMode::Extras:
+        case PauseMenuMode::Gallery:
+        case PauseMenuMode::MusicRoom:
+        case PauseMenuMode::Achievements: return extrasItemCount();
         case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
         case PauseMenuMode::Backlog: return static_cast<int>(getDialogueHistory().size());
         default: return PauseMenuLayout::kSlotRows;
@@ -68,6 +73,10 @@ int Engine::pauseMenuRowCount() const {
 void Engine::pauseMenuMoveSelection(int direction) {
     if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: a list, never wraps
         backlogMoveSelection(direction);
+        return;
+    }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: grid / lists never wrap
+        extrasMove(direction);
         return;
     }
     const int count = pauseMenuRowCount();
@@ -100,7 +109,7 @@ void Engine::menuChooseSlot(int32_t slotIndex) {
 void Engine::menuActivateSelected() {
     if (!m_paused) return;
     if (m_titleActive || m_pauseMode == PauseMenuMode::Title ||
-        m_pauseMode == PauseMenuMode::Preferences) {
+        m_pauseMode == PauseMenuMode::Preferences || isExtrasMode(m_pauseMode)) {
         titleActivateSelected();
         return;
     }
@@ -165,6 +174,10 @@ void Engine::menuBack() {
         backlogClose();
         return;
     }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2
+        extrasBack();
+        return;
+    }
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
         return;
@@ -197,6 +210,10 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     if (!m_paused) return;
     if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: variable-height list
         backlogClick(virtualX, virtualY);
+        return;
+    }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: grid cells / scrolled lists
+        extrasClick(virtualX, virtualY);
         return;
     }
     const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
@@ -245,6 +262,7 @@ PauseMenuView Engine::getPauseMenuView() const {
     if (m_pauseMode == PauseMenuMode::Title || m_pauseMode == PauseMenuMode::Preferences) {
         return getTitleMenuView();
     }
+    if (isExtrasMode(m_pauseMode)) return getExtrasMenuView();  // D07-2
     view.selected = m_pauseSelected;
     view.titleActive = m_titleActive;
     const UiLang lang = getUiLanguage();
@@ -407,6 +425,12 @@ std::string Engine::getPauseMenuJson() const {
             out.push_back('}');
         }
         out += "]}";
+    }
+    if (view.extras.active) {
+        // D07-2: Ekstralar page state (gallery cells / list window); a locked
+        // gallery cell carries no image path.
+        out += ",\"extras\":";
+        out += pauseExtrasViewJson(view.extras);
     }
     out += "}";
     return out;

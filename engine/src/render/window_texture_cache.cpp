@@ -51,6 +51,7 @@ unsigned char* loadTextureMemorySafely(const uint8_t* bytes, int byteCount,
 void Window::clearTextureCache() {
     invalidateFrameCache();
     releasePauseThumbnail();  // D02
+    releaseGalleryThumbnails();  // D07-2
     const bool hadMsdfAtlas = m_msdfAtlasTexture != nullptr;
     std::unordered_set<SDL_Texture*> uniqueTextures;
     for (auto& [name, tex] : m_textureCache) {
@@ -85,6 +86,7 @@ void Window::invalidateMissingCaches() {
     m_missingTextureCache.clear();
     m_budgetRejectedTextureCache.clear();
     m_missingFontCache.clear();
+    m_galleryThumbFailed.clear();  // D07-2: a remount may now provide the image
 }
 
 void Window::setTextureCacheBudgetBytes(uint64_t bytes) {

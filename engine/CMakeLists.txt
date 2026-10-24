@@ -319,6 +319,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani
     src/core/engine_player_drivers.cpp  # D04-1: oyuncu Otomatik / Atla surucusu
     src/core/engine_node_conditions.cpp  # D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
+    src/core/engine_extras_menu.cpp  # D07-2: Ekstralar sayfalari (galeri / muzik odasi / basarimlar) + basarim bildirimi
     src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
@@ -326,6 +327,7 @@ set(ROWL_ENGINE_SOURCES
     # Rendering
     src/render/window.cpp
     src/render/window_input.cpp  # W8-d(2): keymap + pollEvents (davranışsız taşıma)
+    src/render/window_extras_overlay.cpp  # D07-2: galeri izgarasi / tam ekran gorunum / basarim bildirimi cizimi
     src/render/window_pause_overlay.cpp  # W8-d(2): pause overlay (davranışsız taşıma)
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi

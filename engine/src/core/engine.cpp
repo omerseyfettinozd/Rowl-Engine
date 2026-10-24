@@ -104,6 +104,18 @@ void Engine::setBgmTransitionDefaults(std::string kind, float durationSeconds) {
         ? std::clamp(durationSeconds, 0.0f, 60.0f) : 1.0f;
 }
 
+void Engine::playBgmWithDefaultTransition(const std::string& track) {
+    // D07-2 (music room): the BGM channel with the project's own transition. Lives
+    // here because the default-transition members are census-pinned to this file
+    // (rowl_d06_154_refutation_tests).
+    if (!m_audio) return;
+    const std::string transition = m_defaultBgmTransition;  // a copy: the census pin counts '=' after the name
+    const auto kind = transition == "crossfade" ? Rowl::Audio::BgmTransitionKind::Crossfade
+                    : transition == "fade" ? Rowl::Audio::BgmTransitionKind::Fade
+                                           : Rowl::Audio::BgmTransitionKind::Instant;
+    m_audio->playBgm(track, kind, m_defaultBgmTransitionDurationSeconds);
+}
+
 Engine::Engine(std::shared_ptr<RuntimeContext> context)
     : m_context(context ? std::move(context) : std::make_shared<RuntimeContext>()) {}
 
@@ -229,7 +241,8 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             break;
         case Type::SecondaryClick:
             // D03-2: right click closes the backlog; elsewhere it carries no action.
-            if (isBacklogOpen()) menuBack();
+            // D07-2: on the Ekstralar pages it closes the full-screen viewer / goes up.
+            if (isBacklogOpen() || isExtrasOpen()) menuBack();
             break;
         case Type::Scroll:
             // D03-2: wheel up (y > 0) opens the backlog from the story; on the
@@ -237,6 +250,7 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // row closes it). Every other state still consumes it silently.
             if (event.y == 0.0f || !std::isfinite(event.y)) break;
             if (isBacklogOpen()) backlogScroll(event.y);
+            else if (isExtrasOpen()) extrasScroll(event.y);  // D07-2
             else if (!m_paused && event.y > 0.0f) openBacklog();
             break;
         case Type::ToggleAuto:
@@ -2366,6 +2380,9 @@ void Engine::step(float deltaTime) {
                                      getCurrentStepId() != driverStepBefore);
     } // end MS-6 pause freeze of story simulation
 
+    // D07-2: achievement toast clock (frozen and hidden while any menu is up).
+    updateUnlockToast(deltaTime);
+
     Rowl::Render::ComposedFrame frame;
     frame.hasBackground = m_hasBackground;
     frame.background = m_activeBackground;
@@ -2383,6 +2400,7 @@ void Engine::step(float deltaTime) {
     // on the title, pause menu, backlog or preferences).
     frame.showAutoBadge = m_isPlaying && !m_paused && m_autoMode;
     frame.showSkipBadge = m_isPlaying && !m_paused && isSkipEffective();
+    frame.toastText = unlockToastText();  // D07-2: empty unless a toast is showing
     // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
     // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
     // Window imzasi/hash degismez — C0/D2 kilidine dokunulmaz.
@@ -2891,6 +2909,12 @@ void Engine::resetSessionProfile() {
     m_backlogTop = 0;  // D03-2
     m_backlogFromPause = false;
     m_prefsFromPause = false;  // D05-2
+    m_extrasTop = 0;           // D07-2 (the audio engine is gone already)
+    m_galleryViewing = false;
+    m_musicPlayingId.clear();
+    m_musicRoomTouchedAudio = false;
+    m_toastActive = false;
+    m_toastRemaining = 0.0f;
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02

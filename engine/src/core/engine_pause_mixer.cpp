@@ -54,6 +54,10 @@ void Engine::pauseMenuAdjustSelected(int direction) {
     // D02: the preferences page maps its rows onto value rows 3..7 (D04-2: 8/9
     // for auto-delay / skip-mode, D05-2: 10..13 language / text size / contrast /
     // motion); the pause main page has none since D05-2.
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: gallery grid / viewer stepping
+        extrasAdjust(direction);
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;
     const int row = pauseMenuValueRow();
     if (row >= 3 && row <= 6) {

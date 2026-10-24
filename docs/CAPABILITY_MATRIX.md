@@ -1,6 +1,6 @@
 # Capability and Node-Component Matrix
 
-Status reviewed: 2026-10-24 (D07-1, on top of D01-D06-3)
+Status reviewed: 2026-10-24 (D07-2, on top of D01-D07-1)
 Scope: every `ROWL_ENGINE_CAPABILITY_*` bit and every node-component JSON key, followed from the
 editor field to the native engine to the packaged player (`RowlGame`).
 
@@ -64,7 +64,7 @@ the editor mirrors a few values as constants (`LocalizationService`, `Accessibil
 | `TITLE_SCREEN` (33554432) | `NativeBridge.OpenTitleScreen` | pause-menu mode 3 / 4 | `engine_title_menu.cpp` | `rowl_demo_first_light_packaged` ("Package smoke title: ok") | full |
 | `BACKLOG_REPLAY` (67108864) | Editor player backlog panel (C#) | history JSON `voice`, `ReplayBacklogVoice`, `OpenBacklog` | `engine_backlog.cpp` | none through the packaged player; native `test_backlog_replay.cpp`, `test_backlog_screen.cpp` | partial (no packaged proof) |
 | `PLAYER_AUTO_SKIP` (134217728) | Editor player auto / skip drivers (C#, separate implementation) | `SetAutoMode`, `SetSkipActive`, profile `auto_*`, `skip_mode` | `engine_player_drivers.cpp` | none through the packaged player; native `test_auto_skip.cpp`, `test_auto_skip_ui.cpp` | partial (no packaged proof; two driver implementations, no parity test) |
-| `EXTRAS_UNLOCKS` (268435456) | none yet (D07-3: `unlock` component, extras editor); menus in D07-2 | `Assets/json/extras.json`, profile `unlocks`, `RowlEngine_GetExtrasJson` / `ProfileUnlock` / `ProfileIsUnlocked` | `extras_catalog.cpp`, `engine_extras.cpp`, `player_profile.cpp`, `c_api_extras.cpp` | none through the packaged player; native `test_extras_unlocks.cpp` (includes the shipped `kayip_tablo` catalog) | native-only (`docs/EXTRAS_UNLOCKS.md`) |
+| `EXTRAS_UNLOCKS` (268435456) | none yet (D07-3: `unlock` component, extras editor); native title "Ekstralar" pages + achievement toast since D07-2 (`RowlEngine_OpenExtras`, pause-menu modes 6-9) | `Assets/json/extras.json`, profile `unlocks`, `RowlEngine_GetExtrasJson` / `ProfileUnlock` / `ProfileIsUnlocked` | `extras_catalog.cpp`, `engine_extras.cpp`, `engine_extras_menu.cpp`, `window_extras_overlay.cpp`, `player_profile.cpp`, `c_api_extras.cpp` | none through the packaged player; native `test_extras_unlocks.cpp`, `test_extras_screens.cpp` (includes the shipped `kayip_tablo` catalog) | native-only (`docs/EXTRAS_UNLOCKS.md`) |
 
 ## 2. Node components (JSON `components[].type` and `data` keys)
 

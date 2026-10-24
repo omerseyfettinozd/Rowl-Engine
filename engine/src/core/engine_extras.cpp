@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -33,6 +34,15 @@ const char* languageTag(UiLang lang) {
 }  // namespace
 
 void Engine::loadExtrasCatalog() {
+    // D07-2: a (re)mounted project starts the Ekstralar pages and the toast over;
+    // an open extras page falls back to the title it came from.
+    endExtrasSession();
+    if (isExtrasMode(m_pauseMode)) {
+        m_pauseMode = PauseMenuMode::Title;
+        m_pauseSelected = 0;
+    }
+    m_toastActive = false;
+    m_toastRemaining = 0.0f;
     m_extrasCatalog = {};
     m_extrasCgKeys.clear();
     m_extrasMusicKeys.clear();
@@ -57,6 +67,9 @@ void Engine::loadExtrasCatalog() {
     }
     for (const auto& item : m_extrasCatalog.music) {
         m_extrasMusicKeys.push_back(Rowl::State::canonicalMediaPath(item.track, "audio/"));
+    }
+    if (m_paused && m_pauseMode == PauseMenuMode::Title) {  // the row count follows the catalog
+        m_pauseSelected = std::clamp(m_pauseSelected, 0, titleRowCount() - 1);
     }
     if (!m_extrasCatalog.empty()) {
         ROWL_LOG_INFO("[Extras] catalog: " + std::to_string(m_extrasCatalog.gallery.size()) + " CG, " +
@@ -199,6 +212,15 @@ std::string Engine::getExtrasJson() const {
     ordered_json notices = ordered_json::array();
     for (const auto& notice : m_unlockNotices) notices.push_back({{"kind", notice.kind}, {"id", notice.id}});
     out["pending_notices"] = std::move(notices);
+    // D07-2: the notice on screen (already off the queue); null when none shows.
+    if (m_toastActive) {
+        out["toast"] = {{"kind", m_toastNotice.kind},
+                        {"id", m_toastNotice.id},
+                        {"visible", m_isPlaying && !m_paused},
+                        {"remaining_seconds", m_toastRemaining}};
+    } else {
+        out["toast"] = nullptr;
+    }
     return out.dump(-1, ' ', false, ordered_json::error_handler_t::replace);
 }
 

@@ -14,7 +14,7 @@ per-capability evidence is in [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md).
 
 | Player capability | Editor PlayerWindow | Exported RowlGame | Assessment |
 | --- | --- | --- | --- |
-| Start a new story from a title screen | Title state and New Game command | Native title screen (D02): New Game / Continue / Load / Preferences / Exit before the story; `--title-state story` skips it. Labels follow the player language (D05-1) | Present |
+| Start a new story from a title screen | Title state and New Game command | Native title screen (D02): New Game / Continue / Load / Extras (D07-2, only when the game ships an `extras.json`) / Preferences / Exit before the story; `--title-state story` skips it. Labels follow the player language (D05-1) | Present |
 | Continue latest progress | Continue command backed by profile/save discovery | Title-level Continue loads the newest valid save (`saved_at`, slots 0-99); corrupt/empty saves are skipped or reported | Present (D02) |
 | Load a chosen save | Save/load overlay with paged slots and metadata | Pause menu and title Load page expose slots 0-9 (`kSlotRows = 10`) with date, chapter, summary and thumbnail; F9 loads the active slot | Partial (no paging to slots 10-99; Continue still finds them) |
 | Save a chosen save | Save/load overlay with paged slots and metadata | Pause menu exposes slots 0-9; F5 saves the active slot | Partial (same slot-page limit) |

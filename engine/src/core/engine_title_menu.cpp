@@ -107,7 +107,16 @@ void Engine::ensureSlotCache() const {
     m_pauseSlotCacheValid = true;
 }
 
+int Engine::titleRowCount() const {
+    return m_extrasCatalog.empty() ? PauseMenuLayout::kTitleRows : PauseMenuLayout::kTitleRowsWithExtras;
+}
+
+int Engine::titlePrefsRow() const {
+    return m_extrasCatalog.empty() ? PauseMenuLayout::kTitleExtrasRow : PauseMenuLayout::kTitleExtrasRow + 1;
+}
+
 bool Engine::openTitleScreen() {
+    endExtrasSession();  // D07-2: a re-opened title never keeps a music-room track
     if (!m_initialized) {
         if (m_context) {
             m_context->setError(RuntimeErrorCode::StateError,
@@ -205,30 +214,47 @@ bool Engine::titleContinue() {
 }
 
 void Engine::titleActivateSelected() {
-    const bool quitRow = (m_pauseMode == PauseMenuMode::Title && m_pauseSelected == 4);
+    // D07-2: with an extras catalog the title is New / Continue / Load / Extras /
+    // Preferences / Quit; without one the older five rows (Extras row absent).
+    const bool hasExtras = !m_extrasCatalog.empty();
+    const int extrasRow = hasExtras ? PauseMenuLayout::kTitleExtrasRow : -1;
+    const int prefsRow = titlePrefsRow();
+    const int quitRowIndex = titleRowCount() - 1;
+    const bool quitRow = (m_pauseMode == PauseMenuMode::Title && m_pauseSelected == quitRowIndex);
     if (!quitRow) m_pauseConfirmQuit = false;
     m_titleHint = UiText::None;
     switch (m_pauseMode) {
         case PauseMenuMode::Title:
-            switch (m_pauseSelected) {
-                case 0: titleStartNewGame(); break;
-                case 1: titleContinue(); break;
-                case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; break;
-                case 3:
-                    m_pauseMode = PauseMenuMode::Preferences;
-                    m_prefsFromPause = false;  // D05-2: Back returns to the title
-                    m_pauseSelected = 0;
-                    break;
-                case 4:
-                    if (m_pauseConfirmQuit) {
-                        ROWL_LOG_INFO("[Player] Exit confirmed from title screen.");
-                        m_isRunning = false;
-                    } else {
-                        m_pauseConfirmQuit = true;
-                    }
-                    break;
-                default: break;
+            if (m_pauseSelected == 0) {
+                titleStartNewGame();
+            } else if (m_pauseSelected == 1) {
+                titleContinue();
+            } else if (m_pauseSelected == 2) {
+                m_pauseMode = PauseMenuMode::LoadSlots;
+                m_pauseSelected = 0;
+            } else if (m_pauseSelected == extrasRow) {
+                m_pauseMode = PauseMenuMode::Extras;
+                m_pauseSelected = 0;
+                m_extrasTop = 0;
+                m_galleryViewing = false;
+            } else if (m_pauseSelected == prefsRow) {
+                m_pauseMode = PauseMenuMode::Preferences;
+                m_prefsFromPause = false;  // D05-2: Back returns to the title
+                m_pauseSelected = 0;
+            } else if (m_pauseSelected == quitRowIndex) {
+                if (m_pauseConfirmQuit) {
+                    ROWL_LOG_INFO("[Player] Exit confirmed from title screen.");
+                    m_isRunning = false;
+                } else {
+                    m_pauseConfirmQuit = true;
+                }
             }
+            break;
+        case PauseMenuMode::Extras:
+        case PauseMenuMode::Gallery:
+        case PauseMenuMode::MusicRoom:
+        case PauseMenuMode::Achievements:
+            extrasActivateSelected();  // D07-2
             break;
         case PauseMenuMode::Preferences:
             if (m_pauseSelected == PauseMenuLayout::kPreferenceRows - 1) {
@@ -256,6 +282,8 @@ void Engine::titleBack() {
         m_pauseSelected = 2;
     } else if (m_pauseMode == PauseMenuMode::Preferences) {
         leavePreferencesPage();
+    } else if (isExtrasMode(m_pauseMode)) {
+        extrasBack();  // D07-2: one level up; the root returns to the title row
     }
 }
 
@@ -268,7 +296,7 @@ void Engine::leavePreferencesPage() {
         m_pauseSelected = PauseMenuLayout::kMainPrefsRow;
     } else {
         m_pauseMode = PauseMenuMode::Title;
-        m_pauseSelected = 3;
+        m_pauseSelected = titlePrefsRow();
     }
     m_pauseConfirmQuit = false;
 }
@@ -356,13 +384,13 @@ PauseMenuView Engine::getTitleMenuView() const {
         cont.value = T(UiText::NoSaveValue);
         cont.enabled = false;
     }
-    view.rows = {
-        {T(UiText::NewGame), "", false},
-        cont,
-        {T(UiText::LoadGame), T(UiText::PickSlotValue), false},
-        {T(UiText::Preferences), ">", false},
-        {T(UiText::Quit), m_pauseConfirmQuit ? T(UiText::AreYouSure) : "", false},
-    };
+    view.rows.push_back(makePauseRow(T(UiText::NewGame)));
+    view.rows.push_back(cont);
+    view.rows.push_back(makePauseRow(T(UiText::LoadGame), T(UiText::PickSlotValue)));
+    // D07-2: "Ekstralar" sits before Tercihler, only when the game has extras.
+    if (!m_extrasCatalog.empty()) view.rows.push_back(makePauseRow(T(UiText::Extras), ">"));
+    view.rows.push_back(makePauseRow(T(UiText::Preferences), ">"));
+    view.rows.push_back(makePauseRow(T(UiText::Quit), m_pauseConfirmQuit ? T(UiText::AreYouSure) : ""));
     if (m_pauseConfirmQuit) {
         view.hint = T(UiText::HintTitleQuit);
     } else if (m_titleHint != UiText::None) {

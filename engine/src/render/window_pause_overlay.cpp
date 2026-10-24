@@ -80,6 +80,12 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
         AspectGuardian::virtualToPhysical(vx, vy, metrics, px, py);
     };
 
+    // D07-2: the gallery's full-screen viewer replaces the whole menu.
+    if (view.extras.active && view.extras.viewing) {
+        renderGalleryViewer(view, metrics);
+        return;
+    }
+
     // Dim the frozen story frame.
     SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(m_sdlRenderer, 0, 0, 0, 160);
@@ -96,6 +102,7 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
     SDL_RenderRect(m_sdlRenderer, &panel);
     drawPauseThumbnail(view, metrics);  // D02: selected slot's thumbnail
+    drawExtrasGraphics(view, metrics);  // D07-2: gallery grid boxes + thumbnails
 
     // C02 BUG-2: gorunur pencerede overlay her kare dim basar; donmus hikaye
     // karesi onbellekten atlanirsa arka tampon bos kalir / dim ust uste biner
@@ -137,6 +144,8 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
     toPhys(LM::kRowX, 170.0f, tx, ty);
     drawText(view.title, tx, ty, 40.0f * metrics.scaleFactor / accessScale, titleColor,
              LM::kRowW * metrics.scaleFactor, 60.0f * metrics.scaleFactor);
+
+    drawExtrasText(view, metrics);  // D07-2: counter + gallery captions
 
     // D03-2: backlog page — engine-laid-out entries (wrapped lines, y/h in the
     // virtual canvas) instead of the fixed-pitch row list. An empty history
@@ -250,6 +259,31 @@ void Window::renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view) {
              LM::kRowW * metrics.scaleFactor, 30.0f * metrics.scaleFactor);
 }
 
+// Softly rounded rectangle: one whole-pixel row per strip (sub-pixel rects
+// vanish in the software renderer on small surfaces); only the top and bottom
+// few rows are inset by a small corner arc. A full half-height capsule would
+// show hard 1px stair steps without anti-aliasing. (D04-2 badges; D07-2 toast.)
+void Window::fillCapsule(SDL_Renderer* renderer, const SDL_FRect& r, SDL_Color c) {
+    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+    const int rows = std::max(1, static_cast<int>(std::lround(r.h)));
+    const float corner = std::min(static_cast<float>(rows) * 0.2f, 6.0f);
+    const float top = std::floor(r.y);
+    const float width = std::max(1.0f, std::round(r.w));
+    const float x0 = std::round(r.x);
+    for (int row = 0; row < rows; ++row) {
+        const float edge = std::min(static_cast<float>(row) + 0.5f,
+                                    static_cast<float>(rows - row) - 0.5f);
+        float inset = 0.0f;
+        if (edge < corner) {
+            const float up = corner - edge;
+            inset = std::round(corner - std::sqrt(std::max(0.0f, corner * corner - up * up)));
+        }
+        const SDL_FRect strip{x0 + inset, top + static_cast<float>(row),
+                              std::max(1.0f, width - 2.0f * inset), 1.0f};
+        SDL_RenderFillRect(renderer, &strip);
+    }
+}
+
 void Window::renderPlayerBadges(bool autoBadge, bool skipBadge) {
     if (!m_sdlRenderer || (!autoBadge && !skipBadge)) return;
     // D04-2: AUTO / SKIP status capsules, top-right of the 1920x1080 canvas.
@@ -282,35 +316,11 @@ void Window::renderPlayerBadges(bool autoBadge, bool skipBadge) {
     }
 
     SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
-    // Softly rounded rectangle: one whole-pixel row per strip (sub-pixel rects
-    // vanish in the software renderer on small surfaces); only the top and
-    // bottom few rows are inset by a small corner arc. A full half-height
-    // capsule would show hard 1px stair steps without anti-aliasing.
-    auto fillCapsule = [&](const SDL_FRect& r, SDL_Color c) {
-        SDL_SetRenderDrawColor(m_sdlRenderer, c.r, c.g, c.b, c.a);
-        const int rows = std::max(1, static_cast<int>(std::lround(r.h)));
-        const float corner = std::min(static_cast<float>(rows) * 0.2f, 6.0f);
-        const float top = std::floor(r.y);
-        const float width = std::max(1.0f, std::round(r.w));
-        const float x0 = std::round(r.x);
-        for (int row = 0; row < rows; ++row) {
-            const float edge = std::min(static_cast<float>(row) + 0.5f,
-                                        static_cast<float>(rows - row) - 0.5f);
-            float inset = 0.0f;
-            if (edge < corner) {
-                const float up = corner - edge;
-                inset = std::round(corner - std::sqrt(std::max(0.0f, corner * corner - up * up)));
-            }
-            const SDL_FRect strip{x0 + inset, top + static_cast<float>(row),
-                                  std::max(1.0f, width - 2.0f * inset), 1.0f};
-            SDL_RenderFillRect(m_sdlRenderer, &strip);
-        }
-    };
     for (int i = 0; i < count; ++i) {
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(badges[i].left, kMarginTop, metrics, px, py);
         const SDL_FRect rect{px, py, kBadgeW * metrics.scaleFactor, kBadgeH * metrics.scaleFactor};
-        fillCapsule(rect, badges[i].fill);
+        fillCapsule(m_sdlRenderer, rect, badges[i].fill);
     }
     // Offscreen software path: flush queued rects before direct text writes.
     if (m_isOffscreen) {

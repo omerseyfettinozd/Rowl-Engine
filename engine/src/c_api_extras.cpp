@@ -41,6 +41,13 @@ RowlEngine_ResultCode RowlEngine_GetExtrasJson(
     });
 }
 
+RowlEngine_ResultCode RowlEngine_OpenExtras(RowlEngineHandle handle) {
+    // D07-2: OpenTitleScreen / OpenBacklog emsali; salt-okunur sayfalar.
+    return withExtras(handle, "open_extras", [&](Rowl::Core::Engine& engine) {
+        return engine.openExtras() ? ROWL_RESULT_OK : ROWL_RESULT_STATE_ERROR;
+    });
+}
+
 RowlEngine_ResultCode RowlEngine_ProfileUnlock(RowlEngineHandle handle, const char* kind, const char* id) {
     return withExtras(handle, "profile_unlock", [&](Rowl::Core::Engine& engine) {
         if (!kind || !id) return ROWL_RESULT_INVALID_ARGUMENT;

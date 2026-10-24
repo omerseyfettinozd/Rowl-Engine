@@ -1542,6 +1542,8 @@ void Window::renderComposedFrame(const ComposedFrame& frame) {
     const uint8_t wantedBadges = static_cast<uint8_t>((frame.showAutoBadge ? 1 : 0) |
                                                        (frame.showSkipBadge ? 2 : 0));
     if (wantedBadges != m_bakedBadges) invalidateFrameCache();
+    // D07-2: same for the achievement toast (appearing, changing, vanishing).
+    if (frame.toastText != m_bakedToast) invalidateFrameCache();
     renderVisualNovelFrame(
         frame.hasBackground,
         frame.background,
@@ -1557,9 +1559,14 @@ void Window::renderComposedFrame(const ComposedFrame& frame) {
     );
     if (!m_lastFrameReusedCache) {
         m_bakedBadges = 0;  // the redraw wiped whatever was baked before
+        m_bakedToast.clear();
         if (wantedBadges != 0) {
             renderPlayerBadges(frame.showAutoBadge, frame.showSkipBadge);
             m_bakedBadges = wantedBadges;
+        }
+        if (!frame.toastText.empty()) {
+            renderUnlockToast(frame.toastText);
+            m_bakedToast = frame.toastText;
         }
     }
 }

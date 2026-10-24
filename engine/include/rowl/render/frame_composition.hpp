@@ -31,6 +31,9 @@ struct ComposedFrame {
     /// the content hash; the window tracks what is baked into its cached frame.
     bool showAutoBadge = false;
     bool showSkipBadge = false;
+    /// D07-2: achievement toast text ("Basarim: X"), empty = none. Like the
+    /// badges it never enters the content hash; the window tracks what is baked.
+    std::string toastText;
 };
 
 } // namespace Rowl::Render
