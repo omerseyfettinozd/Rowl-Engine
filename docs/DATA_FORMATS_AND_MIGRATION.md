@@ -339,3 +339,29 @@ folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
 `USERPROFILE` or `TMPDIR` (`tools/launcher_contract.py`,
 `data_dir_override_problems`). Machine-checked by `rowl_packaged_game_isolation`
 (`tests/test_packaged_game_isolation.py`).
+
+## 11. Node `condition` component (D06-1)
+
+- **Shape:** `{"type":"condition","data":{"expression":"gold >= 10","fail_target_node_id":"42"}}`.
+  `expression` is the same Lua condition used by choice options
+  (`condition` on an option); `fail_target_node_id` is a node id written as a
+  string (the editor) or a number (hand-written graphs).
+- **When:** evaluated on a real node entry only (advance, choice, New Game,
+  graph mount) and BEFORE any entry effect. Load, rewind and scene restores
+  never re-evaluate it. Several conditions on a node run in order; the first
+  false one decides. An empty/missing expression or a disabled component gates
+  nothing.
+- **False + valid target:** the node is not played at all (no variable, audio,
+  script, transition, camera, history row or read mark); the cursor moves to
+  the target, whose own entry (conditions included) runs. A redirect is one
+  history step and saves/rewinds record the target, never the skipped node.
+  More than 16 redirects in a row is a cycle: one WARN and the node reached
+  plays normally.
+- **False + empty/unknown/unparsable target:** one WARN per node and graph, the
+  node plays normally (an authoring error never locks the game).
+- **Evaluation error** (Lua syntax/runtime error, budget): same policy as a
+  choice option, i.e. the condition counts as false (and one WARN names it).
+- **Variables:** the Lua evaluator reads the Lua globals, so New Game
+  (`RowlEngine_ResetToStartNode`, title New Game) clears the Lua story
+  variables together with the fresh GameState, as load/rewind/mount already do.
+- No C API or capability change (ABI unchanged).

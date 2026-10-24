@@ -318,6 +318,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/player_ui_strings.cpp  # D05-1: oyuncu menu yazi tablosu (tr/en)
     src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani
     src/core/engine_player_drivers.cpp  # D04-1: oyuncu Otomatik / Atla surucusu
+    src/core/engine_node_conditions.cpp  # D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     src/core/engine_parity_presenter.cpp  # Dilim-7 parity (P1-C): salt-okunur slot/backlog/semantik sunum (additive)

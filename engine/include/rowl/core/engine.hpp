@@ -23,6 +23,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -560,6 +561,12 @@ private:
     std::vector<std::string> m_activeScriptSources;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
+    // D06-1: nodes whose condition problem was already logged (bad target,
+    // evaluation error, redirect cycle) - one WARN per node and graph.
+    std::unordered_set<uint64_t> m_conditionWarnedNodes;
+    // D06-1: the last advanceStory moved the cursor through a condition
+    // redirect (advanceToChoice must still report the choice as taken).
+    bool m_lastAdvanceRedirected = false;
     uint64_t m_startPresentationStepId = 1;
     // Audio components are applied while a scene is refreshed as well as when
     // a story node is entered. Keep the entry marker separate so inspector
@@ -670,6 +677,12 @@ private:
     /// Lua gate of a choice option ("" / "true" / "1" = open; fail-closed
     /// without a sandbox).
     bool choiceConditionHolds(const std::string& condition) const;
+    /// D06-1: node-entry "condition" components. Evaluates the current node's
+    /// conditions in order; the first false one with a valid
+    /// fail_target_node_id moves the cursor to that target (repeatedly, at
+    /// most 16 hops) BEFORE any entry effect runs. Call only on real entries
+    /// (advance, new game, graph mount) - never on load/rewind/restore.
+    void resolveNodeEntryConditions();
     /// Author-enabled and its condition holds right now.
     bool choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const;
     // MS-6 pause-menu internals: keyboard and pointer funnels share these.

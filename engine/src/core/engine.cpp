@@ -509,7 +509,15 @@ void Engine::setPlayState(bool isPlaying) {
 void Engine::resetToStartNode() {
     if (!m_storyRuntime.resetToStart()) return;
 
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    // D06-1: the Lua condition evaluator (choice options and node conditions)
+    // reads the Lua globals, not GameState. The fresh GameState below carries no
+    // variables, so the Lua side starts clean too - exactly like load/rewind and
+    // the graph mount do; only the story variables go, loaded script modules stay.
+    if (m_luaSandbox) m_luaSandbox->clearVariables();
+    // A start node with a false condition hands over to its fail target
+    // before the initial snapshot is taken (the target is the first step).
+    resolveNodeEntryConditions();
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
     m_skipActive = false;  // D04-1: a new game / reset starts with Auto and Skip idle
@@ -655,6 +663,7 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     if (m_paused) return;
     m_autoAdvanceElapsed = 0.0f;
     resetAutoWait();  // D04-1: any advance (manual, Auto, Skip) starts a fresh wait
+    m_lastAdvanceRedirected = false;
 
     // If typewriter is still typing out any line, the request reveals the
     // full text immediately instead of advancing (MS-6 unified contract).
@@ -688,6 +697,11 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
         return;
     }
     if (advanceResult != StoryRuntime::AdvanceResult::Advanced) return;
+
+    // D06-1: node conditions decide BEFORE the step is recorded and before
+    // any entry effect, so a skipped node leaves no state, history or
+    // rewind link - the snapshot below belongs to the node that really plays.
+    resolveNodeEntryConditions();
 
     if (m_gameState) {
         m_gameState = Rowl::State::GameState::createNextState(
@@ -765,7 +779,7 @@ bool Engine::advanceToChoice(const std::string& optionId) {
     }
 
     advanceStory(choice->index, true);
-    return m_storyRuntime.currentNodeId() == choice->targetNodeId;
+    return m_lastAdvanceRedirected || m_storyRuntime.currentNodeId() == choice->targetNodeId;
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
@@ -1681,9 +1695,13 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
     // Loading a graph is a new story session. Keeping a previous graph's
     // history here could make Save/Load or rewind jump into another graph.
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
     m_lastSfxPlaybackNodeId = 0;
     if (m_luaSandbox) m_luaSandbox->clearVariables();
+    // D06-1: new graph = new warning budget; the start node's conditions run
+    // against the freshly cleared variables, before the initial snapshot.
+    m_conditionWarnedNodes.clear();
+    resolveNodeEntryConditions();
+    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
 
     const auto& startNode = *m_storyRuntime.currentNode();
     if (!startNode.components.empty()) {

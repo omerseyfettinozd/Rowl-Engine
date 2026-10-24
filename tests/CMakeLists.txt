@@ -41,6 +41,7 @@ add_executable(rowl_tests
     test_backlog_screen.cpp
     test_auto_skip.cpp
     test_auto_skip_ui.cpp
+    test_condition_component.cpp
     test_player_ui_language.cpp
     test_player_preferences_menu.cpp
     test_graph_vnext.cpp
