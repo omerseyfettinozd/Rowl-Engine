@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -28,12 +29,83 @@ constexpr size_t kDetailSummaryBytes = 48;
 
 }  // namespace
 
-std::string pauseSlotDateText(const std::string& savedAt) {
-    // "2026-10-24T12:34:56Z" -> "2026-10-24 12:34"
-    if (savedAt.size() >= 16 && savedAt[10] == 'T') {
-        return savedAt.substr(0, 10) + " " + savedAt.substr(11, 5);
+namespace {
+
+bool isDigits(const std::string& s, size_t pos, size_t count) {
+    if (pos + count > s.size()) return false;
+    for (size_t i = pos; i < pos + count; ++i) {
+        if (s[i] < '0' || s[i] > '9') return false;
     }
-    return savedAt;
+    return true;
+}
+
+int twoDigits(const std::string& s, size_t pos) { return (s[pos] - '0') * 10 + (s[pos + 1] - '0'); }
+
+// "YYYY-MM-DDTHH:MM[:SS[.fff]]Z" (UTC) -> local broken-down time. False for
+// anything else (legacy "Z"-less stamps, garbage), so callers keep the old
+// truncating display for those.
+bool utcIsoToLocal(const std::string& iso, std::tm& local) {
+    if (iso.size() < 17 || iso.back() != 'Z' || iso[10] != 'T' || iso[4] != '-' || iso[7] != '-' ||
+        iso[13] != ':' || !isDigits(iso, 0, 4) || !isDigits(iso, 5, 2) || !isDigits(iso, 8, 2) ||
+        !isDigits(iso, 11, 2) || !isDigits(iso, 14, 2)) {
+        return false;
+    }
+    int second = 0;
+    size_t pos = 16;
+    if (iso[pos] == ':') {
+        if (!isDigits(iso, pos + 1, 2)) return false;
+        second = twoDigits(iso, pos + 1);
+        pos += 3;
+        if (pos < iso.size() && iso[pos] == '.') {
+            ++pos;
+            const size_t start = pos;
+            while (pos < iso.size() && iso[pos] >= '0' && iso[pos] <= '9') ++pos;
+            if (pos == start) return false;
+        }
+    }
+    if (pos + 1 != iso.size()) return false;  // only the trailing "Z" may remain
+    std::tm utc{};
+    utc.tm_year = std::stoi(iso.substr(0, 4)) - 1900;
+    utc.tm_mon = twoDigits(iso, 5) - 1;
+    utc.tm_mday = twoDigits(iso, 8);
+    utc.tm_hour = twoDigits(iso, 11);
+    utc.tm_min = twoDigits(iso, 14);
+    utc.tm_sec = second;
+    if (utc.tm_mon < 0 || utc.tm_mon > 11 || utc.tm_mday < 1 || utc.tm_mday > 31 || utc.tm_hour > 23 ||
+        utc.tm_min > 59 || utc.tm_sec > 60) {
+        return false;
+    }
+#if defined(_WIN32)
+    const std::time_t t = _mkgmtime(&utc);
+#else
+    const std::time_t t = timegm(&utc);
+#endif
+    if (t == static_cast<std::time_t>(-1)) return false;
+#if defined(_WIN32)
+    return localtime_s(&local, &t) == 0;
+#else
+    return localtime_r(&t, &local) != nullptr;
+#endif
+}
+
+}  // namespace
+
+std::string utcIsoToLocalText(const std::string& iso, bool dateOnly) {
+    std::tm local{};
+    if (utcIsoToLocal(iso, local)) {
+        char buffer[32];
+        std::strftime(buffer, sizeof(buffer), dateOnly ? "%Y-%m-%d" : "%Y-%m-%d %H:%M", &local);
+        return std::string(buffer);
+    }
+    // Legacy / unparsable stamp: show it as stored (truncated), as before.
+    if (dateOnly) return iso.size() >= 10 ? iso.substr(0, 10) : iso;
+    if (iso.size() >= 16 && iso[10] == 'T') return iso.substr(0, 10) + " " + iso.substr(11, 5);
+    return iso;
+}
+
+std::string pauseSlotDateText(const std::string& savedAt) {
+    // "2026-10-24T12:34:56Z" (UTC on disk) -> local "2026-10-24 15:34".
+    return utcIsoToLocalText(savedAt, false);
 }
 
 std::string pauseSlotDetail(const PauseSlotInfo& info) {
@@ -355,11 +427,11 @@ PauseMenuView Engine::getTitleMenuView() const {
     if (m_pauseMode == PauseMenuMode::Preferences) {
         view.title = T(UiText::PreferencesTitle);
         view.rows = {
-            {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true},
-            {T(UiText::Music), pauseMenuPercent(pauseMenuVolume(4)), true},
-            {T(UiText::Sfx), pauseMenuPercent(pauseMenuVolume(5)), true},
-            {T(UiText::Voice), pauseMenuPercent(pauseMenuVolume(6)), true},
-            {T(UiText::TextSpeed), pauseMenuSpeedText(m_textSpeedMultiplier), true},
+            {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true, "", true},
+            {T(UiText::Music), pauseMenuPercent(pauseMenuVolume(4)), true, "", true},
+            {T(UiText::Sfx), pauseMenuPercent(pauseMenuVolume(5)), true, "", true},
+            {T(UiText::Voice), pauseMenuPercent(pauseMenuVolume(6)), true, "", true},
+            {T(UiText::TextSpeed), pauseMenuSpeedText(m_textSpeedMultiplier), true, "", true},
             {T(UiText::AutoSpeed), pauseMenuDelayText(m_autoDelay, lang), true, "", true},
             {T(UiText::Skip), T(m_skipPolicy == SkipPolicy::Off ? UiText::Off
                               : m_skipPolicy == SkipPolicy::All ? UiText::All : UiText::ReadOnly),
@@ -368,7 +440,7 @@ PauseMenuView Engine::getTitleMenuView() const {
             {T(UiText::TextSize), pauseMenuPercent(textScale()), true, "", true},
             {T(UiText::HighContrast), T(highContrast() ? UiText::On : UiText::Off), true, "", true},
             {T(UiText::ReduceMotion), T(reducedMotion() ? UiText::On : UiText::Off), true, "", true},
-            {T(UiText::Back), "", false},
+            {T(UiText::Back), "", false, "", true},
         };
         view.hint = T(UiText::HintPreferences);
         return view;

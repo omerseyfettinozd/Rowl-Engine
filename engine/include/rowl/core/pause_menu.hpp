@@ -192,7 +192,11 @@ std::string pauseMenuDelayText(float seconds, UiLang lang);
 /// D02: "<YYYY-MM-DD HH:MM>  <chapter>  <summary ~48 bytes>" of a valid slot,
 /// empty otherwise (engine_title_menu.cpp).
 std::string pauseSlotDetail(const PauseSlotInfo& info);
-/// D02: "2026-10-24T12:34:56Z" -> "2026-10-24 12:34".
+/// D-K2: ISO-8601 UTC stamp ("...Z", seconds/fraction optional) -> player-local
+/// "YYYY-MM-DD HH:MM" or, with dateOnly, "YYYY-MM-DD". Unparsable / "Z"-less
+/// stamps are shown truncated as stored (engine_title_menu.cpp).
+std::string utcIsoToLocalText(const std::string& iso, bool dateOnly);
+/// D02: "2026-10-24T12:34:56Z" -> local "2026-10-24 12:34" (D-K2: local time).
 std::string pauseSlotDateText(const std::string& savedAt);
 
 /// Single source of truth for overlay layout. Row i occupies

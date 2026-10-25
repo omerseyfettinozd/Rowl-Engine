@@ -23,6 +23,7 @@
 #include <array>
 #include <iterator>
 #include <cstdlib>
+#include <ctime>
 #include <iomanip>
 #include <sstream>  // A3-tur6: frameHashFail hex-formatı harness-helper'a taşındı
 #include <SDL3/SDL.h>
@@ -60,6 +61,34 @@
     std::cerr << lockName << " lock failure: " << message << std::endl;
     std::exit(1);
 }
+
+// D-K2: pins the process time zone for the scope (TZ + tzset) and restores the
+// previous value, so local-time displays are deterministic on any machine.
+struct ScopedTimeZone {
+    explicit ScopedTimeZone(const char* tz) {
+        const char* old = std::getenv("TZ");
+        hadOld = old != nullptr;
+        if (old) oldValue = old;
+        apply(tz);
+    }
+    ~ScopedTimeZone() { apply(hadOld ? oldValue.c_str() : nullptr); }
+    ScopedTimeZone(const ScopedTimeZone&) = delete;
+    ScopedTimeZone& operator=(const ScopedTimeZone&) = delete;
+
+private:
+    static void apply(const char* tz) {
+#ifdef _WIN32
+        _putenv_s("TZ", tz ? tz : "");
+        _tzset();
+#else
+        if (tz) ::setenv("TZ", tz, 1);
+        else ::unsetenv("TZ");
+        ::tzset();
+#endif
+    }
+    bool hadOld = false;
+    std::string oldValue;
+};
 
 inline std::vector<uint8_t> decodeBase64(const std::string_view input) {
     static constexpr std::string_view alphabet =

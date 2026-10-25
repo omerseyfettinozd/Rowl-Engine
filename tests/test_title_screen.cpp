@@ -147,6 +147,10 @@ void corrupt(const fs::path& file) {
 void test_title_screen() {
     TEST_SECTION("Native title screen (D02)");
 
+    // D-K2: slot dates are shown in local time; pin UTC so the fixed
+    // "2026-02-02 09:30" style expectations below hold on any machine.
+    ScopedTimeZone utcZone("UTC");
+
     const fs::path root = fs::temp_directory_path() / "rowl_title_screen";
     std::error_code ec;
     fs::remove_all(root, ec);
@@ -448,6 +452,29 @@ void test_title_screen() {
         req(RowlEngine_IsRunning(h) == 1, "Ana Menu must not quit");
     }
     TEST_PASS("Pause menu Ana Menu returns to the title after a two-step confirm");
+
+    // D-K2: the disk stamp stays UTC; the player sees local time (slot row,
+    // "Devam Et" line, achievement date).
+    {
+        ScopedTimeZone istanbul("Europe/Istanbul");  // +03, no DST
+        const std::string slotText = Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00Z");
+        req(slotText == "2026-10-25 01:30", "Istanbul slot time is local: " + slotText);
+        req(Rowl::Core::utcIsoToLocalText("2026-10-24T22:30:00Z", true) == "2026-10-25",
+            "Istanbul achievement date rolls over midnight");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T22:30Z") == "2026-10-25 01:30" &&
+                Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00.250Z") == "2026-10-25 01:30",
+            "seconds-less and fractional stamps convert too");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T12:34:56") == "2026-10-24 12:34" &&
+                Rowl::Core::utcIsoToLocalText("2026-10-24T12:34:56", true) == "2026-10-24" &&
+                Rowl::Core::pauseSlotDateText("garbage") == "garbage" &&
+                Rowl::Core::pauseSlotDateText("") == "",
+            "Z-less / unparsable stamps keep the legacy truncated display");
+        ScopedTimeZone utc("UTC");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00Z") == "2026-10-24 22:30" &&
+                Rowl::Core::utcIsoToLocalText("2026-10-24T22:30:00Z", true) == "2026-10-24",
+            "UTC zone: same as the old display");
+    }
+    TEST_PASS("D-K2: UTC disk stamps display in local time, legacy stamps unchanged");
 
     RowlEngine_Shutdown(h);
     RowlEngine_Destroy(h);

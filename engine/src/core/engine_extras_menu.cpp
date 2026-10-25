@@ -36,10 +36,8 @@ constexpr float kToastSeconds = 3.0f;
 
 const char* langTag(UiLang lang) { return lang == UiLang::English ? "en" : "tr"; }
 
-// "2026-10-24T19:30:00Z" -> "2026-10-24".
-std::string dateOnly(const std::string& iso) {
-    return iso.size() >= 10 ? iso.substr(0, 10) : iso;
-}
+// "2026-10-24T19:30:00Z" (UTC) -> player-local "2026-10-24" (D-K2).
+std::string dateOnly(const std::string& iso) { return utcIsoToLocalText(iso, true); }
 
 }  // namespace
 

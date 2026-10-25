@@ -47,6 +47,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
@@ -871,6 +872,9 @@ void musicTests() {
 
 // ── 4. achievements ─────────────────────────────────────────────────────────
 void achievementsTests() {
+    // D-K2: the date is shown in local time (the profile keeps UTC). Istanbul is
+    // a fixed +03, so the expected day is computed here independently (UTC+3).
+    ScopedTimeZone istanbul("Europe/Istanbul");
     Options o;
     o.catalog = "default";
     Rig rig(o);
@@ -888,9 +892,18 @@ void achievementsTests() {
         req(items.size() == 3, "three items");
         req(items[0]["title"] == "Birinci" && items[0]["description"] == "Birinci açıklama." && items[0]["unlocked"] == true,
             "open: title + description: " + items[0].dump());
-        req(std::regex_match(items[0]["at"].get<std::string>(), std::regex(R"(\d{4}-\d{2}-\d{2})")) &&
-                at.rfind(items[0]["at"].get<std::string>(), 0) == 0,
-            "open: the unlock date " + items[0]["at"].dump() + " from " + at);
+        std::tm utcFields{};
+        req(std::sscanf(at.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d", &utcFields.tm_year, &utcFields.tm_mon,
+                        &utcFields.tm_mday, &utcFields.tm_hour, &utcFields.tm_min, &utcFields.tm_sec) == 6,
+            "profile stamp parses: " + at);
+        utcFields.tm_year -= 1900;
+        utcFields.tm_mon -= 1;
+        utcFields.tm_hour += 3;  // Europe/Istanbul
+        std::mktime(&utcFields);  // normalises the day roll-over (TZ-independent fields only)
+        char expectedDay[16];
+        std::strftime(expectedDay, sizeof(expectedDay), "%Y-%m-%d", &utcFields);
+        req(at.back() == 'Z' && items[0]["at"] == std::string(expectedDay),
+            "open: the unlock date " + items[0]["at"].dump() + " is the local day of " + at + " (" + expectedDay + ")");
         req(items[1]["title"] == "???" && items[1]["description"] == "???" && items[1]["at"].is_null() &&
                 items[1]["unlocked"] == false,
             "hidden and locked: title and description are ???: " + items[1].dump());
