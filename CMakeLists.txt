@@ -431,6 +431,26 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             # Offscreen smoke frame: must initialise with no display server.
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # D-K1 (Asama D kabul yolculugu): paketli kayip_tablo, editorsuz; gercek SDL
+        # tus/fare olaylariyla ("Yeni Oyun" -> secimler -> kayit -> yeniden baslat ->
+        # devam -> gecmis -> tercih -> auto/skip -> rewind -> son -> basarim -> Ekstralar).
+        # SDL olaylari ctypes ile SDL_PushEvent'e itilir: yalniz Linux (SDL3 .so, dummy
+        # video); SDL3 kutuphanesi bulunamazsa test 77 ile SKIP doner.
+        if(UNIX AND NOT APPLE)
+            add_test(
+                NAME rowl_d_acceptance_journey
+                COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d_acceptance_journey.py
+                    $<TARGET_FILE:rowl_player>
+                    $<TARGET_FILE:RowlEngineCore>
+                    ${CMAKE_SOURCE_DIR}/samples/kayip_tablo
+            )
+            set_tests_properties(rowl_d_acceptance_journey PROPERTIES
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                TIMEOUT 300
+                SKIP_RETURN_CODE 77
+                ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+            )
+        endif()
     endif()
 
     # A real SDL window is needed to exercise SDL's GPU render-state path.  Keep

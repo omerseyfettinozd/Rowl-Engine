@@ -344,7 +344,7 @@ void test_backlog_replay() {
     // 3. Load / rewind never replay a voice_track.
     RowlEngine_Step(h, 0.016f);
     const uint32_t clipsBeforeRestore = audio->getVoiceClipCount();
-    const uint64_t sfxBeforeRestore = audio->sfxStartedCount();
+    uint64_t sfxBeforeRestore = audio->sfxStartedCount();
     // Entry effects bump stepId, so one node can span several rewind steps.
     const auto rewindToNode = [&](uint64_t node) {
         for (int i = 0; i < 12 && RowlEngine_GetCurrentNodeId(h) != node; ++i)
@@ -359,6 +359,31 @@ void test_backlog_replay() {
     audio->resetVoiceBlipCount();
     stepFor(h, 40, 0.05f);
     req(audio->getVoiceBlipCount() == 0, "a voiced node stays blip-free after rewind");
+    // D-K1: a rewind restores state, it is not a node entry - but the node it came FROM is
+    // entered again as soon as the player walks forward. The one-shot entry markers (sfx,
+    // voice clip, backlog row) used to keep the old node: node 5 below played no sfx and
+    // got no backlog row the second time (node 4, rewound to, has no audio component).
+    RowlEngine_AdvanceNode(h, 0);
+    stepFor(h, 40, 0.05f);  // node 4 types its text out first; a click would only finish it
+    RowlEngine_AdvanceNode(h, 0);
+    req(RowlEngine_GetCurrentNodeId(h) == 5 && history(h).size() == 4,
+        "walk forward to node 5 again: node " + std::to_string(RowlEngine_GetCurrentNodeId(h)) + ", " +
+            std::to_string(history(h).size()) + " rows");
+    const uint64_t sfxBeforeReentry = audio->sfxStartedCount();
+    rewindToNode(4);
+    req(history(h).size() == 3 && audio->sfxStartedCount() == sfxBeforeReentry,
+        "rewinding from node 5 to node 4 drops node 5's row and plays nothing");
+    stepFor(h, 40, 0.05f);
+    RowlEngine_AdvanceNode(h, 0);
+    req(RowlEngine_GetCurrentNodeId(h) == 5, "advance back into node 5");
+    req(audio->sfxStartedCount() == sfxBeforeReentry + 1,
+        "entering node 5 again after a rewind plays its sfx again");
+    {
+        const json rows = history(h);
+        req(rows.size() == 4 && rows[3]["node_id"] == 5,
+            "entering node 5 again after a rewind records its backlog row again: " + json(rows).dump());
+    }
+    sfxBeforeRestore = audio->sfxStartedCount();
     req(RowlEngine_ReplayBacklogVoice(h, 0) == ROWL_RESULT_OK, "replay before load");
     const uint32_t clipsBeforeLoad = audio->getVoiceClipCount();
     req(RowlEngine_LoadGameSlot(h, 1) == 1 && RowlEngine_GetCurrentNodeId(h) == 5, "load slot 1");

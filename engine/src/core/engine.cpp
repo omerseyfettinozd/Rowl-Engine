@@ -1622,6 +1622,15 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_scriptRuntimeStatuses.clear();
         deactivateScripts(replayEntryEffects);
         activateScripts(stagedScripts, replayEntryEffects);
+        // D-K1: a node's on_enter writes its story variables through rowl.var_set into the
+        // Lua side only. Without a commit the GameState never heard of them: a save made on
+        // or after that node, and a rewind back to it, lost the change (kayip_tablo's
+        // Hoca node gives +1 clue; the last choice needs it). Same single immutable
+        // transition ExecuteScript uses; unchanged variables add no step.
+        if (replayEntryEffects && !stagedScripts.empty() && m_luaSandbox && m_gameState) {
+            m_gameState = Rowl::State::GameState::createNextStateWithVariables(
+                m_gameState, m_storyRuntime.currentNodeId(), m_luaSandbox->getAllVariables());
+        }
 
         if (replayEntryEffects && m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
             std::string filter = "Normal";
@@ -3220,6 +3229,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     const uint64_t prevNode = m_storyRuntime.currentNodeId();
     const double prevPlaytime = m_playtimeSeconds;
     const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    const uint64_t prevRecordedNode = m_lastRecordedDialogueNodeId;
     // getAllVariables const-ref döner — kopya şart (clearVariables sonrası
     // referans ölürdü).
     const auto prevLuaVars = m_luaSandbox
@@ -3242,6 +3252,11 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
     // Loading restores state; it is not a node-entry event and must not replay SFX.
     m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+    // D-K1: nor a history entry (the restored history already holds this node's
+    // lines), but the one-shot "line already recorded" marker must not outlive the
+    // restore: it kept the node the player was on BEFORE the load, so walking
+    // back into that node dropped its line from the backlog.
+    m_lastRecordedDialogueNodeId = 0;
 
     // Sync variables to Lua sandbox
     if (m_luaSandbox && m_gameState->variables) {
@@ -3299,6 +3314,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         m_gameState = prevState;
         m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_lastRecordedDialogueNodeId = prevRecordedNode;
         m_storyRuntime.setCurrentNodeId(prevNode);
         if (m_luaSandbox) {
             m_luaSandbox->clearVariables();
@@ -3429,6 +3445,7 @@ bool Engine::rewind(uint64_t steps) {
     // kalıyordu.
     const double prevPlaytime = m_playtimeSeconds;
     const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    const uint64_t prevRecordedNode = m_lastRecordedDialogueNodeId;
     const auto prevLuaVars = m_luaSandbox
         ? m_luaSandbox->getAllVariables()
         : std::unordered_map<std::string, std::string>{};
@@ -3444,6 +3461,12 @@ bool Engine::rewind(uint64_t steps) {
                       " steps lands on node #" + std::to_string(m_gameState->activeNodeId) +
                       " absent from the loaded graph");
     }
+    // D-K1: like a load, a rewind restores state and is not a node-entry event.
+    // The one-shot node-entry markers (SFX / voice clip, backlog line) used to
+    // keep the node the player rewound FROM, so walking forward into that same
+    // node again played no SFX / voice and added no backlog row for it.
+    m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+    m_lastRecordedDialogueNodeId = 0;
 
     if (m_luaSandbox && m_gameState->variables) {
         m_luaSandbox->clearVariables();
@@ -3492,6 +3515,7 @@ bool Engine::rewind(uint64_t steps) {
         // #86: playtime senkronu (load karşılığı) + kamera/ses geri-alımı.
         m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_lastRecordedDialogueNodeId = prevRecordedNode;
         m_storyRuntime.setCurrentNodeId(prevNode);
         if (m_luaSandbox) {
             m_luaSandbox->clearVariables();
