@@ -16,7 +16,8 @@ Window::SpeakerTagLayout Window::layoutSpeakerTag(const DialogueRenderData& dlg,
     SpeakerTagLayout layout;
     layout.text = dlg.speaker;
     const float fontPx = dlg.speakerFontSize * scale;
-    if (!m_fontRenderer || !m_fontRenderer->isLoaded()) {
+    FontRenderer* const speakerFont = getSpeakerFontRenderer();  // T1: theme speaker font or the project font
+    if (!speakerFont || !speakerFont->isLoaded()) {
         // Yazi tipi yok: debug-bitmap yolu 10 sanal piksel/karakter ile olcer.
         layout.tagWidth = speakerTagWidth(
             static_cast<float>(dlg.speaker.length()) * 10.0f * scale, scaledDialogueWidth, scale);
@@ -25,7 +26,7 @@ Window::SpeakerTagLayout Window::layoutSpeakerTag(const DialogueRenderData& dlg,
     // Tek satir olcumu (sarma yok): kararı kutu verir. measureTextWidth sekilli
     // yolda cizilen sekille ayni onbellek girdisidir (textScale dahil).
     const auto measure = [&](const std::string& text) {
-        return m_fontRenderer->measureTextWidth(text, fontPx);
+        return speakerFont->measureTextWidth(text, fontPx);
     };
     const float naturalWidth = measure(dlg.speaker);
     layout.tagWidth = speakerTagWidth(naturalWidth, scaledDialogueWidth, scale);
@@ -34,7 +35,7 @@ Window::SpeakerTagLayout Window::layoutSpeakerTag(const DialogueRenderData& dlg,
     // ile inner = tagWidth - 32*olcek ayni sayiya float yuvarlamasiyla donmez; yarim
     // piksellik pay, sigan adin sondan "…" yemesini onler.
     if (naturalWidth > inner + 0.5f) layout.text = ellipsizeToWidth(dlg.speaker, inner, measure);
-    layout.shaped = m_fontRenderer->shapeTextShared(layout.text, fontPx, 0.0f);
+    layout.shaped = speakerFont->shapeTextShared(layout.text, fontPx, 0.0f);
     return layout;
 }
 
@@ -57,7 +58,7 @@ void Window::fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) cons
         box.height = choice.height;
         box.visible = choice.enabled;
         if (choice.enabled && !choice.text.empty()) {
-            const FontRenderer* font = m_fontRenderer.get();
+            const FontRenderer* font = getDialogueFontRenderer();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 const auto found = m_buttonFontCache.find(choice.fontFamily);
                 if (found != m_buttonFontCache.end() && found->second) font = found->second.get();

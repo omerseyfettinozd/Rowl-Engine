@@ -130,6 +130,7 @@ void test_c_api_contract() {
         ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY |  // D03-1
         ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP |  // D04-1
         ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS |  // D07-1
+        ROWL_ENGINE_CAPABILITY_UI_THEME |  // T1
         ROWL_ENGINE_CAPABILITY_MSDF_RENDER;
     if ((capabilities & ~kKnownCapabilities) != 0) {
         std::cerr << "Unknown capability bits in mask" << std::endl;

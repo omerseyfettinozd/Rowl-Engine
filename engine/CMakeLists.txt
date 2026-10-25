@@ -322,6 +322,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine_choice_focus.cpp  # D-K3: secim menusunde klavye / fare odagi + sigdirilmis dugme yerlesimi
     src/core/engine_extras_menu.cpp  # D07-2: Ekstralar sayfalari (galeri / muzik odasi / basarimlar) + basarim bildirimi
     src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
+    src/core/engine_ui_theme.cpp  # T1: oyuncu arayuzu temasi (ui_theme.json) + diyalog/secim varsayilanlari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     src/core/engine_parity_presenter.cpp  # Dilim-7 parity (P1-C): salt-okunur slot/backlog/semantik sunum (additive)
@@ -366,6 +367,7 @@ set(ROWL_ENGINE_SOURCES
     src/state/game_data_layout.cpp
     src/state/player_profile.cpp
     src/state/extras_catalog.cpp  # D07-1: extras.json ayristiricisi
+    src/state/ui_theme.cpp        # T1: ui_theme.json ayristiricisi
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -406,6 +408,7 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_game_data.cpp
     src/c_api_profile.cpp
     src/c_api_extras.cpp  # D07-1: GetExtrasJson / ProfileUnlock / ProfileIsUnlocked
+    src/c_api_ui_theme.cpp  # T1: GetUiThemeJson / ReloadUiTheme / SetUiThemeJson
     src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
     src/c_api_observability.cpp          # AI Full-Observability log pipe & query
 )

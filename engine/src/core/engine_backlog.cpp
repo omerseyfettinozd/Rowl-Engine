@@ -78,7 +78,7 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
     if (index >= history.size()) return cell;
     const auto& entry = history[index];
 
-    Rowl::Render::FontRenderer* fonts = m_window ? m_window->getFontRenderer() : nullptr;
+    Rowl::Render::FontRenderer* fonts = m_window ? m_window->getMenuFontRenderer() : nullptr;
     const bool haveFont = fonts && fonts->isLoaded();
     // Accessibility text scale grows glyphs (and so the line pitch) with it.
     const float lineH = LM::kBacklogLineH * (haveFont ? std::max(1.0f, fonts->textScale()) : 1.0f);

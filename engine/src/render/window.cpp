@@ -117,17 +117,84 @@ static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
 // kontrastta ve hover rengi arka planla yakin yazarlarda): ikinci ic cerceve
 // (yazi renginde) + sol serit (cerceve renginde), duraklatma menusu secili satiri gibi.
 void drawChoiceFocusMarks(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color border,
-                          SDL_Color text, float scale) {
-    const float inset = std::max(2.0f, 3.0f * scale);
-    if (rect.w > inset * 2.0f && rect.h > inset * 2.0f) {
+                          SDL_Color text, float scale,
+                          const Rowl::State::UiChoiceFocusTheme& focus) {
+    // T1: inset / bar width / colours come from the theme (defaults == the old
+    // 3 / 6 / button text colour / button border colour).
+    const float inset = std::max(2.0f, focus.inset * scale);
+    if (focus.inset > 0.0f && rect.w > inset * 2.0f && rect.h > inset * 2.0f) {
         const SDL_FRect inner{rect.x + inset, rect.y + inset, rect.w - inset * 2.0f,
                               rect.h - inset * 2.0f};
-        SDL_SetRenderDrawColor(renderer, text.r, text.g, text.b, 255);
+        const SDL_Color innerColor = focus.innerColor
+            ? SDL_Color{focus.innerColor->r, focus.innerColor->g, focus.innerColor->b, 255} : text;
+        SDL_SetRenderDrawColor(renderer, innerColor.r, innerColor.g, innerColor.b, 255);
         SDL_RenderRect(renderer, &inner);
     }
-    const SDL_FRect bar{rect.x, rect.y, std::max(3.0f, 6.0f * scale), rect.h};
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
-    SDL_RenderFillRect(renderer, &bar);
+    if (focus.barWidth > 0.0f) {
+        const SDL_FRect bar{rect.x, rect.y, std::max(3.0f, focus.barWidth * scale), rect.h};
+        const SDL_Color barColor = focus.barColor
+            ? SDL_Color{focus.barColor->r, focus.barColor->g, focus.barColor->b, 255} : border;
+        SDL_SetRenderDrawColor(renderer, barColor.r, barColor.g, barColor.b, 255);
+        SDL_RenderFillRect(renderer, &bar);
+    }
+}
+
+// T1: rounded box for the dialogue box / choice buttons when the theme honours
+// the components' corner_radius / border_thickness. One whole-pixel row per
+// strip (the fillCapsule technique: sub-pixel rects vanish in the software
+// renderer); `radius` and `rings` are physical pixels.
+float roundedInset(int row, int rows, float radius) {
+    const float edge = std::min(static_cast<float>(row) + 0.5f, static_cast<float>(rows - row) - 0.5f);
+    if (radius <= 0.0f || edge >= radius) return 0.0f;
+    const float up = radius - edge;
+    return std::round(radius - std::sqrt(std::max(0.0f, radius * radius - up * up)));
+}
+
+void drawRoundedBox(SDL_Renderer* renderer, const SDL_FRect& r, float radius, SDL_Color fill,
+                    SDL_Color border, int rings, bool drawFill) {
+    const int rows = std::max(1, static_cast<int>(std::lround(r.h)));
+    const float width = std::max(1.0f, std::round(r.w));
+    const float x0 = std::round(r.x);
+    const float top = std::floor(r.y);
+    radius = std::clamp(radius, 0.0f, std::min(width, static_cast<float>(rows)) * 0.5f);
+    const auto strip = [&](float left, float right, float row) {
+        if (right - left < 1.0f) return;
+        const SDL_FRect span{left, top + row, right - left, 1.0f};
+        SDL_RenderFillRect(renderer, &span);
+    };
+    if (drawFill) {
+        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+        for (int row = 0; row < rows; ++row) {
+            const float inset = roundedInset(row, rows, radius);
+            strip(x0 + inset, x0 + width - inset, static_cast<float>(row));
+        }
+    }
+    if (rings <= 0) return;
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    const int innerRows = rows - 2 * rings;
+    const float innerRadius = std::max(0.0f, radius - static_cast<float>(rings));
+    for (int row = 0; row < rows; ++row) {
+        const float outer = roundedInset(row, rows, radius);
+        const float left = x0 + outer;
+        const float right = x0 + width - outer;
+        const int innerRow = row - rings;
+        if (innerRow >= 0 && innerRow < innerRows && width > 2.0f * rings) {
+            const float inner = static_cast<float>(rings) + roundedInset(innerRow, innerRows, innerRadius);
+            strip(left, std::max(left, x0 + inner), static_cast<float>(row));
+            strip(std::min(right, x0 + width - inner), right, static_cast<float>(row));
+        } else {
+            strip(left, right, static_cast<float>(row));
+        }
+    }
+}
+
+SDL_Color toSdl(const Rowl::State::UiColor& c) { return SDL_Color{c.r, c.g, c.b, c.a}; }
+
+// border_thickness -> ring count when the theme honours the shape fields: the
+// legacy "1 px up to 1.5, else 2" rule widens to round(thickness); 0 = no border.
+int shapeRings(float thickness) {
+    if (!(thickness >= 0.5f)) return 0;
+    return thickness > 1.5f ? std::clamp(static_cast<int>(std::lround(thickness)), 1, 16) : 1;
 }
 
 // A3-tur3 (lifecycle): secim-dugmesi font onbellegi tavani — hikaye-JSON'undan
@@ -850,10 +917,53 @@ void Window::beginFrame() {
     if (!m_initialized || !m_sdlRenderer) return;
 
     // Dark sleek theme background (#1A1A24)
-    SDL_SetRenderDrawColor(m_sdlRenderer, 26, 26, 36, 255);
+    const auto& clear = uiTheme().scene.clear;
+    SDL_SetRenderDrawColor(m_sdlRenderer, clear.r, clear.g, clear.b, clear.a);
     SDL_RenderClear(m_sdlRenderer);
 }
 
+
+void Window::strokeRect(SDL_Renderer* renderer, const SDL_FRect& rect, int rings) {
+    for (int k = 0; k < rings; ++k) {
+        const float inset = static_cast<float>(k);
+        const SDL_FRect ring{rect.x + inset, rect.y + inset, rect.w - 2.0f * inset, rect.h - 2.0f * inset};
+        if (ring.w <= 0.0f || ring.h <= 0.0f) break;
+        SDL_RenderRect(renderer, &ring);
+    }
+}
+
+std::unique_ptr<FontRenderer> Window::loadThemeFont(const std::string& path) {
+    if (path.empty()) return nullptr;
+    // Same probing as the font resolver: the project's mounts, plain then under Assets/.
+    for (const std::string& candidate : {path, "Assets/" + path}) {
+        const auto bytes = vfs().readBytes(candidate);
+        if (bytes.empty()) continue;
+        auto renderer = std::make_unique<FontRenderer>();
+        if (renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
+            if (m_fontRenderer) {  // the accessibility state is shared by every renderer
+                renderer->setTextScale(m_fontRenderer->textScale());
+                renderer->setHighContrast(m_fontRenderer->highContrast());
+            }
+            return renderer;
+        }
+    }
+    ROWL_LOG_WARN("[UiTheme] font '" + path + "' could not be loaded; the project font is used");
+    return nullptr;
+}
+
+void Window::setUiTheme(const Rowl::State::UiTheme& theme,
+                        const std::optional<Rowl::State::UiTheme>& highContrast) {
+    m_theme = theme;
+    m_themeHc = highContrast;
+    m_themeMenuFont = loadThemeFont(theme.fonts.menu);
+    m_themeDialogueFont = loadThemeFont(theme.fonts.dialogue);
+    m_themeSpeakerFont = loadThemeFont(theme.fonts.speaker);
+    // The theme is not part of the frame hash: whatever was drawn (and baked:
+    // badges, toast) in the old colours must be drawn again.
+    m_bakedBadges = 0;
+    m_bakedToast.clear();
+    invalidateFrameCache();
+}
 
 void Window::renderVisualNovelFrame(
     bool hasBackground,
@@ -914,7 +1024,9 @@ void Window::renderVisualNovelFrame(
     ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
 
     // Clear physical screen to letterbox black (#0B0F19)
-    SDL_SetRenderDrawColor(m_sdlRenderer, 11, 15, 25, 255);
+    const Rowl::State::UiTheme& theme = uiTheme();
+    SDL_SetRenderDrawColor(m_sdlRenderer, theme.scene.letterbox.r, theme.scene.letterbox.g,
+                           theme.scene.letterbox.b, theme.scene.letterbox.a);
     SDL_RenderClear(m_sdlRenderer);
 
     // Protect letterbox / pillarbox margins from camera zoom and shake bleed
@@ -944,7 +1056,10 @@ void Window::renderVisualNovelFrame(
             }
             SDL_SetTextureAlphaMod(bgTex, 255);
         } else {
-            SDL_SetRenderDrawColor(m_sdlRenderer, 20, 24, 38, static_cast<Uint8>(std::clamp(bgOpacity, 0.0f, 1.0f) * 255.0f));
+            SDL_SetRenderDrawColor(m_sdlRenderer, theme.scene.missingBackground.r,
+                                   theme.scene.missingBackground.g, theme.scene.missingBackground.b,
+                                   static_cast<Uint8>(std::clamp(bgOpacity, 0.0f, 1.0f) *
+                                                      static_cast<float>(theme.scene.missingBackground.a)));
             SDL_RenderFillRect(m_sdlRenderer, &vpRect);
         }
     }
@@ -1024,13 +1139,15 @@ void Window::renderVisualNovelFrame(
             SDL_SetTextureAlphaMod(charTex, 255);
         } else {
             SDL_FRect charBox = { physCharX, physCharY, scaledCharW, scaledCharH };
-            SDL_SetRenderDrawColor(m_sdlRenderer, 30, 41, 59, 220);
+            const auto& fillTheme = theme.scene.placeholderFill;
+            const auto& edgeTheme = theme.scene.placeholderBorder;
+            SDL_SetRenderDrawColor(m_sdlRenderer, fillTheme.r, fillTheme.g, fillTheme.b, fillTheme.a);
             SDL_RenderFillRect(m_sdlRenderer, &charBox);
-            SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, edgeTheme.r, edgeTheme.g, edgeTheme.b, edgeTheme.a);
             SDL_RenderRect(m_sdlRenderer, &charBox);
 
             std::string charInfo = "[ CHAR: " + ch.sprite + " ]";
-            SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, edgeTheme.r, edgeTheme.g, edgeTheme.b, edgeTheme.a);
             SDL_RenderDebugText(m_sdlRenderer, physCharX + 20.0f * metrics.scaleFactor, physCharY + (scaledCharH / 2.0f), charInfo.c_str());
         }
     }
@@ -1054,19 +1171,31 @@ void Window::renderVisualNovelFrame(
 
         SDL_FRect dlgBox = { physBoxX, physBoxY, scaledDlgW, scaledDlgH };
 
+        // T1: a colour with an alpha channel ("#RRGGBBAA") blends whatever drew
+        // before (the draw blend mode is sticky renderer state); alpha-255 colours
+        // are unaffected.
+        SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
         // Parse custom box styling & opacity
         uint8_t boxAlpha = static_cast<uint8_t>(std::clamp(dlg.boxOpacity, 0.0f, 1.0f) * 255.0f);
         SDL_Color boxColor = parseHexColor(dlg.boxColor, boxAlpha);
-        SDL_SetRenderDrawColor(m_sdlRenderer, boxColor.r, boxColor.g, boxColor.b, boxColor.a);
-        SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
-
-        // Border
         SDL_Color borderColor = parseHexColor(dlg.borderColor, 255);
-        SDL_SetRenderDrawColor(m_sdlRenderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
-        SDL_RenderRect(m_sdlRenderer, &dlgBox);
-        if (dlg.borderThickness > 1.5f) {
-            SDL_FRect innerBox = { physBoxX + 1.0f, physBoxY + 1.0f, scaledDlgW - 2.0f, scaledDlgH - 2.0f };
-            SDL_RenderRect(m_sdlRenderer, &innerBox);
+        if (theme.story.honorShapeFields) {
+            // T1: the component's corner_radius / border_thickness are drawn
+            // (rounded fill + ring of `border_thickness` physical pixels).
+            const int rings = shapeRings(dlg.borderThickness);
+            drawRoundedBox(m_sdlRenderer, dlgBox, std::max(0.0f, dlg.cornerRadius) * metrics.scaleFactor,
+                           boxColor, borderColor, rings, true);
+        } else {
+            SDL_SetRenderDrawColor(m_sdlRenderer, boxColor.r, boxColor.g, boxColor.b, boxColor.a);
+            SDL_RenderFillRect(m_sdlRenderer, &dlgBox);
+
+            // Border
+            SDL_SetRenderDrawColor(m_sdlRenderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+            SDL_RenderRect(m_sdlRenderer, &dlgBox);
+            if (dlg.borderThickness > 1.5f) {
+                SDL_FRect innerBox = { physBoxX + 1.0f, physBoxY + 1.0f, scaledDlgW - 2.0f, scaledDlgH - 2.0f };
+                SDL_RenderRect(m_sdlRenderer, &innerBox);
+            }
         }
 
         // Speaker Name Tag Badge (if speaker name provided)
@@ -1079,7 +1208,10 @@ void Window::renderVisualNovelFrame(
             float tagW = speakerLayout.tagWidth;
             // D05-2: the renderer draws the name at speakerFontPx * textScale, so
             // the badge height and the text's vertical centring follow that size.
-            const float speakerTextScale = m_fontRenderer ? m_fontRenderer->textScale() : 1.0f;
+            FontRenderer* const speakerFont = getSpeakerFontRenderer();
+            const bool themedSpeakerFont = speakerFont != m_fontRenderer.get();
+            const SDL_Color speakerInk = toSdl(theme.story.speakerTag.textColor);
+            const float speakerTextScale = speakerFont ? speakerFont->textScale() : 1.0f;
             const float speakerDrawPx = speakerFontPx * speakerTextScale;
             float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
             float tagX = physBoxX + (20.0f * metrics.scaleFactor);
@@ -1092,8 +1224,10 @@ void Window::renderVisualNovelFrame(
             SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
 
             // Border on speaker badge
-            SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 180);
-            SDL_RenderRect(m_sdlRenderer, &speakerTag);
+            const auto& tagBorder = theme.story.speakerTag.borderColor;
+            SDL_SetRenderDrawColor(m_sdlRenderer, tagBorder.r, tagBorder.g, tagBorder.b, tagBorder.a);
+            strokeRect(m_sdlRenderer, speakerTag,
+                       static_cast<int>(std::lround(theme.story.speakerTag.borderWidth)));
 
             // Draw speaker name text
             // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
@@ -1102,18 +1236,21 @@ void Window::renderVisualNovelFrame(
                 // D11: şekilli-MSDF yolu (shape girdileri TrueType koluyla AYNI
                 // ifade — :1491-1502 emsali; topY textDrawY :1489). Şekillenemezse
                 // ham-MSDF legacy (birebir eski piksel/davranış).
+                // T1: a themed speaker font is not in the MSDF atlas: TrueType only.
                 const float speakerWrapW = std::max(0.0f, tagW - (32.0f * metrics.scaleFactor));
                 const auto& shapedSpeaker = speakerLayout.shaped;
                 bool speakerMsdfOk = false;
-                if (shapedSpeaker && !shapedSpeaker->glyphs.empty()) {
+                if (themedSpeakerFont) {
+                    // fall through to the TrueType branch below
+                } else if (shapedSpeaker && !shapedSpeaker->glyphs.empty()) {
                     speakerMsdfOk = drawMsdfShapedAllOrNothing(
                         m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
                         *shapedSpeaker, speakerLayout.text, tagX + 16.0f * metrics.scaleFactor,
                         tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
-                        speakerFontPx, {255,255,255,255}, shapedSpeaker->revealUnits.size(),
+                        speakerFontPx, speakerInk, shapedSpeaker->revealUnits.size(),
                         speakerWrapW, "Left");
                 } else {
-                    speakerMsdfOk = renderGpuMsdfText(speakerLayout.text, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255});
+                    speakerMsdfOk = renderGpuMsdfText(speakerLayout.text, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, speakerInk);
                 }
                 if (!speakerMsdfOk) {
                     // A11: MSDF kapsamıyorsa debug-bitmap değil TrueType (offscreen
@@ -1122,14 +1259,14 @@ void Window::renderVisualNovelFrame(
                     // sekilleyici yedek kolunda sekil bos: sarmasiz eski cizim.
                     const bool haveShape = shapedSpeaker && !shapedSpeaker->glyphs.empty();
                     speakerMsdfOk = drawTrueTypeTextOnGpu(
-                        m_sdlRenderer, m_fontRenderer.get(), haveShape ? shapedSpeaker.get() : nullptr,
+                        m_sdlRenderer, speakerFont, haveShape ? shapedSpeaker.get() : nullptr,
                         speakerLayout.text,
                         tagX + 16.0f * metrics.scaleFactor,
                         tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
-                        speakerFontPx, {255,255,255,255}, haveShape ? speakerWrapW : 0.0f, tagH, "Left");
+                        speakerFontPx, speakerInk, haveShape ? speakerWrapW : 0.0f, tagH, "Left");
                 }
                 if (!speakerMsdfOk) {
-                    SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
+                    SDL_SetRenderDrawColor(m_sdlRenderer, speakerInk.r, speakerInk.g, speakerInk.b, 255);
                     SDL_RenderDebugText(m_sdlRenderer, tagX + (16.0f * metrics.scaleFactor), tagY + (tagH - 8.0f) / 2.0f, dlg.speaker.c_str());
                 }
             }
@@ -1149,10 +1286,13 @@ void Window::renderVisualNovelFrame(
                 // ifade — :1510-1520 emsali: maxLineWidth, fontPx, language,
                 // evaluateReveal; topY physBoxY+paddingTop :1525). Şekillenemezse
                 // ham-MSDF legacy (birebir eski piksel/davranış).
+                // T1: a themed dialogue font is not in the MSDF atlas: TrueType only.
+                FontRenderer* const dialogueFont = getDialogueFontRenderer();
+                const bool themedDialogueFont = dialogueFont != m_fontRenderer.get();
                 const float msdfFontPx = dlg.fontSize * metrics.scaleFactor;
                 const float msdfMaxLineW = scaledDlgW - (48.0f * metrics.scaleFactor);
-                const auto shapedDialogue = m_fontRenderer
-                    ? m_fontRenderer->shapeTextShared(dlg.dialogue, msdfFontPx, msdfMaxLineW, dlg.language)
+                const auto shapedDialogue = dialogueFont
+                    ? dialogueFont->shapeTextShared(dlg.dialogue, msdfFontPx, msdfMaxLineW, dlg.language)
                     : nullptr;
                 size_t dialogueVisible = shapedDialogue ? shapedDialogue->revealUnits.size() : 0;
                 if (shapedDialogue && dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
@@ -1160,7 +1300,9 @@ void Window::renderVisualNovelFrame(
                         *shapedDialogue, dlg.elapsedTypewriterTime, dlg.textSpeed).visibleUnits;
                 }
                 bool dialogueMsdfOk = false;
-                if (shapedDialogue && !shapedDialogue->glyphs.empty()) {
+                if (themedDialogueFont) {
+                    // fall through to the TrueType branch below
+                } else if (shapedDialogue && !shapedDialogue->glyphs.empty()) {
                     dialogueMsdfOk = drawMsdfShapedAllOrNothing(
                         m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
                         *shapedDialogue, dlg.dialogue, physBoxX + paddingLeft, physBoxY + paddingTop,
@@ -1171,7 +1313,7 @@ void Window::renderVisualNovelFrame(
                 if (!dialogueMsdfOk) {
                     // A11: TrueType yedeği (typewriter sınırı korunur).
                     dialogueMsdfOk = drawTrueTypeTextOnGpu(
-                        m_sdlRenderer, m_fontRenderer.get(), shapedDialogue.get(), dlg.dialogue,
+                        m_sdlRenderer, dialogueFont, shapedDialogue.get(), dlg.dialogue,
                         physBoxX + paddingLeft, physBoxY + paddingTop, msdfFontPx, textColor,
                         msdfMaxLineW, scaledDlgH - (36.0f * metrics.scaleFactor),
                         dlg.textAlignment, shapedDialogue ? dialogueVisible : SIZE_MAX);
@@ -1191,21 +1333,32 @@ void Window::renderVisualNovelFrame(
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(choice.x, choice.y, metrics, px, py);
         SDL_FRect rect{px, py, choice.width * metrics.scaleFactor, choice.height * metrics.scaleFactor};
+        SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);  // T1: see the dialogue box
         // D-K3: odaktaki secenek yazarin hover rengiyle dolar (duraklatma menusunun
         // secili satiri gibi: dolgu + sol serit + kalin cerceve).
         SDL_Color bg = parseHexColor(choice.focused ? choice.hoverColor : choice.backgroundColor,
                                      static_cast<uint8_t>(255.0f * std::clamp(choice.opacity, 0.0f, 1.0f)));
-        SDL_SetRenderDrawColor(m_sdlRenderer, bg.r, bg.g, bg.b, bg.a);
-        SDL_RenderFillRect(m_sdlRenderer, &rect);
-        if (!choice.backgroundImage.empty()) {
-            if (auto* texture = loadTexture(choice.backgroundImage)) SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &rect);
-        }
         SDL_Color border = parseHexColor(choice.borderColor, 255);
-        SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
-        SDL_RenderRect(m_sdlRenderer, &rect);
+        if (theme.story.honorShapeFields) {
+            // T1: corner_radius / border_thickness of the option are drawn.
+            const float radius = std::max(0.0f, choice.cornerRadius) * metrics.scaleFactor;
+            drawRoundedBox(m_sdlRenderer, rect, radius, bg, border, 0, true);
+            if (!choice.backgroundImage.empty()) {
+                if (auto* texture = loadTexture(choice.backgroundImage)) SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &rect);
+            }
+            drawRoundedBox(m_sdlRenderer, rect, radius, bg, border, shapeRings(choice.borderThickness), false);
+        } else {
+            SDL_SetRenderDrawColor(m_sdlRenderer, bg.r, bg.g, bg.b, bg.a);
+            SDL_RenderFillRect(m_sdlRenderer, &rect);
+            if (!choice.backgroundImage.empty()) {
+                if (auto* texture = loadTexture(choice.backgroundImage)) SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &rect);
+            }
+            SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
+            SDL_RenderRect(m_sdlRenderer, &rect);
+        }
         if (choice.focused) drawChoiceFocusMarks(m_sdlRenderer, rect, border,
                                                  parseHexColor(choice.textColor, 255),
-                                                 metrics.scaleFactor);
+                                                 metrics.scaleFactor, theme.story.choiceFocus);
         // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
         if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                 m_offscreenSurface != nullptr)) {
@@ -1217,7 +1370,10 @@ void Window::renderVisualNovelFrame(
             // Şekillenemezse ham-MSDF legacy (birebir eski piksel/davranış).
             const float choiceFontPx = choice.fontSize * metrics.scaleFactor;
             const float choiceWrapW = rect.w - 24.0f * metrics.scaleFactor;
-            FontRenderer* choiceMsdfFont = m_fontRenderer.get();
+            // T1: the default button font is the theme's dialogue font (not in the
+            // MSDF atlas, so TrueType only); a font_family button keeps its own.
+            FontRenderer* choiceMsdfFont = getDialogueFontRenderer();
+            const bool themedChoiceFont = choiceMsdfFont != m_fontRenderer.get();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 const auto foundMsdfFont = m_buttonFontCache.find(choice.fontFamily);
                 if (foundMsdfFont != m_buttonFontCache.end()) choiceMsdfFont = foundMsdfFont->second.get();
@@ -1231,7 +1387,9 @@ void Window::renderVisualNovelFrame(
                                 shapedChoice->lines.size(), choiceMsdfFont->textScale())
                 : py + (rect.h - choiceFontPx) * 0.5f;
             bool choiceMsdfOk = false;
-            if (shapedChoice && !shapedChoice->glyphs.empty()) {
+            if (themedChoiceFont && choiceMsdfFont == getDialogueFontRenderer()) {
+                // fall through to the TrueType branch below
+            } else if (shapedChoice && !shapedChoice->glyphs.empty()) {
                 choiceMsdfOk = drawMsdfShapedAllOrNothing(
                     m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
                     *shapedChoice, choice.text, px + 12.0f * metrics.scaleFactor,
@@ -1287,7 +1445,9 @@ void Window::renderVisualNovelFrame(
                     layoutSpeakerTag(dlg, scaledDlgW, metrics.scaleFactor);
                 float tagW = speakerLayout.tagWidth;
                 // D05-2: same scaled-size rule as the GPU path above.
-                const float speakerTextScale = m_fontRenderer->textScale();
+                FontRenderer* const speakerFont = getSpeakerFontRenderer();
+                const SDL_Color speakerInk = toSdl(theme.story.speakerTag.textColor);
+                const float speakerTextScale = speakerFont->textScale();
                 const float speakerDrawPx = speakerFontPx * speakerTextScale;
                 float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
                 float tagX = physBoxX + (20.0f * metrics.scaleFactor);
@@ -1295,13 +1455,13 @@ void Window::renderVisualNovelFrame(
                 float textDrawY = tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor);
 
                 // D-K3: hazir tek-satir sekil (renderText yeniden sarar; ad kesilirdi).
-                m_fontRenderer->renderShapedText(
+                speakerFont->renderShapedText(
                     m_offscreenSurface,
                     *speakerLayout.shaped,
                     tagX + (16.0f * metrics.scaleFactor),
                     textDrawY,
                     speakerFontPx,
-                    {255, 255, 255, 255},
+                    speakerInk,
                     // B6 (#10): keep the wrap width non-negative on narrow boxes.
                     std::max(0.0f, tagW - (32.0f * metrics.scaleFactor)),
                     tagH,
@@ -1318,7 +1478,8 @@ void Window::renderVisualNovelFrame(
                 float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
                 float fontPx = dlg.fontSize * metrics.scaleFactor;
 
-                const auto shaped = m_fontRenderer->shapeTextShared(
+                FontRenderer* const dialogueFont = getDialogueFontRenderer();
+                const auto shaped = dialogueFont->shapeTextShared(
                     dlg.dialogue, fontPx, maxLineWidth, dlg.language);
                 size_t visibleUnits = shaped->revealUnits.size();
                 if (dlg.isPlaying && dlg.typewriterEnabled && dlg.textSpeed > 0) {
@@ -1326,7 +1487,7 @@ void Window::renderVisualNovelFrame(
                         *shaped, dlg.elapsedTypewriterTime, dlg.textSpeed).visibleUnits;
                 }
 
-                m_fontRenderer->renderShapedText(
+                dialogueFont->renderShapedText(
                     m_offscreenSurface,
                     *shaped,
                     physBoxX + paddingLeft,
@@ -1342,7 +1503,7 @@ void Window::renderVisualNovelFrame(
         }
         for (const auto& choice : choices) {
             if (!choice.enabled || choice.text.empty()) continue;
-            FontRenderer* choiceFont = m_fontRenderer.get();
+            FontRenderer* choiceFont = getDialogueFontRenderer();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 auto found = m_buttonFontCache.find(choice.fontFamily);
                 if (found == m_buttonFontCache.end()) {

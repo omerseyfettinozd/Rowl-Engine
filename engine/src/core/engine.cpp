@@ -431,6 +431,8 @@ bool Engine::initialize(const EngineConfig& config) {
     m_window->setInputHandler([this](const Rowl::Platform::RuntimeInputEvent& event) {
         handleRuntimeInput(event);
     });
+    // T1: a theme loaded before the window existed is installed now.
+    m_window->setUiTheme(m_uiTheme, m_uiThemeHighContrast);
 
     // Initialize Entity-Component Scene Manager
     m_scene = std::make_unique<Rowl::Scene::Scene>();
@@ -633,7 +635,7 @@ bool Engine::completeTypewriterIfTyping() {
     // is double, and a bare cast can land one ulp below the cursor, reading
     // back incomplete on the very next query.
     constexpr double kSnapMarginSeconds = 0.01;
-    const auto* fontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
+    const auto* fontRenderer = m_window ? m_window->getDialogueFontRenderer() : nullptr;
     bool anyTyping = false;
     for (auto& dlg : m_activeDialogues) {
         if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
@@ -981,6 +983,7 @@ void Engine::updateActiveScene(
     m_activeDialogueData.height = dlgH;
     m_activeDialogueData.typewriterEnabled = false;
 
+    applyUiThemeTo(m_activeDialogueData);  // T1: legacy payloads carry no component keys
     m_activeDialogues.clear();
     if (m_hasDialogueBox) {
         m_activeDialogues.push_back(m_activeDialogueData);
@@ -1214,7 +1217,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeCharacter.clear();
         m_activeBackgroundRotation = 0.0f;
         m_activeCharacterRotation = 0.0f;
-        m_activeDialogueData = {};
+        m_activeDialogueData = themedDialogue();  // T1: theme defaults, not the bare built-ins
         m_hasBackground = false;
         m_hasDialogueBox = false;
         std::vector<nlohmann::json> pendingAudioComponents;
@@ -1279,16 +1282,21 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 }
                 dlgData.autoAdvance = data.value("auto_advance", false);
                 dlgData.autoAdvanceDelay = std::clamp(data.value("auto_advance_delay", 2.0f), 0.0f, 60.0f);
-                dlgData.fontSize = data.value("font_size", 24.0f);
-                dlgData.speakerFontSize = data.value("speaker_font_size", 20.0f);
-                dlgData.textColor = data.value("text_color", "#F1F5F9");
-                dlgData.speakerColor = data.value("speaker_color", "#38BDF8");
-                dlgData.textAlignment = data.value("text_alignment", "Left");
-                dlgData.boxOpacity = data.value("box_opacity", 0.88f);
-                dlgData.boxColor = data.value("box_color", "#0F0F1A");
-                dlgData.borderColor = data.value("border_color", "#00F0FF");
-                dlgData.borderThickness = data.value("border_thickness", 2.0f);
-                dlgData.cornerRadius = data.value("corner_radius", 8.0f);
+                // T1: precedence = a key the component wrote > the project's UI
+                // theme (Assets/json/ui_theme.json) > the built-in default.
+                // The theme's values ARE the built-ins when the file is absent.
+                const Rowl::State::UiDialogueDefaults& themed = m_uiTheme.story.dialogue;
+                dlgData.authoredMask = dialogueAuthoredMask(data);
+                dlgData.fontSize = data.value("font_size", themed.fontSize);
+                dlgData.speakerFontSize = data.value("speaker_font_size", themed.speakerFontSize);
+                dlgData.textColor = data.value("text_color", Rowl::State::uiColorToHex(themed.textColor));
+                dlgData.speakerColor = data.value("speaker_color", Rowl::State::uiColorToHex(themed.speakerColor));
+                dlgData.textAlignment = data.value("text_alignment", themed.textAlignment);
+                dlgData.boxOpacity = data.value("box_opacity", themed.boxOpacity);
+                dlgData.boxColor = data.value("box_color", Rowl::State::uiColorToHex(themed.boxColor));
+                dlgData.borderColor = data.value("border_color", Rowl::State::uiColorToHex(themed.borderColor));
+                dlgData.borderThickness = data.value("border_thickness", themed.borderThickness);
+                dlgData.cornerRadius = data.value("corner_radius", themed.cornerRadius);
                 dlgData.customBoxTexture = data.value("custom_box_texture", "");
                 dlgData.typewriterSound = data.value("typewriter_sound", data.value("voice_blip_sound", ""));
                 dlgData.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
@@ -1497,15 +1505,18 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                     button.y = option.value("y", 520.0f + static_cast<float>(index) * 80.0f);
                     button.width = option.value("width", 560.0f);
                     button.height = option.value("height", 64.0f);
-                    button.fontSize = option.value("font_size", 22.0f);
-                    button.opacity = option.value("opacity", 1.0f);
-                    button.borderThickness = option.value("border_thickness", 2.0f);
-                    button.cornerRadius = option.value("corner_radius", 8.0f);
-                    button.textColor = option.value("text_color", "#FFFFFF");
-                    button.backgroundColor = option.value("background_color", "#1E293B");
-                    button.hoverColor = option.value("hover_color", "#0EA5E9");
-                    button.borderColor = option.value("border_color", "#38BDF8");
-                    button.textAlignment = option.value("text_alignment", "Center");
+                    // T1: option key > project UI theme > built-in (see dialogue above).
+                    const Rowl::State::UiChoiceDefaults& themedChoice = m_uiTheme.story.choice;
+                    button.authoredMask = choiceAuthoredMask(option);
+                    button.fontSize = option.value("font_size", themedChoice.fontSize);
+                    button.opacity = option.value("opacity", themedChoice.opacity);
+                    button.borderThickness = option.value("border_thickness", themedChoice.borderThickness);
+                    button.cornerRadius = option.value("corner_radius", themedChoice.cornerRadius);
+                    button.textColor = option.value("text_color", Rowl::State::uiColorToHex(themedChoice.textColor));
+                    button.backgroundColor = option.value("background_color", Rowl::State::uiColorToHex(themedChoice.backgroundColor));
+                    button.hoverColor = option.value("hover_color", Rowl::State::uiColorToHex(themedChoice.hoverColor));
+                    button.borderColor = option.value("border_color", Rowl::State::uiColorToHex(themedChoice.borderColor));
+                    button.textAlignment = option.value("text_alignment", themedChoice.textAlignment);
                     button.fontFamily = option.value("font_family", "Default");
                     button.backgroundImage = option.value("normal_image", option.value("background_image", ""));
                     if (!button.optionId.empty()) m_activeChoiceButtons.push_back(std::move(button));
@@ -2292,7 +2303,7 @@ void Engine::step(float deltaTime) {
     // E2b: sunum-efekt saati hikaye simulasyonuyla donar/akar (pause'da kare
     // sabit kalir — MS-4 static-gate korunur).
     updateCharacterFx(deltaTime);
-    const auto* fontRenderer = m_window->getFontRenderer();
+    const auto* fontRenderer = m_window->getDialogueFontRenderer();
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
         // MS-6: typewriter progression follows presentation + real dt, not the
@@ -2890,9 +2901,9 @@ void Engine::refreshActiveDialogueLocalization() {
         m_activeDialogue = m_activeDialogueData.dialogue;
     }
     if (m_window) {
-        if (auto* fontRenderer = m_window->getFontRenderer()) {
-            fontRenderer->invalidateShapeCache();
-        }
+        m_window->forEachFontRenderer([](Rowl::Render::FontRenderer& renderer) {
+            renderer.invalidateShapeCache();
+        });
     }
 }
 
@@ -2914,7 +2925,7 @@ bool Engine::areActiveDialoguesComplete() const {    // MS-6: a paused line rend
     // early-return above stays: paused previews pin elapsed at 9999 s while
     // pause-heavy lines can total beyond that, so a bare reveal would call
     // a settled preview "typing" forever.
-    const auto* gateFontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
+    const auto* gateFontRenderer = m_window ? m_window->getDialogueFontRenderer() : nullptr;
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.typewriterEnabled || dialogue.textSpeed <= 0) continue;
         const auto shaped = shapeDialogue(gateFontRenderer, dialogue);
@@ -3009,7 +3020,7 @@ void Engine::resetSessionProfile() {
     m_activeDialogueBoxY = 860.0f;
     m_activeDialogueBoxWidth  = 1760.0f;
     m_activeDialogueBoxHeight = 180.0f;
-    m_activeDialogueData = Rowl::Render::DialogueRenderData{};
+    m_activeDialogueData = themedDialogue();
     m_activeDialogues.clear();
     m_activeChoiceButtons.clear();
     m_choiceFocusId.clear();

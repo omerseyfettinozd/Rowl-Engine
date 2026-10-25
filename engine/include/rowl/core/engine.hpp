@@ -12,6 +12,7 @@
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/player_profile.hpp"
 #include "rowl/state/session_persistence.hpp"
+#include "rowl/state/ui_theme.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
@@ -25,6 +26,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -499,6 +501,22 @@ public:
     /// extras" state; an unusable one leaves an empty catalog + diagnostics.
     void loadExtrasCatalog();
     const Rowl::State::ExtrasCatalog& extrasCatalog() const { return m_extrasCatalog; }
+
+    // ── T1: player-UI theme (engine_ui_theme.cpp) ──
+    /// (Re)reads `Assets/json/ui_theme.json` from the VFS (same candidate order as
+    /// extras.json), installs the result in the window and re-applies it to the
+    /// dialogue / choices on screen. A missing file is the normal "built-in look"
+    /// state; an unusable one leaves the built-in theme + diagnostics. Called by
+    /// SetProjectDirectory; the editor's live preview calls it after a save.
+    void loadUiTheme();
+    /// Same, from a document instead of the VFS (file-less preview); the source
+    /// reads "(inline)". An unusable document (not JSON, wrong format, too big)
+    /// returns false and leaves the current theme alone.
+    bool setUiThemeText(std::string_view json);
+    const Rowl::State::UiTheme& uiTheme() const { return m_uiTheme; }
+    /// {"format","loaded","source","diagnostics":[..],"theme":{..},
+    /// "high_contrast":{..}|null} (RowlEngine_GetUiThemeJson).
+    std::string getUiThemeJson() const;
     /// Records an unlock in the profile. The id must exist in the catalog of
     /// that kind (else Invalid, nothing written). Ok = newly unlocked (a new
     /// achievement also queues a notice), Unchanged = already unlocked; the
@@ -618,6 +636,21 @@ private:
     // nodes whose bad "unlock" component was already logged (one WARN per node
     // and graph, like the condition warnings).
     Rowl::State::ExtrasCatalog m_extrasCatalog;
+    // T1: the project's player-UI theme; the window keeps its own copy.
+    Rowl::State::UiTheme m_uiTheme;
+    std::optional<Rowl::State::UiTheme> m_uiThemeHighContrast;
+    std::vector<std::string> m_uiThemeDiagnostics;
+    std::string m_uiThemeSource;   ///< VFS path the theme came from, "(inline)", or empty
+    bool m_uiThemeFileFound = false;
+    bool m_uiThemeUsable = false;
+    void installUiTheme(Rowl::State::UiThemeLoad load, std::string source);
+    /// Sets every field of `dlg` / `button` the component did not write itself
+    /// (authoredMask) to the theme default.
+    void applyUiThemeTo(Rowl::Render::DialogueRenderData& dlg) const;
+    void applyUiThemeTo(Rowl::Render::ChoiceButtonRenderData& button) const;
+    Rowl::Render::DialogueRenderData themedDialogue() const;
+    static uint32_t dialogueAuthoredMask(const nlohmann::json& data);
+    static uint32_t choiceAuthoredMask(const nlohmann::json& data);
     std::vector<std::string> m_extrasCgKeys;
     std::vector<std::string> m_extrasMusicKeys;
     std::vector<UnlockNotice> m_unlockNotices;

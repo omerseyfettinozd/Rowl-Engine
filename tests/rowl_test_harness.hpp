@@ -216,6 +216,7 @@ void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
 void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
 void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
 void test_chapter_boundary_persistence();  // D06-3: bolum siniri kayit/yukle/geri sarma + muzik + oyuncu prefetch surucusu
+void test_ui_theme();  // T1: oyuncu arayuzu temasi (ui_theme.json): ayristirici, varsayilan == eski sabitler, temali pikseller, oncelik, yazi tipi, reload
 void test_extras_screens();  // D07-2: Ekstralar sayfalari (Galeri / Muzik Odasi / Basarimlar) + basarim bildirimi
 void test_extras_unlocks();  // D07-1: acilabilir icerik (extras.json, profil unlocks, tetikleyiciler, C API)
 void test_condition_component();  // D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)

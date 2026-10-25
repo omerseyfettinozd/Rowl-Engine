@@ -173,6 +173,11 @@ typedef struct RowlEngine_ApiVersion {
  * achievements), the profile `unlocks` records, the "unlock" node component and
  * RowlEngine_GetExtrasJson / ProfileUnlock / ProfileIsUnlocked. Additive. */
 #define ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS UINT64_C(268435456)
+/* T1: the player-interface theme - Assets/json/ui_theme.json (colours, border
+ * widths, text sizes, fonts of the menus / Ekstralar / toast / AUTO-SKIP badges
+ * plus project-wide dialogue and choice defaults) and RowlEngine_GetUiThemeJson /
+ * ReloadUiTheme / SetUiThemeJson. Additive. */
+#define ROWL_ENGINE_CAPABILITY_UI_THEME UINT64_C(536870912)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -356,6 +361,36 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ProfileIsUnlocked(
  *  STATE_ERROR before RowlEngine_Init and when extras.json lists no item;
  *  INVALID_HANDLE; WRONG_THREAD. Needs ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS. */
 ROWL_API RowlEngine_ResultCode RowlEngine_OpenExtras(RowlEngineHandle handle);
+
+/* ── Player-interface theme (ROWL_ENGINE_CAPABILITY_UI_THEME, T1) ──────────
+ * The game restyles its engine-drawn player UI in Assets/json/ui_theme.json
+ * (loaded by RowlEngine_SetProjectDirectory; missing file = the built-in look,
+ * which is also what every missing key means). Precedence for the dialogue box
+ * and choice buttons: key written in the node component > theme > built-in.
+ * Format: docs/PLAYER_UI_THEME.md. Before RowlEngine_Init every function here
+ * returns ROWL_RESULT_STATE_ERROR. */
+
+/** The theme in force as JSON: {"format":1,"loaded","source","diagnostics":[..],
+ *  "theme":{menu,extras,toast,badges,scene,story,fonts: every key, resolved},
+ *  "high_contrast":{..}|null}. "loaded" = a usable ui_theme.json was read;
+ *  "source" = the VFS path, "(inline)" for SetUiThemeJson, or "". Same
+ *  caller-buffer contract as RowlEngine_GetExtrasJson. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetUiThemeJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Re-reads ui_theme.json from the project's VFS (editor live preview after a
+ *  save), applies it and invalidates the cached frame: the next frame is in the
+ *  new colours. A missing file restores the built-in look. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ReloadUiTheme(RowlEngineHandle handle);
+
+/** Installs a ui_theme.json document without touching any file (editor preview
+ *  of unsaved edits). NULL: ROWL_RESULT_INVALID_ARGUMENT. A document that is
+ *  not usable (not a JSON object, wrong "format", over 256 KiB):
+ *  ROWL_RESULT_VALIDATION_ERROR and the current theme stays. A usable one is
+ *  installed even when single values were rejected (see "diagnostics"). */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetUiThemeJson(
+    RowlEngineHandle handle, const char* themeJson);
 
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 

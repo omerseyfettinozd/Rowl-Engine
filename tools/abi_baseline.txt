@@ -133,6 +133,7 @@ RowlEngine_GetTextureCacheBudgetBytes
 RowlEngine_GetTextureCacheBytes
 RowlEngine_GetTextureCacheEvictionCount
 RowlEngine_GetTextureCacheTextureCount
+RowlEngine_GetUiThemeJson
 RowlEngine_GetUiVolume
 RowlEngine_GetVariable
 RowlEngine_GetVariableUtf8
@@ -195,6 +196,7 @@ RowlEngine_QuickLoad
 RowlEngine_QuickSave
 RowlEngine_ReclaimHandle
 RowlEngine_RegisterCharacterPreset
+RowlEngine_ReloadUiTheme
 RowlEngine_ReplayBacklogVoice
 RowlEngine_ResetCamera
 RowlEngine_ResetToStartNode
@@ -245,6 +247,7 @@ RowlEngine_SetSpeakerFocus
 RowlEngine_SetTextScale
 RowlEngine_SetTextSpeedMultiplier
 RowlEngine_SetTextureCacheBudgetBytes
+RowlEngine_SetUiThemeJson
 RowlEngine_SetUiVolume
 RowlEngine_SetVariable
 RowlEngine_SetVignette

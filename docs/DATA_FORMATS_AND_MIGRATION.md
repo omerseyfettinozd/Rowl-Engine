@@ -366,3 +366,14 @@ folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
   (`RowlEngine_ResetToStartNode`, title New Game) clears the Lua story
   variables together with the fresh GameState, as load/rewind/mount already do.
 - No C API or capability change (ABI unchanged).
+
+## 12. Player-interface theme (`Assets/json/ui_theme.json`, T1)
+
+Optional, `format: 1`, read from the project VFS (loose or `.rowlpkg`) by `RowlEngine_SetProjectDirectory`,
+the same way as `extras.json`. Colours, border widths, text sizes and fonts of the engine-drawn player UI
+plus project-wide dialogue / choice defaults (a key written in a node component still wins). No file or a
+missing key = the built-in look, pixel for pixel. A bad value keeps its default and is reported (at most
+32 diagnostics); a whole bad file (over 256 KiB, not an object, wrong `format`) is ignored. Unknown keys are
+ignored, so older engines read newer files. Layout, images and texts are later slices. Full field table:
+`docs/PLAYER_UI_THEME.md`. C API: `RowlEngine_GetUiThemeJson` / `ReloadUiTheme` / `SetUiThemeJson`
+(`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 271 symbols).

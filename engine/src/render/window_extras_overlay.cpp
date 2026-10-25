@@ -36,9 +36,7 @@ constexpr int kMaxThumbDecodesPerFrame = 4;    // a first page fills over a few 
 constexpr int kMaxSourceDimension = 8192;
 constexpr uint64_t kMaxSourcePixels = 16ULL * 1024 * 1024;
 
-const SDL_Color kAccent{56, 189, 248, 255};
-const SDL_Color kLightText{241, 245, 249, 255};
-const SDL_Color kDimText{148, 163, 184, 255};
+SDL_Color sdl(const Rowl::State::UiColor& c) { return SDL_Color{c.r, c.g, c.b, c.a}; }
 
 // Area-average downscale of RGBA8 (no upscaling). Returns w*h*4 bytes.
 std::vector<unsigned char> boxDownscale(const unsigned char* src, int sw, int sh, int dw, int dh) {
@@ -159,25 +157,27 @@ SDL_Texture* Window::galleryThumbnail(const std::string& filename) {
 
 void Window::drawOverlayText(const std::string& text, float x, float y, float px, SDL_Color color,
                              float w, float h, const char* align) {
-    if (text.empty() || !m_fontRenderer || !m_fontRenderer->isLoaded()) return;
+    FontRenderer* const font = getMenuFontRenderer();  // T1: theme menu font or the project font
+    if (text.empty() || !font || !font->isLoaded()) return;
     if (m_offscreenSurface) {
-        m_fontRenderer->renderText(m_offscreenSurface, text, x, y, px, color, w, h, align);
+        font->renderText(m_offscreenSurface, text, x, y, px, color, w, h, align);
     } else {
-        drawTrueTypeTextOnGpu(m_sdlRenderer, m_fontRenderer.get(), nullptr, text, x, y, px, color, w, h, align);
+        drawTrueTypeTextOnGpu(m_sdlRenderer, font, nullptr, text, x, y, px, color, w, h, align);
     }
 }
 
 // Cuts `text` (UTF-8 safe, whole codepoints) until it fits maxWidth, "..." appended.
 std::string Window::fitOverlayText(const std::string& text, float px, float maxWidth) {
-    if (!m_fontRenderer || !m_fontRenderer->isLoaded() || text.empty()) return text;
-    if (m_fontRenderer->measureTextWidth(text, px) <= maxWidth) return text;
+    FontRenderer* const font = getMenuFontRenderer();
+    if (!font || !font->isLoaded() || text.empty()) return text;
+    if (font->measureTextWidth(text, px) <= maxWidth) return text;
     std::string cut = text;
     while (!cut.empty()) {
         size_t end = cut.size() - 1;
         while (end > 0 && (static_cast<unsigned char>(cut[end]) & 0xC0) == 0x80) --end;
         cut.resize(end);
         const std::string candidate = cut + "...";
-        if (m_fontRenderer->measureTextWidth(candidate, px) <= maxWidth) return candidate;
+        if (font->measureTextWidth(candidate, px) <= maxWidth) return candidate;
     }
     return "...";
 }
@@ -188,6 +188,8 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
     m_galleryThumbDecodesThisFrame = 0;
     if (!extras.active || extras.viewing) return;
     const float s = metrics.scaleFactor;
+    const Rowl::State::UiTheme& theme = uiTheme();
+    const Rowl::State::UiExtrasTheme& ex = theme.extras;
     if (extras.page == "achievements") {
         // Two-line rows: a plate per row, the selected one in the menu highlight
         // colour with the accent bar; the plate covers both text lines.
@@ -196,12 +198,12 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             float px = 0.0f, py = 0.0f;
             AspectGuardian::virtualToPhysical(Rowl::Core::PauseMenuLayout::kRowX, item.y, metrics, px, py);
             const SDL_FRect plate{px, py, Rowl::Core::PauseMenuLayout::kRowW * s, item.h * s};
-            if (item.selected) SDL_SetRenderDrawColor(m_sdlRenderer, 14, 116, 144, 255);
-            else SDL_SetRenderDrawColor(m_sdlRenderer, 22, 25, 42, 255);
+            const auto& plateColor = item.selected ? ex.plateSelected : ex.plate;
+            SDL_SetRenderDrawColor(m_sdlRenderer, plateColor.r, plateColor.g, plateColor.b, plateColor.a);
             SDL_RenderFillRect(m_sdlRenderer, &plate);
-            if (item.selected) {
-                const SDL_FRect bar{px, py, 6.0f * s, item.h * s};
-                SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            if (item.selected && theme.menu.selectedBarWidth > 0.0f) {
+                const SDL_FRect bar{px, py, theme.menu.selectedBarWidth * s, item.h * s};
+                SDL_SetRenderDrawColor(m_sdlRenderer, ex.plateBar.r, ex.plateBar.g, ex.plateBar.b, ex.plateBar.a);
                 SDL_RenderFillRect(m_sdlRenderer, &bar);
             }
         }
@@ -217,11 +219,12 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             // Highlight plate behind the whole cell (thumbnail + caption), like a menu row.
             const float pad = 4.0f * s;
             const SDL_FRect plate{px - pad, py - pad, cell.w * s + 2.0f * pad, cell.h * s + 2.0f * pad};
-            SDL_SetRenderDrawColor(m_sdlRenderer, 14, 116, 144, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, ex.plateSelected.r, ex.plateSelected.g, ex.plateSelected.b,
+                                   ex.plateSelected.a);
             SDL_RenderFillRect(m_sdlRenderer, &plate);
         }
         if (!cell.thumbnail.empty()) {  // the engine view gives a path to unlocked cells only
-            SDL_SetRenderDrawColor(m_sdlRenderer, 8, 10, 18, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, ex.cellFill.r, ex.cellFill.g, ex.cellFill.b, ex.cellFill.a);
             SDL_RenderFillRect(m_sdlRenderer, &thumb);
             if (SDL_Texture* texture = galleryThumbnail(cell.thumbnail)) {
                 float tw = 0.0f, th = 0.0f;
@@ -234,12 +237,13 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             }
         } else {
             // Locked: a flat dark box, never any part of the picture.
-            SDL_SetRenderDrawColor(m_sdlRenderer, 22, 25, 40, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, ex.lockedFill.r, ex.lockedFill.g, ex.lockedFill.b,
+                                   ex.lockedFill.a);
             SDL_RenderFillRect(m_sdlRenderer, &thumb);
         }
-        const SDL_Color border = cell.selected ? kAccent
-                               : cell.unlocked ? SDL_Color{71, 85, 105, 255}
-                                               : SDL_Color{46, 56, 78, 255};
+        const SDL_Color border = cell.selected ? sdl(ex.cellBorderSelected)
+                               : cell.unlocked ? sdl(ex.cellBorder)
+                                               : sdl(ex.lockedBorder);
         SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
         SDL_RenderRect(m_sdlRenderer, &thumb);
     }
@@ -248,12 +252,18 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
 void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics) {
     using LM = Rowl::Core::PauseMenuLayout;
     const auto& extras = view.extras;
-    if (!extras.active || extras.page == "root" || !m_fontRenderer || !m_fontRenderer->isLoaded()) return;
+    FontRenderer* const menuFont = getMenuFontRenderer();
+    if (!extras.active || extras.page == "root" || !menuFont || !menuFont->isLoaded()) return;
     const float s = metrics.scaleFactor;
-    const float accessScale = std::max(1.0f, m_fontRenderer->textScale());
+    const Rowl::State::UiExtrasTheme& ex = uiTheme().extras;
+    const SDL_Color kAccent = sdl(ex.titleSelected);
+    const SDL_Color kLightText = sdl(ex.text);
+    const SDL_Color kDimText = sdl(ex.dimText);
+    const float accessScale = std::max(1.0f, menuFont->textScale());
     float cx = 0.0f, cy = 0.0f;
     AspectGuardian::virtualToPhysical(LM::kRowX + LM::kRowW - 150.0f, 178.0f, metrics, cx, cy);
-    drawOverlayText(extras.counter, cx, cy, 24.0f * s / accessScale, kDimText, 150.0f * s, 40.0f * s, "Left");
+    drawOverlayText(extras.counter, cx, cy, 24.0f * s / accessScale, sdl(uiTheme().menu.dimText), 150.0f * s,
+                    40.0f * s, "Left");
     if (extras.page == "achievements") {
         const float rowW = LM::kRowW * s;
         for (const auto& item : extras.items) {
@@ -266,7 +276,7 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
             // The date sits at the right edge on the title line; the title gets
             // the width it leaves.
             float dateW = 0.0f;
-            if (!item.at.empty()) dateW = m_fontRenderer->measureTextWidth(item.at, datePx);
+            if (!item.at.empty()) dateW = menuFont->measureTextWidth(item.at, datePx);
             const float titleMaxW = rowW - 2.0f * padX - (dateW > 0.0f ? dateW + 16.0f * s : 0.0f);
             const SDL_Color titleColour = item.selected ? kAccent : (item.unlocked ? kLightText : kDimText);
             drawOverlayText(fitOverlayText(item.title, titlePx, titleMaxW), px + padX,
@@ -279,7 +289,7 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
             }
             const float descMaxW = rowW - 2.0f * padX;
             drawOverlayText(fitOverlayText(item.detail, descPx, descMaxW), px + padX,
-                            py + LM::kAchDescTop * s, descPx, item.unlocked ? SDL_Color{203, 213, 225, 255} : kDimText,
+                            py + LM::kAchDescTop * s, descPx, item.unlocked ? sdl(ex.description) : kDimText,
                             descMaxW + 4.0f * s, LM::kAchDescPx * 1.6f * s, "Left");
         }
         return;
@@ -292,12 +302,12 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(cell.x, cell.y, metrics, px, py);
         if (!cell.unlocked) {
-            const float markPx = 44.0f * s / accessScale;
+            const float markPx = ex.markPx * s / accessScale;
             const float boxH = LM::kGalleryThumbH * s;
             drawOverlayText("?", px, py + boxH * 0.5f - markPx * 0.69f * accessScale, markPx, kDimText,
                             cell.w * s, boxH, "Center");
         }
-        const float captionPx = 16.0f * s / accessScale;
+        const float captionPx = ex.captionPx * s / accessScale;
         const std::string caption = fitOverlayText(cell.title, captionPx, cell.w * s - 4.0f * s);
         drawOverlayText(caption, px + 2.0f * s, py + (LM::kGalleryThumbH + 7.0f) * s, captionPx,
                         cell.selected ? kLightText : (cell.unlocked ? kLightText : kDimText),
@@ -307,8 +317,10 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
 
 void Window::renderGalleryViewer(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics) {
     const float s = metrics.scaleFactor;
+    const Rowl::State::UiTheme& theme = uiTheme();
+    const Rowl::State::UiExtrasTheme& ex = theme.extras;
     SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(m_sdlRenderer, 0, 0, 0, 240);
+    SDL_SetRenderDrawColor(m_sdlRenderer, ex.viewerDim.r, ex.viewerDim.g, ex.viewerDim.b, ex.viewerDim.a);
     const SDL_FRect full{0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height)};
     SDL_RenderFillRect(m_sdlRenderer, &full);
 
@@ -324,21 +336,24 @@ void Window::renderGalleryViewer(const Rowl::Core::PauseMenuView& view, const Vi
                                               metrics, px, py);
             const SDL_FRect dst{px, py, w * s, h * s};
             SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &dst);
-            SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 255);
+            SDL_SetRenderDrawColor(m_sdlRenderer, ex.viewerFrame.r, ex.viewerFrame.g, ex.viewerFrame.b,
+                                   ex.viewerFrame.a);
             SDL_RenderRect(m_sdlRenderer, &dst);
         }
     }
     // The viewer repaints the whole frame every time (see renderPauseMenuOverlay).
     invalidateFrameCache();
     if (m_isOffscreen) SDL_RenderPresent(m_sdlRenderer);
-    if (!m_fontRenderer || !m_fontRenderer->isLoaded()) return;
-    const float accessScale = std::max(1.0f, m_fontRenderer->textScale());
+    FontRenderer* const menuFont = getMenuFontRenderer();
+    if (!menuFont || !menuFont->isLoaded()) return;
+    const float accessScale = std::max(1.0f, menuFont->textScale());
     float tx = 0.0f, ty = 0.0f;
     AspectGuardian::virtualToPhysical(0.0f, 968.0f, metrics, tx, ty);
-    drawOverlayText(view.extras.viewTitle, tx, ty, 30.0f * s / accessScale, kLightText, 1920.0f * s, 44.0f * s,
-                    "Center");
+    drawOverlayText(view.extras.viewTitle, tx, ty, ex.viewerTitlePx * s / accessScale, sdl(ex.viewerTitle),
+                    1920.0f * s, 44.0f * s, "Center");
     AspectGuardian::virtualToPhysical(0.0f, 1030.0f, metrics, tx, ty);
-    drawOverlayText(view.hint, tx, ty, 19.0f * s / accessScale, kDimText, 1920.0f * s, 30.0f * s, "Center");
+    drawOverlayText(view.hint, tx, ty, theme.menu.hintPx * s / accessScale, sdl(theme.menu.hint),
+                    1920.0f * s, 30.0f * s, "Center");
 }
 
 void Window::renderUnlockToast(const std::string& text) {
@@ -346,23 +361,27 @@ void Window::renderUnlockToast(const std::string& text) {
     // Achievement toast: a semi-transparent capsule, top-centre of the 1920x1080
     // canvas ("Basarim: <baslik>"). Palette = the badges' (navy / accent cyan /
     // light text) so it reads as part of the same player chrome.
-    constexpr float kCapsuleH = 56.0f;
-    constexpr float kMarginTop = 28.0f;
-    constexpr float kPadX = 30.0f;
-    constexpr float kMaxTextW = 1300.0f;
+    // T1: colours, size and margins come from the UI theme (defaults == the
+    // former constants: height 56, top 28, side 30, max text 1300, 26 px).
+    const Rowl::State::UiToastTheme& theme = uiTheme().toast;
+    const float kCapsuleH = theme.height;
+    const float kMarginTop = theme.marginTop;
+    const float kPadX = theme.padX;
+    const float kMaxTextW = theme.maxTextWidth;
     const ViewportMetrics metrics = AspectGuardian::calculateViewport(m_width, m_height, 1920, 1080);
     if (metrics.scaleFactor <= 0.0f) return;
     const float s = metrics.scaleFactor;
-    const bool haveFont = m_fontRenderer && m_fontRenderer->isLoaded();
-    const float accessScale = haveFont ? std::max(1.0f, m_fontRenderer->textScale()) : 1.0f;
-    const float px = 26.0f * s / accessScale;  // what the font renderer is given
+    FontRenderer* const menuFont = getMenuFontRenderer();
+    const bool haveFont = menuFont && menuFont->isLoaded();
+    const float accessScale = haveFont ? std::max(1.0f, menuFont->textScale()) : 1.0f;
+    const float px = theme.px * s / accessScale;  // what the font renderer is given
 
     // Without a font the capsule still shows (a fixed width), just without text.
     std::string shown = text;
     float textW = 520.0f * s;
     if (haveFont) {
         shown = fitOverlayText(text, px, kMaxTextW * s);
-        textW = m_fontRenderer->measureTextWidth(shown, px);
+        textW = menuFont->measureTextWidth(shown, px);
     }
     const float capsuleW = std::min(textW + 2.0f * kPadX * s, (kMaxTextW + 2.0f * kPadX) * s);
     float cx = 0.0f, cy = 0.0f;
@@ -370,11 +389,14 @@ void Window::renderUnlockToast(const std::string& text) {
     const SDL_FRect capsule{cx - capsuleW * 0.5f, cy, capsuleW, kCapsuleH * s};
 
     SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
-    fillCapsule(m_sdlRenderer, capsule, SDL_Color{15, 15, 26, 215});
+    fillCapsule(m_sdlRenderer, capsule, sdl(theme.fill));
     // Thin accent rule along the bottom edge.
-    const SDL_FRect rule{capsule.x + 14.0f * s, capsule.y + capsule.h - 4.0f * s, capsule.w - 28.0f * s, 2.0f * s};
-    SDL_SetRenderDrawColor(m_sdlRenderer, 56, 189, 248, 190);
-    SDL_RenderFillRect(m_sdlRenderer, &rule);
+    if (theme.rulePx > 0.0f) {
+        const SDL_FRect rule{capsule.x + 14.0f * s, capsule.y + capsule.h - 4.0f * s, capsule.w - 28.0f * s,
+                             theme.rulePx * s};
+        SDL_SetRenderDrawColor(m_sdlRenderer, theme.rule.r, theme.rule.g, theme.rule.b, theme.rule.a);
+        SDL_RenderFillRect(m_sdlRenderer, &rule);
+    }
     // Offscreen software path: flush queued rects before direct text writes.
     if (m_isOffscreen) SDL_RenderPresent(m_sdlRenderer);
     if (!haveFont) return;
@@ -383,12 +405,12 @@ void Window::renderUnlockToast(const std::string& text) {
     const size_t colon = shown.find(':');
     const std::string head = colon == std::string::npos ? std::string() : shown.substr(0, colon + 1);
     const std::string tail = colon == std::string::npos ? shown : shown.substr(colon + 1);
-    const float headW = head.empty() ? 0.0f : m_fontRenderer->measureTextWidth(head, px);
+    const float headW = head.empty() ? 0.0f : menuFont->measureTextWidth(head, px);
     const float fontPx = px * accessScale;  // effective size, for the vertical centre
     const float textY = capsule.y + capsule.h * 0.5f - fontPx * 0.69f;
     const float left = capsule.x + (capsule.w - textW) * 0.5f;
-    if (!head.empty()) drawOverlayText(head, left, textY, px, kAccent, headW + 8.0f * s, capsule.h, "Left");
-    drawOverlayText(tail, left + headW, textY, px, kLightText, capsule.w - (left - capsule.x) - headW, capsule.h,
+    if (!head.empty()) drawOverlayText(head, left, textY, px, sdl(theme.accent), headW + 8.0f * s, capsule.h, "Left");
+    drawOverlayText(tail, left + headW, textY, px, sdl(theme.text), capsule.w - (left - capsule.x) - headW, capsule.h,
                     "Left");
 }
 

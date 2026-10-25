@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <functional>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -13,6 +14,7 @@
 #include "rowl/render/msdf_renderer.hpp"
 #include "rowl/render/camera2d.hpp"
 #include "rowl/render/transition_manager.hpp"
+#include "rowl/state/ui_theme.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
@@ -141,6 +143,10 @@ struct DialogueRenderData {
     float borderThickness = 2.0f;
     float cornerRadius = 8.0f;
     std::string customBoxTexture;
+
+    /// T1: bit per field the node's component wrote itself (engine_ui_theme.cpp). The other fields hold the project's UI theme
+    /// default and follow a theme reload. Never part of the frame hash.
+    uint32_t authoredMask = 0;
 };
 
 struct ComposedFrame;
@@ -171,6 +177,9 @@ struct ChoiceButtonRenderData {
     /// D-K3: klavye/fare odagi bu secenekte (cizimde vurgulanir). Yazar
     /// verisi degil, Engine'in anlik durumudur; kare ozetine yalniz true iken girer.
     bool focused = false;
+    /// T1: bit per field the option wrote itself (engine_ui_theme.cpp);
+    /// the rest follow the project's UI theme. Not part of the frame hash.
+    uint32_t authoredMask = 0;
 };
 
 class Window {
@@ -369,10 +378,42 @@ public:
     double getLastFrameRendererFlushMilliseconds() const { return m_lastFrameRendererFlushMilliseconds; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
+    /// T1: the renderer the menus / badges / toast are drawn AND measured with
+    /// (the theme's `fonts.menu` when it loaded, else the project font), and
+    /// likewise for the dialogue text and the speaker tag.
+    FontRenderer* getMenuFontRenderer() const {
+        return m_themeMenuFont && m_themeMenuFont->isLoaded() ? m_themeMenuFont.get() : m_fontRenderer.get();
+    }
+    FontRenderer* getDialogueFontRenderer() const {
+        return m_themeDialogueFont && m_themeDialogueFont->isLoaded() ? m_themeDialogueFont.get()
+                                                                       : m_fontRenderer.get();
+    }
+    FontRenderer* getSpeakerFontRenderer() const {
+        return m_themeSpeakerFont && m_themeSpeakerFont->isLoaded() ? m_themeSpeakerFont.get()
+                                                                      : m_fontRenderer.get();
+    }
+    /// T1: installs the player-UI theme (and its optional high-contrast
+    /// palette), (re)loads the theme fonts from the VFS and invalidates every
+    /// cached frame, including the baked badge / toast state.
+    void setUiTheme(const Rowl::State::UiTheme& theme,
+                    const std::optional<Rowl::State::UiTheme>& highContrast = std::nullopt);
+    /// The theme in force right now (the high-contrast palette while the
+    /// player's high-contrast setting is on and the theme has one).
+    const Rowl::State::UiTheme& uiTheme() const {
+        return (m_themeHc && m_fontRenderer && m_fontRenderer->highContrast()) ? *m_themeHc : m_theme;
+    }
+    /// Test seam: the theme fonts that loaded (menu, dialogue, speaker).
+    bool hasThemeFont(int which) const {
+        const auto& font = which == 0 ? m_themeMenuFont : (which == 1 ? m_themeDialogueFont : m_themeSpeakerFont);
+        return font && font->isLoaded();
+    }
     /// Faz 3 Dilim 5 — visits the main renderer and every cached button
     /// renderer so accessibility display settings apply uniformly.
     template <typename Fn> void forEachFontRenderer(Fn&& fn) {
         if (m_fontRenderer) fn(*m_fontRenderer);
+        if (m_themeMenuFont) fn(*m_themeMenuFont);
+        if (m_themeDialogueFont) fn(*m_themeDialogueFont);
+        if (m_themeSpeakerFont) fn(*m_themeSpeakerFont);
         for (auto& entry : m_buttonFontCache)
             if (entry.second) fn(*entry.second);
     }
@@ -500,6 +541,8 @@ private:
                          float w, float h, const char* align);
     std::string fitOverlayText(const std::string& text, float px, float maxWidth);
     static void fillCapsule(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color);
+    /// T1: rectangle outline `rings` physical pixels thick (rings 1 == SDL_RenderRect).
+    static void strokeRect(SDL_Renderer* renderer, const SDL_FRect& rect, int rings);
     // D07-2: toast text currently baked into the cached frame pixels (see
     // m_bakedBadges); a different wanted text forces a re-render.
     std::string m_bakedToast;
@@ -510,6 +553,13 @@ private:
     // retried when the host raises that budget, unlike genuinely missing files.
     std::unordered_set<std::string> m_budgetRejectedTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
+    // T1: player-UI theme + its optional fonts (see setUiTheme).
+    Rowl::State::UiTheme m_theme;
+    std::optional<Rowl::State::UiTheme> m_themeHc;
+    std::unique_ptr<FontRenderer> m_themeMenuFont;
+    std::unique_ptr<FontRenderer> m_themeDialogueFont;
+    std::unique_ptr<FontRenderer> m_themeSpeakerFont;
+    std::unique_ptr<FontRenderer> loadThemeFont(const std::string& path);
     SDL_GPUShader* m_msdfFragmentShader = nullptr;
     SDL_GPURenderState* m_msdfRenderState = nullptr;
     std::unique_ptr<MsdfRenderer> m_msdfRenderer;

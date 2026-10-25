@@ -390,6 +390,19 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             TIMEOUT 120
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # T1: Assets/json/ui_theme.json packs into the .rowlpkg and the packaged game
+        # applies it (a bad value keeps its default + diagnostic; no file = built-in look).
+        add_test(
+            NAME rowl_ui_theme_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_ui_theme_packaged.py
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/first_light
+        )
+        set_tests_properties(rowl_ui_theme_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
         # D01d: two packaged games (same sample, different ids) driven through
         # the real player: distinct ids/data dirs, read state + preferences
         # persist per game, future-version profile stays read-only/byte-identical.

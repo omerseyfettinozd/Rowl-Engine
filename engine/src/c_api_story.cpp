@@ -412,6 +412,10 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // opened and before the story loads, so the start node's entry can
         // already unlock.
         engine->loadExtrasCatalog();
+        // T1: player-UI theme (ui_theme.json) - before the story loads, so the
+        // first node already hydrates with the project's dialogue / choice
+        // defaults; the window (when there is one) gets it right away.
+        engine->loadUiTheme();
         // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
         // mount — AFTER the VFS remount above, so the VFS-first catalog
         // probe sees packaged locales (Assets/locales inside .rowlpkg).
