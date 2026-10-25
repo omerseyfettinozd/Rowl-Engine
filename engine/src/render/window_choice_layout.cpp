@@ -47,6 +47,11 @@ void Window::fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) cons
     if (!(metrics.scaleFactor > 0.0f)) return;
     const float scale = metrics.scaleFactor;
 
+    // T2: the text inset of a skinned button (default 12 + 12) and whether locked options are shown.
+    const auto& choiceTheme = uiTheme().story.choice;
+    const float insetAcross = choiceTheme.skin.normal.padding
+        ? (*choiceTheme.skin.normal.padding)[0] + (*choiceTheme.skin.normal.padding)[2] : 24.0f;
+    const bool showDisabled = choiceTheme.showDisabled;
     std::vector<ChoiceBox> boxes;
     boxes.reserve(choices.size());
     bool anyNeeds = false;
@@ -56,8 +61,8 @@ void Window::fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) cons
         box.y = choice.y;
         box.width = choice.width;
         box.height = choice.height;
-        box.visible = choice.enabled;
-        if (choice.enabled && !choice.text.empty()) {
+        box.visible = choice.enabled || showDisabled;
+        if ((choice.enabled || showDisabled) && !choice.text.empty()) {
             const FontRenderer* font = getDialogueFontRenderer();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 const auto found = m_buttonFontCache.find(choice.fontFamily);
@@ -65,7 +70,7 @@ void Window::fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) cons
             }
             // Cizimle ayni cagri: fontPx = fontSize*olcek, sarma = w*olcek - 24*olcek.
             const auto shaped = font->shapeTextShared(
-                choice.text, choice.fontSize * scale, choice.width * scale - 24.0f * scale);
+                choice.text, choice.fontSize * scale, choice.width * scale - insetAcross * scale);
             const bool multiLine = shaped->lines.size() > 1;
             // %100'de tek satir: bugunku gorunum aynen kalir (kutu dokunulmaz).
             if (multiLine || font->textScale() > 1.0001f) {

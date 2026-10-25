@@ -330,6 +330,7 @@ set(ROWL_ENGINE_SOURCES
     src/render/window.cpp
     src/render/window_input.cpp  # W8-d(2): keymap + pollEvents (davranışsız taşıma)
     src/render/window_extras_overlay.cpp  # D07-2: galeri izgarasi / tam ekran gorunum / basarim bildirimi cizimi
+    src/render/window_skin.cpp  # T2: skin cizimi (9-dilim, doku, ...), imlec, devam gostergesi
     src/render/window_pause_overlay.cpp  # W8-d(2): pause overlay (davranışsız taşıma)
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi

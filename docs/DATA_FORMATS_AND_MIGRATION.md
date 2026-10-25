@@ -374,6 +374,8 @@ the same way as `extras.json`. Colours, border widths, text sizes and fonts of t
 plus project-wide dialogue / choice defaults (a key written in a node component still wins). No file or a
 missing key = the built-in look, pixel for pixel. A bad value keeps its default and is reported (at most
 32 diagnostics); a whole bad file (over 256 KiB, not an object, wrong `format`) is ignored. Unknown keys are
-ignored, so older engines read newer files. Layout, images and texts are later slices. Full field table:
+ignored, so older engines read newer files. T2 added skins (images, 9-slice frames, title background / logo /
+music, cursor, slider, continue mark; all additive keys, `"format": 1` unchanged) and the optional
+`extras.json` achievement `icon`; layout and label texts are a later slice. Full field table:
 `docs/PLAYER_UI_THEME.md`. C API: `RowlEngine_GetUiThemeJson` / `ReloadUiTheme` / `SetUiThemeJson`
 (`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 271 symbols).

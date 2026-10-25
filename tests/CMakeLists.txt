@@ -50,6 +50,7 @@ add_executable(rowl_tests
     test_extras_unlocks.cpp
     test_extras_screens.cpp
     test_ui_theme.cpp
+    test_ui_skin.cpp
     test_chapter_boundary_persistence.cpp
     test_player_ui_language.cpp
     test_player_preferences_menu.cpp

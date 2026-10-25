@@ -261,7 +261,7 @@ ExtrasCatalog parseExtrasCatalog(std::string_view json) {
                      if (!hiddenIt->is_boolean()) return std::string("has a non-boolean 'hidden'");
                      entry.hidden = hiddenIt->get<bool>();
                  }
-                 return std::string();
+                 return readPath(item, "icon", false, entry.icon);  // T2: optional plate icon
              });
     return catalog;
 }

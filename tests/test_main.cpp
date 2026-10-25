@@ -149,6 +149,7 @@ int main(int argc, char* argv[]) {
     test_msdf_renderer();
     test_gpu_truetype_text();
     test_pause_overlay_visible_window();
+    test_ui_skin_visible_window();
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();
@@ -224,6 +225,7 @@ int main(int argc, char* argv[]) {
     test_extras_unlocks();
     test_extras_screens();
     test_ui_theme();
+    test_ui_skin();
     test_chapter_boundary_persistence();
     test_player_ui_language();
     test_player_preferences_menu();

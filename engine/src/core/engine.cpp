@@ -290,8 +290,11 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // D-K3: hovering a choice option moves the focus there; it never
             // advances anything (the story-silent contract of #16 stands).
             if (!m_paused) focusChoiceAt(event.x, event.y);
+            else if (m_sliderDragRow >= 0) sliderDragTo(event.x);  // T2: slider drag
             break;
         case Type::PointerUp:
+            m_sliderDragRow = -1;
+            break;
         case Type::TextInput:
         case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
@@ -1519,6 +1522,10 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                     button.textAlignment = option.value("text_alignment", themedChoice.textAlignment);
                     button.fontFamily = option.value("font_family", "Default");
                     button.backgroundImage = option.value("normal_image", option.value("background_image", ""));
+                    // T2: the other state images of the option (a theme skin fills the ones left empty).
+                    button.hoverImage = option.value("hover_image", "");
+                    button.pressedImage = option.value("pressed_image", "");
+                    button.disabledImage = option.value("disabled_image", "");
                     if (!button.optionId.empty()) m_activeChoiceButtons.push_back(std::move(button));
                     ++index;
                 }

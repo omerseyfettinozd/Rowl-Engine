@@ -20,7 +20,7 @@ mounts the project. No file means no extras (normal, no warning).
                     "image": "bogaz_ay.jpg", "thumbnail": "optional.jpg"}],
   "music":        [{"id": "nokturn", "title": "Nokturn", "track": "audio/nokturn_fa_minor.ogg"}],
   "achievements": [{"id": "ilk_son", "title": {"tr": "...", "en": "..."},
-                    "description": {"tr": "...", "en": "..."}, "hidden": false}]
+                    "description": {"tr": "...", "en": "..."}, "hidden": false, "icon": "ui/star.png"}]
 }
 ```
 
@@ -29,7 +29,9 @@ mounts the project. No file means no extras (normal, no warning).
   a missing language falls back to the first entry in file order. `title` is optional (shown empty).
 - `image` / `thumbnail` / `track`: VFS-relative paths (no absolute path, no `..`, at most 260 bytes).
   `thumbnail` defaults to `image`. `hidden` (achievements) tells the menu to veil the entry until
-  it is unlocked; the JSON still carries the text.
+  it is unlocked; the JSON still carries the text. `icon` (achievements, optional): a VFS image shown on the
+  plate once the achievement is unlocked (T2); a locked one never shows it (the theme's `extras.locked_icon`
+  stands in). A bad icon path skips that item like a bad thumbnail.
 - Limits: the file is at most 256 KiB, each list at most 256 items. A file that is too large, is not
   a JSON object or does not declare `"format": 1` is ignored as a whole (one diagnostic). Otherwise a
   bad item (invalid id, missing or unsafe path, wrong type) or a repeated id (the second one) is

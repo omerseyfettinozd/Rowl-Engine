@@ -9,6 +9,7 @@
 #include "rowl/render/gpu_truetype_text.hpp"
 #include "rowl/render/window_text_fallback.hpp"
 #include "rowl/render/ui_text_fit.hpp"
+#include "rowl/render/ui_draw.hpp"
 #include "rowl/render/window_font_resolve.hpp"
 #include "rowl/render/window_msdf_shaped.hpp"
 #include "rowl/core/logger.hpp"
@@ -139,55 +140,6 @@ void drawChoiceFocusMarks(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Col
     }
 }
 
-// T1: rounded box for the dialogue box / choice buttons when the theme honours
-// the components' corner_radius / border_thickness. One whole-pixel row per
-// strip (the fillCapsule technique: sub-pixel rects vanish in the software
-// renderer); `radius` and `rings` are physical pixels.
-float roundedInset(int row, int rows, float radius) {
-    const float edge = std::min(static_cast<float>(row) + 0.5f, static_cast<float>(rows - row) - 0.5f);
-    if (radius <= 0.0f || edge >= radius) return 0.0f;
-    const float up = radius - edge;
-    return std::round(radius - std::sqrt(std::max(0.0f, radius * radius - up * up)));
-}
-
-void drawRoundedBox(SDL_Renderer* renderer, const SDL_FRect& r, float radius, SDL_Color fill,
-                    SDL_Color border, int rings, bool drawFill) {
-    const int rows = std::max(1, static_cast<int>(std::lround(r.h)));
-    const float width = std::max(1.0f, std::round(r.w));
-    const float x0 = std::round(r.x);
-    const float top = std::floor(r.y);
-    radius = std::clamp(radius, 0.0f, std::min(width, static_cast<float>(rows)) * 0.5f);
-    const auto strip = [&](float left, float right, float row) {
-        if (right - left < 1.0f) return;
-        const SDL_FRect span{left, top + row, right - left, 1.0f};
-        SDL_RenderFillRect(renderer, &span);
-    };
-    if (drawFill) {
-        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-        for (int row = 0; row < rows; ++row) {
-            const float inset = roundedInset(row, rows, radius);
-            strip(x0 + inset, x0 + width - inset, static_cast<float>(row));
-        }
-    }
-    if (rings <= 0) return;
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    const int innerRows = rows - 2 * rings;
-    const float innerRadius = std::max(0.0f, radius - static_cast<float>(rings));
-    for (int row = 0; row < rows; ++row) {
-        const float outer = roundedInset(row, rows, radius);
-        const float left = x0 + outer;
-        const float right = x0 + width - outer;
-        const int innerRow = row - rings;
-        if (innerRow >= 0 && innerRow < innerRows && width > 2.0f * rings) {
-            const float inner = static_cast<float>(rings) + roundedInset(innerRow, innerRows, innerRadius);
-            strip(left, std::max(left, x0 + inner), static_cast<float>(row));
-            strip(std::min(right, x0 + width - inner), right, static_cast<float>(row));
-        } else {
-            strip(left, right, static_cast<float>(row));
-        }
-    }
-}
-
 SDL_Color toSdl(const Rowl::State::UiColor& c) { return SDL_Color{c.r, c.g, c.b, c.a}; }
 
 // border_thickness -> ring count when the theme honours the shape fields: the
@@ -196,6 +148,22 @@ int shapeRings(float thickness) {
     if (!(thickness >= 0.5f)) return 0;
     return thickness > 1.5f ? std::clamp(static_cast<int>(std::lround(thickness)), 1, 16) : 1;
 }
+
+// T2: where the dialogue text sits inside the box. Default == the former
+// constants (24 left / 28 top / 24 right / 8 bottom == 48 across, 36 down).
+struct BoxPad {
+    float l, t, r, b;
+};
+BoxPad dialoguePad(const Rowl::State::UiTheme& theme) {
+    const auto& pad = theme.story.dialogue.skin.normal.padding;
+    return pad ? BoxPad{(*pad)[0], (*pad)[1], (*pad)[2], (*pad)[3]} : BoxPad{24.0f, 28.0f, 24.0f, 8.0f};
+}
+// T2: choice buttons keep 12 px left / right of the text unless the skin says otherwise.
+BoxPad choicePad(const Rowl::State::UiTheme& theme) {
+    const auto& pad = theme.story.choice.skin.normal.padding;
+    return pad ? BoxPad{(*pad)[0], (*pad)[1], (*pad)[2], (*pad)[3]} : BoxPad{12.0f, 0.0f, 12.0f, 0.0f};
+}
+Rowl::State::UiColor toUi(SDL_Color c) { return Rowl::State::UiColor{c.r, c.g, c.b, c.a}; }
 
 // A3-tur3 (lifecycle): secim-dugmesi font onbellegi tavani — hikaye-JSON'undan
 // gelen saldirgan-etkili anahtarla sinirsiz buyumeye karsi refuse-to-grow.
@@ -690,6 +658,7 @@ bool Window::isTransitionActive() const {
 }
 
 void Window::update(float dt) {
+    if (std::isfinite(dt) && dt > 0.0f) m_uiClock += static_cast<double>(dt);
     if (m_camera) m_camera->update(dt);
     if (m_transitionManager) m_transitionManager->update(dt);
 
@@ -953,6 +922,12 @@ std::unique_ptr<FontRenderer> Window::loadThemeFont(const std::string& path) {
 
 void Window::setUiTheme(const Rowl::State::UiTheme& theme,
                         const std::optional<Rowl::State::UiTheme>& highContrast) {
+    // T2: images the old or the new theme names may have changed on disk (the
+    // editor re-saves a frame, then reloads): drop them from the texture cache.
+    std::vector<std::string> touched;
+    for (const auto& entry : Rowl::State::uiThemeImagePaths(m_theme)) touched.push_back(entry.second);
+    for (const auto& entry : Rowl::State::uiThemeImagePaths(theme)) touched.push_back(entry.second);
+    for (const auto& path : touched) forgetTexture(path);
     m_theme = theme;
     m_themeHc = highContrast;
     m_themeMenuFont = loadThemeFont(theme.fonts.menu);
@@ -963,6 +938,8 @@ void Window::setUiTheme(const Rowl::State::UiTheme& theme,
     m_bakedBadges = 0;
     m_bakedToast.clear();
     invalidateFrameCache();
+    probeThemeImages();
+    applyThemeCursor();
 }
 
 void Window::renderVisualNovelFrame(
@@ -985,6 +962,8 @@ void Window::renderVisualNovelFrame(
         (m_camera && m_camera->isMoving()) ||
         (m_transitionManager && m_transitionManager->isTransitionActive()) ||
         m_screenFx.flashActive ||
+        // T2: an animated continue indicator needs a fresh frame every tick.
+        continueIndicatorAnimating(dialogues, choices) ||
         // E2a: oynayan sprite-sheet karesi icerigi degistirir — hash ayni
         // kalsa da cache yeniden kullanilamaz (yoksa animasyon donar).
         std::any_of(characters.begin(), characters.end(),
@@ -1179,7 +1158,18 @@ void Window::renderVisualNovelFrame(
         uint8_t boxAlpha = static_cast<uint8_t>(std::clamp(dlg.boxOpacity, 0.0f, 1.0f) * 255.0f);
         SDL_Color boxColor = parseHexColor(dlg.boxColor, boxAlpha);
         SDL_Color borderColor = parseHexColor(dlg.borderColor, 255);
-        if (theme.story.honorShapeFields) {
+        // T2: the box skin. A component's custom_box_texture wins over the theme's
+        // image; without any image / named colour the legacy drawing below runs.
+        Rowl::State::UiSkin boxSkin = theme.story.dialogue.skin.normal;
+        if (!dlg.customBoxTexture.empty()) boxSkin.image = dlg.customBoxTexture;
+        if (skinDraws(boxSkin)) {
+            if (theme.story.honorShapeFields && !boxSkin.cornerRadius) {
+                boxSkin.cornerRadius = std::max(0.0f, dlg.cornerRadius);
+            }
+            const float legacyBorderPx = theme.story.honorShapeFields
+                ? static_cast<float>(shapeRings(dlg.borderThickness)) : (dlg.borderThickness > 1.5f ? 2.0f : 1.0f);
+            paintSkin(dlgBox, boxSkin, toUi(boxColor), toUi(borderColor), legacyBorderPx, metrics.scaleFactor);
+        } else if (theme.story.honorShapeFields) {
             // T1: the component's corner_radius / border_thickness are drawn
             // (rounded fill + ring of `border_thickness` physical pixels).
             const int rings = shapeRings(dlg.borderThickness);
@@ -1214,20 +1204,26 @@ void Window::renderVisualNovelFrame(
             const float speakerTextScale = speakerFont ? speakerFont->textScale() : 1.0f;
             const float speakerDrawPx = speakerFontPx * speakerTextScale;
             float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
-            float tagX = physBoxX + (20.0f * metrics.scaleFactor);
-            float tagY = physBoxY - (tagH * 0.6f);
+            // T2: the tag may be moved from its place (theme offset).
+            float tagX = physBoxX + ((20.0f + theme.story.speakerTag.offsetX) * metrics.scaleFactor);
+            float tagY = physBoxY - (tagH * 0.6f) + theme.story.speakerTag.offsetY * metrics.scaleFactor;
 
             SDL_FRect speakerTag = { tagX, tagY, tagW, tagH };
 
             SDL_Color speakerTagColor = parseHexColor(dlg.speakerColor, 255);
-            SDL_SetRenderDrawColor(m_sdlRenderer, speakerTagColor.r, speakerTagColor.g, speakerTagColor.b, speakerTagColor.a);
-            SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
-
-            // Border on speaker badge
             const auto& tagBorder = theme.story.speakerTag.borderColor;
-            SDL_SetRenderDrawColor(m_sdlRenderer, tagBorder.r, tagBorder.g, tagBorder.b, tagBorder.a);
-            strokeRect(m_sdlRenderer, speakerTag,
-                       static_cast<int>(std::lround(theme.story.speakerTag.borderWidth)));
+            const auto& tagSkin = theme.story.speakerTag.skin.normal;
+            const float tagBorderPx = theme.story.speakerTag.borderWidth;
+            if (skinDraws(tagSkin)) {
+                paintSkin(speakerTag, tagSkin, toUi(speakerTagColor), tagBorder, tagBorderPx, metrics.scaleFactor);
+            } else {
+                SDL_SetRenderDrawColor(m_sdlRenderer, speakerTagColor.r, speakerTagColor.g, speakerTagColor.b, speakerTagColor.a);
+                SDL_RenderFillRect(m_sdlRenderer, &speakerTag);
+
+                // Border on speaker badge
+                SDL_SetRenderDrawColor(m_sdlRenderer, tagBorder.r, tagBorder.g, tagBorder.b, tagBorder.a);
+                strokeRect(m_sdlRenderer, speakerTag, static_cast<int>(std::lround(tagBorderPx)));
+            }
 
             // Draw speaker name text
             // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
@@ -1272,12 +1268,18 @@ void Window::renderVisualNovelFrame(
             }
         }
 
+        // T2: "text finished" mark on the box (theme; off without an image).
+        if (std::none_of(choices.begin(), choices.end(), [](const ChoiceButtonRenderData& c) { return c.enabled; })) {
+            drawContinueIndicator(dlg, dlgBox, metrics.scaleFactor);
+        }
+
         // Dialogue Content Text (Debug fallback before present)
         if (!dlg.dialogue.empty()) {
             SDL_Color textColor = parseHexColor(dlg.textColor, 255);
 
-            float paddingLeft = 24.0f * metrics.scaleFactor;
-            float paddingTop = 28.0f * metrics.scaleFactor;
+            const BoxPad textPad = dialoguePad(theme);
+            float paddingLeft = textPad.l * metrics.scaleFactor;
+            float paddingTop = textPad.t * metrics.scaleFactor;
 
             // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
             if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
@@ -1290,7 +1292,7 @@ void Window::renderVisualNovelFrame(
                 FontRenderer* const dialogueFont = getDialogueFontRenderer();
                 const bool themedDialogueFont = dialogueFont != m_fontRenderer.get();
                 const float msdfFontPx = dlg.fontSize * metrics.scaleFactor;
-                const float msdfMaxLineW = scaledDlgW - (48.0f * metrics.scaleFactor);
+                const float msdfMaxLineW = scaledDlgW - ((textPad.l + textPad.r) * metrics.scaleFactor);
                 const auto shapedDialogue = dialogueFont
                     ? dialogueFont->shapeTextShared(dlg.dialogue, msdfFontPx, msdfMaxLineW, dlg.language)
                     : nullptr;
@@ -1315,7 +1317,7 @@ void Window::renderVisualNovelFrame(
                     dialogueMsdfOk = drawTrueTypeTextOnGpu(
                         m_sdlRenderer, dialogueFont, shapedDialogue.get(), dlg.dialogue,
                         physBoxX + paddingLeft, physBoxY + paddingTop, msdfFontPx, textColor,
-                        msdfMaxLineW, scaledDlgH - (36.0f * metrics.scaleFactor),
+                        msdfMaxLineW, scaledDlgH - ((textPad.t + textPad.b) * metrics.scaleFactor),
                         dlg.textAlignment, shapedDialogue ? dialogueVisible : SIZE_MAX);
                 }
                 if (!dialogueMsdfOk) {
@@ -1328,8 +1330,11 @@ void Window::renderVisualNovelFrame(
 
     // 4. Player choice buttons. Their rectangles use the same 1920x1080
     // virtual coordinate system as every other scene element.
+    // T2: options whose condition is false stay hidden unless the theme shows them.
+    const bool showDisabledChoices = theme.story.choice.showDisabled;
+    const BoxPad choiceInset = choicePad(theme);
     for (const auto& choice : choices) {
-        if (!choice.enabled) continue;
+        if (!choice.enabled && !showDisabledChoices) continue;
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(choice.x, choice.y, metrics, px, py);
         SDL_FRect rect{px, py, choice.width * metrics.scaleFactor, choice.height * metrics.scaleFactor};
@@ -1339,7 +1344,29 @@ void Window::renderVisualNovelFrame(
         SDL_Color bg = parseHexColor(choice.focused ? choice.hoverColor : choice.backgroundColor,
                                      static_cast<uint8_t>(255.0f * std::clamp(choice.opacity, 0.0f, 1.0f)));
         SDL_Color border = parseHexColor(choice.borderColor, 255);
-        if (theme.story.honorShapeFields) {
+        if (!choice.enabled) {  // a shown-but-locked option reads as dimmed
+            bg.a = static_cast<uint8_t>(bg.a / 2);
+            border.a = static_cast<uint8_t>(border.a / 2);
+        }
+        // T2: state skin. The option's own state image (hover_image / disabled_image)
+        // wins over the theme's; the option's normal_image keeps its old role.
+        const Rowl::State::UiSkinState choiceState = !choice.enabled ? Rowl::State::UiSkinState::Disabled
+            : (choice.focused ? Rowl::State::UiSkinState::Focused : Rowl::State::UiSkinState::Normal);
+        static const std::string kNoImage;
+        const std::string& ownStateImage = !choice.enabled ? choice.disabledImage
+            : (choice.focused ? choice.hoverImage : kNoImage);
+        const Rowl::State::UiSkin& themedSkin = choiceState == Rowl::State::UiSkinState::Normal
+            ? theme.story.choice.skin.normal : theme.story.choice.skin.pick(choiceState);
+        const bool choiceSkinned = skinDraws(themedSkin) || !ownStateImage.empty();
+        if (choiceSkinned) {
+            Rowl::State::UiSkin skin = themedSkin;
+            if (!ownStateImage.empty()) skin.image = ownStateImage;
+            else if (skin.image.empty() && !choice.backgroundImage.empty()) skin.image = choice.backgroundImage;
+            if (theme.story.honorShapeFields && !skin.cornerRadius) skin.cornerRadius = std::max(0.0f, choice.cornerRadius);
+            skin.opacity *= std::clamp(choice.opacity, 0.0f, 1.0f);
+            const float legacyBorderPx = theme.story.honorShapeFields ? static_cast<float>(shapeRings(choice.borderThickness)) : 1.0f;
+            paintSkin(rect, skin, toUi(bg), toUi(border), legacyBorderPx, metrics.scaleFactor);
+        } else if (theme.story.honorShapeFields) {
             // T1: corner_radius / border_thickness of the option are drawn.
             const float radius = std::max(0.0f, choice.cornerRadius) * metrics.scaleFactor;
             drawRoundedBox(m_sdlRenderer, rect, radius, bg, border, 0, true);
@@ -1362,14 +1389,16 @@ void Window::renderVisualNovelFrame(
         // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
         if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                 m_offscreenSurface != nullptr)) {
-            SDL_Color text = parseHexColor(choice.textColor, 255);
+            SDL_Color text = choice.enabled ? parseHexColor(choice.textColor, 255)
+                                            : toSdl(theme.story.choice.disabledText);
             // D11: şekilli-MSDF yolu (shape girdileri TrueType koluyla AYNI
             // ifade — :1581-1583 emsali: fontPx, w-24*scale, textAlignment;
             // topY py+(h-fontPx)*.5 :1582; şekil OTORİTESİ TrueType ile aynı
             // nesne — Butler-önbellek salt-okunur yoklama, VFS/yükleme YOK).
             // Şekillenemezse ham-MSDF legacy (birebir eski piksel/davranış).
             const float choiceFontPx = choice.fontSize * metrics.scaleFactor;
-            const float choiceWrapW = rect.w - 24.0f * metrics.scaleFactor;
+            const float choiceWrapW = rect.w - (choiceInset.l + choiceInset.r) * metrics.scaleFactor;
+            const float choiceTextX = px + choiceInset.l * metrics.scaleFactor;
             // T1: the default button font is the theme's dialogue font (not in the
             // MSDF atlas, so TrueType only); a font_family button keeps its own.
             FontRenderer* choiceMsdfFont = getDialogueFontRenderer();
@@ -1392,11 +1421,11 @@ void Window::renderVisualNovelFrame(
             } else if (shapedChoice && !shapedChoice->glyphs.empty()) {
                 choiceMsdfOk = drawMsdfShapedAllOrNothing(
                     m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
-                    *shapedChoice, choice.text, px + 12.0f * metrics.scaleFactor,
+                    *shapedChoice, choice.text, choiceTextX,
                     choiceTextY, choiceFontPx, text,
                     shapedChoice->revealUnits.size(), choiceWrapW, choice.textAlignment);
             } else {
-                choiceMsdfOk = renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
+                choiceMsdfOk = renderGpuMsdfText(choice.text, choiceTextX,
                                    py + rect.h * .5f + choice.fontSize * metrics.scaleFactor * .35f,
                                    choice.fontSize * metrics.scaleFactor, text);
             }
@@ -1404,12 +1433,12 @@ void Window::renderVisualNovelFrame(
                 // A11: TrueType yedeği (offscreen kolla aynı yerleşim).
                 choiceMsdfOk = drawTrueTypeTextOnGpu(
                     m_sdlRenderer, choiceMsdfFont, nullptr, choice.text,
-                    px + 12.0f * metrics.scaleFactor, choiceTextY,
+                    choiceTextX, choiceTextY,
                     choiceFontPx, text, choiceWrapW, rect.h, choice.textAlignment);
             }
             if (!choiceMsdfOk) {
                 SDL_SetRenderDrawColor(m_sdlRenderer, text.r, text.g, text.b, text.a);
-                SDL_RenderDebugText(m_sdlRenderer, px + 12.0f, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
+                SDL_RenderDebugText(m_sdlRenderer, choiceTextX, py + rect.h * 0.5f - 4.0f, choice.text.c_str());
             }
         }
     }
@@ -1450,8 +1479,8 @@ void Window::renderVisualNovelFrame(
                 const float speakerTextScale = speakerFont->textScale();
                 const float speakerDrawPx = speakerFontPx * speakerTextScale;
                 float tagH = (dlg.speakerFontSize * speakerTextScale * 1.4f + 12.0f) * metrics.scaleFactor;
-                float tagX = physBoxX + (20.0f * metrics.scaleFactor);
-                float tagY = physBoxY - (tagH * 0.6f);
+                float tagX = physBoxX + ((20.0f + theme.story.speakerTag.offsetX) * metrics.scaleFactor);
+                float tagY = physBoxY - (tagH * 0.6f) + theme.story.speakerTag.offsetY * metrics.scaleFactor;
                 float textDrawY = tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor);
 
                 // D-K3: hazir tek-satir sekil (renderText yeniden sarar; ad kesilirdi).
@@ -1472,10 +1501,11 @@ void Window::renderVisualNovelFrame(
             // 4b. Dialogue Content Text (with Typewriter Progression + Text Alignment)
             if (!dlg.dialogue.empty()) {
                 SDL_Color textColor = parseHexColor(dlg.textColor, 255);
-                float paddingLeft = 24.0f * metrics.scaleFactor;
-                float paddingTop = 28.0f * metrics.scaleFactor;
-                float maxLineWidth = scaledDlgW - (48.0f * metrics.scaleFactor);
-                float maxDialogueHeight = scaledDlgH - (36.0f * metrics.scaleFactor);
+                const BoxPad textPad = dialoguePad(theme);
+                float paddingLeft = textPad.l * metrics.scaleFactor;
+                float paddingTop = textPad.t * metrics.scaleFactor;
+                float maxLineWidth = scaledDlgW - ((textPad.l + textPad.r) * metrics.scaleFactor);
+                float maxDialogueHeight = scaledDlgH - ((textPad.t + textPad.b) * metrics.scaleFactor);
                 float fontPx = dlg.fontSize * metrics.scaleFactor;
 
                 FontRenderer* const dialogueFont = getDialogueFontRenderer();
@@ -1501,8 +1531,9 @@ void Window::renderVisualNovelFrame(
                 );
             }
         }
+        const BoxPad choiceInset = choicePad(theme);
         for (const auto& choice : choices) {
-            if (!choice.enabled || choice.text.empty()) continue;
+            if ((!choice.enabled && !theme.story.choice.showDisabled) || choice.text.empty()) continue;
             FontRenderer* choiceFont = getDialogueFontRenderer();
             if (!choice.fontFamily.empty() && choice.fontFamily != "Default") {
                 auto found = m_buttonFontCache.find(choice.fontFamily);
@@ -1547,13 +1578,15 @@ void Window::renderVisualNovelFrame(
             const float h = choice.height * metrics.scaleFactor;
             const float fontPx = choice.fontSize * metrics.scaleFactor;
             // D-K3: GPU koluyla ayni metin ustu (renderText ayni sekli kullanir).
+            const float choiceTextWidth = w - (choiceInset.l + choiceInset.r) * metrics.scaleFactor;
             const auto shapedChoice = choiceFont->shapeTextShared(
-                choice.text, fontPx, w - 24.0f * metrics.scaleFactor);
+                choice.text, fontPx, choiceTextWidth);
             const float textY = choiceTextTop(py, h, fontPx, shapedChoice->height,
                                               shapedChoice->lines.size(), choiceFont->textScale());
-            choiceFont->renderText(m_offscreenSurface, choice.text, px + 12.0f * metrics.scaleFactor,
-                textY, fontPx, parseHexColor(choice.textColor, 255),
-                w - 24.0f * metrics.scaleFactor, h, choice.textAlignment);
+            choiceFont->renderText(m_offscreenSurface, choice.text, px + choiceInset.l * metrics.scaleFactor,
+                textY, fontPx,
+                choice.enabled ? parseHexColor(choice.textColor, 255) : toSdl(theme.story.choice.disabledText),
+                choiceTextWidth, h, choice.textAlignment);
         }
         m_lastFrameTextRasterizationMilliseconds = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - textRasterizationStarted).count();
@@ -1696,6 +1729,10 @@ uint64_t Window::hashPackedFrameContent(bool hasBackground, const std::string& b
         fnvMixBool(hash, choice.enabled);
         // D-K3: odak yalniz true iken karisir (odaksiz kare ozetleri degismez).
         if (choice.focused) fnvMixBool(hash, true);
+        // T2: per-state images mix in only when written (old frames hash the same).
+        if (!choice.hoverImage.empty()) fnvMixString(hash, choice.hoverImage);
+        if (!choice.pressedImage.empty()) fnvMixString(hash, choice.pressedImage);
+        if (!choice.disabledImage.empty()) fnvMixString(hash, choice.disabledImage);
     }
     // Packed content ends here; dynamic state mixes in hashFrameContent.
     return hash;
@@ -1784,6 +1821,11 @@ void Window::shutdown() {
     clearTextureCache();
     shutdownGpuMsdfRenderer();
 
+    if (m_themeCursor) {  // T2: the window's pointer goes back to the system one first
+        if (m_sdlWindow) SDL_SetCursor(SDL_GetDefaultCursor());
+        SDL_DestroyCursor(m_themeCursor);
+        m_themeCursor = nullptr;
+    }
     if (m_vignetteTexture) {
         SDL_DestroyTexture(m_vignetteTexture);
         m_vignetteTexture = nullptr;

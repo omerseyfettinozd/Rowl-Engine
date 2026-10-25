@@ -17,7 +17,7 @@ namespace Rowl::State {
 ///   {"format": 1,
 ///    "gallery":      [{"id","title","image","thumbnail"?}],
 ///    "music":        [{"id","title","track"}],
-///    "achievements": [{"id","title","description"?,"hidden"?}]}
+///    "achievements": [{"id","title","description"?,"hidden"?,"icon"?}]}
 ///
 /// `title` / `description` are a plain string or a localized object
 /// `{"tr": "...", "en": "..."}`. See docs/EXTRAS_UNLOCKS.md.
@@ -58,6 +58,7 @@ struct ExtrasAchievementItem {
     LocalizedText title;
     LocalizedText description;
     bool hidden = false;    ///< description (and title) stay veiled until unlocked
+    std::string icon;       ///< T2: optional VFS path of the plate icon (shown once unlocked)
 };
 
 struct ExtrasCatalog {

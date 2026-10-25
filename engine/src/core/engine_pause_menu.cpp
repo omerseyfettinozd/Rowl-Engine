@@ -52,6 +52,7 @@ void Engine::setPaused(bool paused) {
     // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
     // have happened out-of-band while unpaused (editor, quick keys).
     m_pauseSlotCacheValid = false;
+    if (!paused) endTitleMusic();  // T2: the title music never outlives the title
     ROWL_LOG_INFO(paused ? "[Player] Paused — menu open (Esc/P to resume)."
                          : "[Player] Resumed.");
 }
@@ -216,6 +217,7 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
         extrasClick(virtualX, virtualY);
         return;
     }
+    m_sliderDragRow = -1;  // a new press ends any drag
     const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
@@ -224,6 +226,14 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     // (keyboard moves disarm the same way in pauseMenuMoveSelection).
     if (!alreadySelected) m_pauseConfirmQuit = false;
     if (pauseMenuValueRow() >= 0) {
+        // T2: with the slider style a press on the track sets the value and starts a drag.
+        const int valueRow = pauseMenuValueRow();
+        if (m_uiTheme.preferences.valueStyle == "slider" && pauseMenuFraction(valueRow) >= 0.0f &&
+            PauseMenuLayout::inSliderZone(virtualX)) {
+            m_sliderDragRow = valueRow;
+            pauseMenuSetFraction(valueRow, PauseMenuLayout::sliderFractionAt(virtualX));
+            return;
+        }
         const int dir = PauseMenuLayout::adjustDirection(virtualX);
         if (dir != 0) {
             pauseMenuAdjustSelected(dir);
@@ -270,6 +280,7 @@ PauseMenuView Engine::getPauseMenuView() const {
     if (m_pauseMode == PauseMenuMode::Backlog) {
         // D03-2: entries (visible window) ride in view.backlog; an empty history
         // shows one dim line instead and selects nothing.
+        view.page = "history";
         view.title = T(UiText::History);
         view.backlog = buildBacklogView();
         view.selected = view.backlog.selected;
@@ -288,6 +299,7 @@ PauseMenuView Engine::getPauseMenuView() const {
         const bool confirmTitle =
             m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
         const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
+        view.page = (confirmTitle || confirmExit) ? "confirm" : "pause";
         view.title = T(UiText::Paused);
         // D-K3: makePauseRow names every field (aggregate rows tripped
         // -Wmissing-field-initializers); the rows are unchanged.
@@ -305,6 +317,7 @@ PauseMenuView Engine::getPauseMenuView() const {
                   : T(UiText::HintPauseMain);
     } else {
         const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
+        view.page = saving ? "save" : "load";
         view.title = T(saving ? UiText::SaveSlotTitle : UiText::LoadSlotTitle);
         // A2b: occupancy is memoized (see m_pauseSlotCacheValid) — a slot
         // page holds 10 rows and this view rebuilds per UI refresh.
@@ -320,6 +333,8 @@ PauseMenuView Engine::getPauseMenuView() const {
                         : info.state == PauseSlotInfo::State::Corrupt ? UiText::SlotCorrupt
                         : UiText::SlotEmpty);
             row.detail = pauseSlotDetail(info);
+            row.slotState = info.state == PauseSlotInfo::State::Valid ? 2
+                          : info.state == PauseSlotInfo::State::Corrupt ? 3 : 1;  // T2
             view.rows.push_back(row);
         }
         const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(
@@ -372,6 +387,8 @@ std::string Engine::getPauseMenuJson() const {
     out += (m_pauseConfirmQuit && !confirmTitle) ? "true" : "false";
     out += ",\"quick_slot\":";
     out += std::to_string(m_activeQuickSlot);
+    out += ",\"page\":";
+    appendPauseMenuJsonString(out, view.page);
     out += ",\"title\":";
     appendPauseMenuJsonString(out, view.title);
     out += ",\"hint\":";

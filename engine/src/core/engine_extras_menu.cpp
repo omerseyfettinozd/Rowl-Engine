@@ -224,6 +224,7 @@ void Engine::extrasBack() {
             break;
         case PauseMenuMode::Extras:
             endExtrasSession();
+            if (m_titleActive && m_titleMusicStarted) startTitleMusic();  // T2: the title music comes back
             m_pauseMode = PauseMenuMode::Title;
             m_pauseSelected = LM::kTitleExtrasRow;
             return;
@@ -413,6 +414,8 @@ PauseExtrasView Engine::buildExtrasView() const {
                 entry.title = (entry.unlocked || !item.hidden) ? item.title.resolve(tag) : locked;
                 entry.detail = entry.unlocked ? item.description.resolve(tag) : locked;
                 if (entry.unlocked) entry.at = dateOnly(profile.achievementTime(item.id));
+                // T2: a locked achievement never reveals its icon (the view carries no path for it).
+                if (entry.unlocked) entry.icon = item.icon;
                 entry.y = LM::achRowTop(index - m_extrasTop);
                 entry.h = LM::kAchRowH;
                 view.items.push_back(std::move(entry));
@@ -427,6 +430,7 @@ PauseMenuView Engine::getExtrasMenuView() const {
     view.open = m_paused;
     view.titleActive = m_titleActive;
     view.extras = buildExtrasView();
+    view.page = view.extras.page == "root" ? "extras_root" : view.extras.page;  // T2
     const UiLang lang = getUiLanguage();
     auto T = [lang](UiText id) { return std::string(uiText(id, lang)); };
     const auto count = [](int unlocked, size_t total) {

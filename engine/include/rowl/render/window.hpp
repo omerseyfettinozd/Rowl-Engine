@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -19,6 +20,7 @@
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
+struct SDL_Cursor;
 struct SDL_Surface;
 struct SDL_GPUShader;
 struct SDL_GPURenderState;
@@ -170,6 +172,12 @@ struct ChoiceButtonRenderData {
     std::string textAlignment = "Center";
     std::string fontFamily = "Default";
     bool enabled = true;
+    /// T2: per-state images the option wrote itself (normal_image feeds backgroundImage,
+    /// the focused / disabled ones are read from hover_image / disabled_image). A theme
+    /// skin supplies the state images the option leaves empty. Empty = not mixed into the frame hash.
+    std::string hoverImage;
+    std::string pressedImage;
+    std::string disabledImage;
     /// Author's own "enabled" flag, before the Lua condition was applied.
     bool authorEnabled = true;
     /// Lua gate ("" / "true" / "1" = always open). Re-checked at selection.
@@ -392,6 +400,13 @@ public:
         return m_themeSpeakerFont && m_themeSpeakerFont->isLoaded() ? m_themeSpeakerFont.get()
                                                                       : m_fontRenderer.get();
     }
+    /// T2: problems found with the theme's images (missing / unreadable / too large),
+    /// one line each, collected when the theme is installed. Merged into GetUiThemeJson.
+    const std::vector<std::string>& skinDiagnostics() const { return m_skinDiagnostics; }
+    /// T2: a theme cursor image is installed on the window.
+    bool hasThemeCursor() const { return m_themeCursor != nullptr; }
+    /// T2: seconds the UI clock has run (drives the continue-indicator animation).
+    double uiClock() const { return m_uiClock; }
     /// T1: installs the player-UI theme (and its optional high-contrast
     /// palette), (re)loads the theme fonts from the VFS and invalidates every
     /// cached frame, including the baked badge / toast state.
@@ -509,6 +524,58 @@ private:
     std::string m_pauseThumbKey;
     std::string m_pauseThumbFailedKey;
     void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+
+    // ── T2: skins (window_skin.cpp) ──
+    /// How one skin will be painted: the image (null = colours only) and the
+    /// fill / border colours that apply after the surface's own defaults.
+    struct SkinPaint {
+        SDL_Texture* texture = nullptr;
+        const Rowl::State::UiSkin* skin = nullptr;
+        bool fillOn = false;
+        SDL_Color fill{0, 0, 0, 0};
+        bool borderOn = false;
+        SDL_Color border{0, 0, 0, 0};
+        int rings = 0;       ///< border thickness, physical px
+        float radius = 0.0f; ///< corner radius, physical px
+    };
+    /// Loads the image (or notes it as missing) and merges the skin's colours with the
+    /// surface's own: with an image the surface colours are NOT drawn unless the skin names them.
+    SkinPaint resolveSkin(const Rowl::State::UiSkin& skin,
+                          const std::optional<Rowl::State::UiColor>& baseFill,
+                          const std::optional<Rowl::State::UiColor>& baseBorder,
+                          float baseBorderPx, float scale);
+    /// True when `skin` would put something on screen: its picture loads or it names a colour.
+    /// A skin whose picture is unusable (and names no colour) is as good as absent: the surface
+    /// then draws exactly as it did before skins.
+    bool skinDraws(const Rowl::State::UiSkin& skin);
+    void paintSkinFill(const SDL_FRect& rect, const SkinPaint& paint);
+    void paintSkinImage(const SDL_FRect& rect, const SkinPaint& paint, float scale);
+    void paintSkinBorder(const SDL_FRect& rect, const SkinPaint& paint);
+    /// fill + image + border in that order. True when the image was drawn.
+    bool paintSkin(const SDL_FRect& rect, const Rowl::State::UiSkin& skin,
+                   const std::optional<Rowl::State::UiColor>& baseFill,
+                   const std::optional<Rowl::State::UiColor>& baseBorder,
+                   float baseBorderPx, float scale);
+    /// Image only (no colours), e.g. the title logo or an icon.
+    bool paintSkinImageOnly(const SDL_FRect& rect, const Rowl::State::UiSkin& skin, float scale);
+    void probeThemeImages();
+    void forgetTexture(const std::string& path);
+    void applyThemeCursor();
+    void noteSkinDiagnostic(const std::string& line);
+    std::vector<std::string> m_skinDiagnostics;
+    SDL_Cursor* m_themeCursor = nullptr;
+    double m_uiClock = 0.0;
+    /// Panel / row skin sets that answer for the page being drawn.
+    const Rowl::State::UiSkinSet& panelSkinFor(const std::string& page) const;
+    const Rowl::State::UiSkinSet& rowSkinFor(const std::string& page) const;
+    /// True while a continue-indicator animation needs a fresh frame each tick.
+    bool continueIndicatorAnimating(const std::vector<DialogueRenderData>& dialogues,
+                                    const std::vector<ChoiceButtonRenderData>& choices) const;
+    void drawContinueIndicator(const DialogueRenderData& dlg, const SDL_FRect& box, float scale);
+    bool dialogueTextComplete(const DialogueRenderData& dlg, float scaledWidth, float scale);
+    /// Title screen background / logo / story-frame hiding.
+    bool drawTitleBackdrop(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawTitleLogo(const ViewportMetrics& metrics);
 
     /// D-K3: konusmaci etiketinin tek yerlesimi (genislik + cizilecek metin + sekil).
     /// Etiket genisligi, cizilen sekil ve kisaltma ayni olcumden (yazi boyutu dahil)

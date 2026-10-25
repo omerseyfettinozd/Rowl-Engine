@@ -664,6 +664,10 @@ private:
     bool m_galleryViewing = false;
     std::string m_musicPlayingId;
     bool m_musicRoomTouchedAudio = false;
+    /// T2: the theme's title music is playing because the title screen started it.
+    bool m_titleMusicStarted = false;
+    void startTitleMusic();
+    void endTitleMusic();
     bool m_toastActive = false;
     UnlockNotice m_toastNotice;
     float m_toastRemaining = 0.0f;
@@ -882,6 +886,13 @@ private:
     std::string preferenceLanguageText() const;
     PauseMenuView getTitleMenuView() const;
     float pauseMenuVolume(int row) const;
+    /// T2: slider position 0..1 of a Preferences numeric row (value-row numbers 3..8), -1 otherwise.
+    float pauseMenuFraction(int row) const;
+    /// T2: sets that row from a slider position (quantised to the row's own step) and persists it.
+    void pauseMenuSetFraction(int row, float fraction);
+    /// T2: pointer drag of a Preferences slider (value-row number, -1 none).
+    int m_sliderDragRow = -1;
+    void sliderDragTo(float physicalX);
     /// #86: setting a volume row also commits the mixer to the game state
     /// (see commitMixerVolumesToGameState) — pause-menu mixing survives
     /// save/load/rewind instead of staying session-local.

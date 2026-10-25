@@ -11,8 +11,9 @@ whole `Assets/` folder, so the file travels in the package with no extra step.
 pixel** (every default below is the former constant). The theme is not part of the frame hash; changing
 it invalidates the cached frame and the baked AUTO/SKIP/toast state.
 
-Not covered yet (later slices): images and 9-slice frames, layout (positions, sizes, row pitch), label
-texts, which rows are listed, durations, sounds, and the editor window.
+Skins (images, 9-slice frames, backgrounds, cursor, slider, continue mark; T2) are described in
+"Skins" below. Not covered yet (later slices): layout (positions, sizes, row pitch; T2b), label texts,
+which rows are listed, durations, UI sounds, and the editor window.
 
 ## Rules
 
@@ -127,7 +128,11 @@ of them. A themed font is not in the MSDF atlas, so text in it is drawn with the
 
 Optional object with the same `menu`, `extras`, `toast`, `badges`, `scene` keys: while the player's
 High Contrast setting is on, these values replace the theme's (inheritance runs again over the result).
-`story` and `fonts` cannot be overridden. Without it the setting changes the glyph halo only, as before.
+`story`, `fonts` and every skin key cannot be overridden. Without it the setting changes the glyph halo
+only, as before. **Skins step aside while High Contrast is on** (a picture behind text is what the setting
+exists to avoid): pictures, "none" panels, the title background / logo are dropped and the surfaces draw
+their plain colours, whether or not the file has a `high_contrast` object. `"high_contrast": {"keep_skins":
+true}` keeps them.
 
 ## Example (dark coffee and gold)
 
@@ -154,6 +159,109 @@ High Contrast setting is on, these values replace the theme's (inheritance runs 
   next frame; a missing file restores the built-in look.
 - `RowlEngine_SetUiThemeJson(handle, json)`: installs a document without a file (preview of unsaved edits);
   a document that is not usable returns `ROWL_RESULT_VALIDATION_ERROR` and the theme in force stays.
+
+## Skins (T2): any surface wears the author's picture
+
+A skin dresses one surface. Every surface takes the same object:
+
+```json
+"panel_skin": {
+  "image": "ui/save_frame.png",       // VFS path (.png .jpg .jpeg .bmp .tga .gif); "" = no picture
+  "mode": "nine_slice",               // nine_slice | stretch | tile | fit | cover | center
+  "slice": [24, 24, 24, 24],          // nine_slice insets l,t,r,b in IMAGE pixels (one number = all four)
+  "slice_scale": 1.0,                 // on-screen size of the image: edges, tiles, centred picture (0.05-16)
+  "tint": "#FFFFFFFF", "opacity": 1,  // multiply the picture
+  "filter": "linear",                 // or "nearest" (pixel art)
+  "fill": "#102030", "border": "#FFD27A", "border_width": 2, "corner_radius": 8,  // colours of the surface itself
+  "padding": [24, 28, 24, 12],        // content inset l,t,r,b, virtual px
+  "selected": { "image": "ui/row_hi.png" }   // state variants (below)
+}
+```
+
+- A bare string is the image (`"panel_skin": "ui/frame.png"`); `"none"` / `false` means "draw no panel".
+- **With a picture the surface's own colours are not drawn** (the picture is the frame) unless the skin names
+  `fill` / `border`; without a picture, or when the picture is missing / unreadable / over 8192 px, the surface
+  draws exactly as it did before skins existed (and `GetUiThemeJson` lists the problem). A skin with no
+  picture and no colour (only `padding`) changes no pixel.
+- `nine_slice`: corners are drawn 1:1 (times `slice_scale`), edges stretch along one axis, the centre fills.
+  `slice_scale` 2 on a half-size window shows the image's pixels 1:1. A frame smaller than its own corners
+  shrinks the corners alike. `tile` repeats the picture at its (scaled) size, `cover` fills and crops, `fit`
+  keeps the aspect inside the rectangle, `center` draws it at its size.
+- `border_width` is physical pixels (like `menu.panel_border_width`); `corner_radius` and `padding` are
+  virtual pixels of the 1920x1080 canvas.
+- State variants (`selected`, `focused`, `hover`, `pressed`, `disabled`, `locked`, `empty`, `corrupt`) start as
+  a copy of the normal skin and change only the keys they name. `selected`, `focused` and `hover` stand in for
+  one another (the engine does not tell hover from keyboard focus: pointer hover moves the focus).
+
+### Surfaces
+
+| key | what it dresses | states used |
+|---|---|---|
+| `menu.panel_skin` | the panel behind every menu page | normal |
+| `menu.row_skin` | rows of every page | normal, selected, disabled |
+| `menu.overlay_skin` | a full-window picture over the veil (`menu.dim`) | normal |
+| `screens.<page>.panel_skin` / `row_skin` | that page only; `"none"` = no panel | as above |
+| `screens.<page>.dim`, `title_color`, `title_px`, `title_hidden`, `hint_hidden`, `counter_color`, `counter_px` | page veil colour, title and counter text, hide the title / hint line | |
+| `slots.row_skin` | rows of the Save / Load pages | normal (filled), selected, empty, corrupt |
+| `slots.thumb_frame_skin` | frame around the thumbnail box (`padding` grows it outward) | normal |
+| `slots.thumb_placeholder`, `slots.new_image` | picture where the slot has no thumbnail / "new save" for an empty slot on the Save page | image, mode |
+| `title_screen.background` | full-window picture on the title and on the pages opened from it (default `cover`) | image, mode, `fill` |
+| `title_screen.logo` + `logo_x/y/w/h` | logo on the title page (virtual px rectangle) | image, mode |
+| `title_screen.music` | VFS audio (.ogg .wav .mp3 .flac), plays while the title is up, stops with it unless the story brings its own BGM | |
+| `title_screen.dim`, `hide_story_frame` | veil on the title (none while a background shows) / hide the story frame behind the title even without a picture (plain `background.fill`, black by default) | |
+| `story.dialogue.skin` | the dialogue box; a component's own `custom_box_texture` wins over the theme's image; `padding` is where the text sits (default `[24, 28, 24, 8]`) | normal |
+| `story.speaker_tag.skin`, `offset_x`, `offset_y` | the name tag; offset moves it from its place (virtual px) | normal |
+| `story.choice.skin` | the option buttons; `padding` left / right is the text inset (default 12) | normal, focused, disabled |
+| `story.choice.show_disabled`, `disabled_text` | draw options whose condition is false (dimmed, never selectable); default `false` = hidden as before | |
+| `story.continue_indicator` | `skin` (picture), `width`, `height`, `offset_x/y` (from the box's bottom-right corner), `animation` (`none` / `bounce` / `blink`), `period`, `amplitude`: a mark when the line has finished typing and no options are up; still under "Reduce Motion" | |
+| `toast.skin`, `toast.anchor`, `toast.margin_x` | achievement toast; anchors `top_center` (default), `top_left`, `top_right`, `bottom_*`; `margin_top` is the distance from the anchored top / bottom edge | normal |
+| `badges.auto_skin`, `skip_skin`, `badges.anchor` | AUTO / SKIP capsules; anchors `top_right` (default), `top_left`, `bottom_right`, `bottom_left`; they stack away from the edge | normal |
+| `extras.cell_skin` | gallery cell (over the picture: draw it as a frame with a transparent centre) | normal, locked, selected (selected = plate behind the cell) |
+| `extras.locked_image` | picture inside a locked cell instead of "?" | image, mode |
+| `extras.plate_skin` | achievement plate; `padding[0]` is the text inset | normal, locked, selected |
+| `extras.locked_icon`, `icon_size` | icon of a locked achievement; an unlocked one shows its catalog `icon` (see below), 16-96 px | |
+| `extras.viewer_frame_skin` | frame around the full-screen picture (`padding` grows it outward) | normal |
+| `cursor` | `image` (PNG, 512 px max), `hotspot_x/y` (image px), `scale` (0.25-4): the pointer on the game window; offscreen / embedded surfaces keep the host's | |
+| `preferences.value_style` | `"slider"`: volume / text speed / auto delay rows show a track with a knob (click or drag the track; keys still step); `"text"` (default) is the "100%" text | |
+| `preferences.track_skin`, `fill_skin`, `knob_skin`, `track_height`, `knob_size`, `show_value` | the slider's parts (without pictures plain bars in the menu colours); knob `pressed` while dragging | |
+
+History entries wear `screens.history.row_skin` (normal / selected). Music-room rows are generic rows
+(`screens.music.row_skin`). With a `selected` row skin the selected row shows that picture instead of the cyan
+fill and the bar; with only a normal row picture the selected row keeps it and gets the bar alone.
+
+`extras.json` achievements may carry an optional `"icon": "ui/star.png"` (a VFS image). A locked achievement
+never reveals it (the view carries no path for it); the theme's `extras.locked_icon` stands in.
+
+The option JSON's `hover_image` / `disabled_image` (and `normal_image`, as before) are honoured: an option's
+own state image wins over the theme's skin for that state. `pressed_image` is read but selection fires on
+press, so the state never shows on a button (the slider knob does use `pressed` while dragging).
+
+### Recipe: use your own frame picture for the save screen
+
+1. Put the picture in the project, e.g. `Assets/ui/save_frame.png` (it travels in the package with the rest of
+   `Assets/`). Draw it with a transparent or decorative centre and edges that survive stretching.
+2. Note the width of the corner decoration in image pixels, say 32.
+3. In `Assets/json/ui_theme.json` (format 1):
+   ```json
+   {"format": 1,
+    "screens": {"save": {"panel_skin": {"image": "ui/save_frame.png", "mode": "nine_slice",
+                                         "slice": [32, 32, 32, 32]}},
+                "load": {"panel_skin": {"image": "ui/save_frame.png", "mode": "nine_slice",
+                                         "slice": [32, 32, 32, 32]}}}}
+   ```
+4. Run the game (or `RowlEngine_ReloadUiTheme` in a host). Corners stay as drawn, edges stretch, the centre
+   fills; the old accent border and panel colour are gone. Adjust `slice_scale` to make the frame bigger or
+   smaller on screen, `tint` to recolour it.
+5. Check `RowlEngine_GetUiThemeJson(...)["diagnostics"]`: a misspelt path or an unreadable picture is named
+   there and the panel simply keeps its old colours.
+6. Want no frame at all on a page? `"panel_skin": "none"`, then colour the text with `menu.text` /
+   `screens.<page>.title_color` so it reads over the story frame.
+
+### Not in T2
+
+Layout is still the engine's fixed grid (panel 880x860 at 520,110; row pitch; thumbnail box; gallery columns;
+achievement rows). Moving or resizing those, the slot "card grid" and the text of the menu labels are the next
+slice (T2b); hit-testing will then come from the same runtime layout as drawing.
 
 ## Authoring note for the editor (T4)
 

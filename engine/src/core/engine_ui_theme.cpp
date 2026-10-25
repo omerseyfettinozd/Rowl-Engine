@@ -174,7 +174,12 @@ std::string Engine::getUiThemeJson() const {
     out["format"] = Rowl::State::kUiThemeFormat;
     out["loaded"] = m_uiThemeFileFound && m_uiThemeUsable;
     out["source"] = m_uiThemeSource;
-    out["diagnostics"] = m_uiThemeDiagnostics;
+    // T2: problems the window found with the theme's images join the parser's lines.
+    Json diagnostics = m_uiThemeDiagnostics;
+    if (m_window) {
+        for (const auto& line : m_window->skinDiagnostics()) diagnostics.push_back("ui_theme.json: " + line);
+    }
+    out["diagnostics"] = std::move(diagnostics);
     out["theme"] = Json::parse(Rowl::State::uiThemeToJson(m_uiTheme));
     out["high_contrast"] = m_uiThemeHighContrast
         ? Json::parse(Rowl::State::uiThemeToJson(*m_uiThemeHighContrast)) : Json(nullptr);

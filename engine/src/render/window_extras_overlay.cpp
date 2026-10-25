@@ -37,6 +37,7 @@ constexpr int kMaxSourceDimension = 8192;
 constexpr uint64_t kMaxSourcePixels = 16ULL * 1024 * 1024;
 
 SDL_Color sdl(const Rowl::State::UiColor& c) { return SDL_Color{c.r, c.g, c.b, c.a}; }
+Rowl::State::UiColor toUiColor(SDL_Color c) { return Rowl::State::UiColor{c.r, c.g, c.b, c.a}; }
 
 // Area-average downscale of RGBA8 (no upscaling). Returns w*h*4 bytes.
 std::vector<unsigned char> boxDownscale(const unsigned char* src, int sw, int sh, int dw, int dh) {
@@ -198,13 +199,34 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             float px = 0.0f, py = 0.0f;
             AspectGuardian::virtualToPhysical(Rowl::Core::PauseMenuLayout::kRowX, item.y, metrics, px, py);
             const SDL_FRect plate{px, py, Rowl::Core::PauseMenuLayout::kRowW * s, item.h * s};
-            const auto& plateColor = item.selected ? ex.plateSelected : ex.plate;
-            SDL_SetRenderDrawColor(m_sdlRenderer, plateColor.r, plateColor.g, plateColor.b, plateColor.a);
-            SDL_RenderFillRect(m_sdlRenderer, &plate);
-            if (item.selected && theme.menu.selectedBarWidth > 0.0f) {
+            // T2: the plate's skin (normal / locked / selected); without one the legacy fill + bar.
+            const auto state = item.selected ? Rowl::State::UiSkinState::Selected
+                             : (!item.unlocked ? Rowl::State::UiSkinState::Locked : Rowl::State::UiSkinState::Normal);
+            const Rowl::State::UiSkin* variant = state == Rowl::State::UiSkinState::Normal ? nullptr
+                                                                                              : ex.plateSkin.find(state);
+            const bool variantShows = variant != nullptr && skinDraws(*variant);
+            const Rowl::State::UiSkin& base = variantShows ? *variant : ex.plateSkin.normal;
+            if (skinDraws(base)) {
+                paintSkin(plate, base, std::nullopt, std::nullopt, 0.0f, s);
+            } else {
+                const auto& plateColor = item.selected ? ex.plateSelected : ex.plate;
+                SDL_SetRenderDrawColor(m_sdlRenderer, plateColor.r, plateColor.g, plateColor.b, plateColor.a);
+                SDL_RenderFillRect(m_sdlRenderer, &plate);
+            }
+            if (item.selected && !variantShows && theme.menu.selectedBarWidth > 0.0f) {
                 const SDL_FRect bar{px, py, theme.menu.selectedBarWidth * s, item.h * s};
                 SDL_SetRenderDrawColor(m_sdlRenderer, ex.plateBar.r, ex.plateBar.g, ex.plateBar.b, ex.plateBar.a);
                 SDL_RenderFillRect(m_sdlRenderer, &bar);
+            }
+            // T2: the achievement icon (an unlocked one's own picture; a locked one shows the theme's).
+            Rowl::State::UiSkin iconSkin = Rowl::State::makeSkinWithMode(Rowl::State::UiSkinMode::Fit);
+            if (item.unlocked && !item.icon.empty()) iconSkin.image = item.icon;
+            else if (!item.unlocked) iconSkin = ex.lockedIcon;
+            if (!iconSkin.image.empty()) {
+                const float iconPx = ex.iconSize * s;
+                const float padX = (base.padding ? (*base.padding)[0] : Rowl::Core::PauseMenuLayout::kAchPadX) * s;
+                const SDL_FRect iconRect{px + padX, py + (item.h * s - iconPx) * 0.5f, iconPx, iconPx};
+                paintSkinImageOnly(iconRect, iconSkin, s);
             }
         }
         return;
@@ -219,12 +241,23 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             // Highlight plate behind the whole cell (thumbnail + caption), like a menu row.
             const float pad = 4.0f * s;
             const SDL_FRect plate{px - pad, py - pad, cell.w * s + 2.0f * pad, cell.h * s + 2.0f * pad};
-            SDL_SetRenderDrawColor(m_sdlRenderer, ex.plateSelected.r, ex.plateSelected.g, ex.plateSelected.b,
-                                   ex.plateSelected.a);
-            SDL_RenderFillRect(m_sdlRenderer, &plate);
+            const Rowl::State::UiSkin* selectedSkin = ex.cellSkin.find(Rowl::State::UiSkinState::Selected);
+            if (selectedSkin != nullptr && skinDraws(*selectedSkin)) {  // T2
+                paintSkin(plate, *selectedSkin, std::nullopt, std::nullopt, 0.0f, s);
+            } else {
+                SDL_SetRenderDrawColor(m_sdlRenderer, ex.plateSelected.r, ex.plateSelected.g, ex.plateSelected.b,
+                                       ex.plateSelected.a);
+                SDL_RenderFillRect(m_sdlRenderer, &plate);
+            }
         }
+        const SDL_Color borderColour = cell.selected ? sdl(ex.cellBorderSelected)
+                                     : cell.unlocked ? sdl(ex.cellBorder)
+                                                     : sdl(ex.lockedBorder);
         if (!cell.thumbnail.empty()) {  // the engine view gives a path to unlocked cells only
-            SDL_SetRenderDrawColor(m_sdlRenderer, ex.cellFill.r, ex.cellFill.g, ex.cellFill.b, ex.cellFill.a);
+            Rowl::State::UiSkin frame = ex.cellSkin.normal;
+            const Rowl::State::UiColor backdrop = frame.fill.value_or(ex.cellFill);
+            frame.fill.reset();  // the picture sits on the backdrop, the frame goes over the picture
+            SDL_SetRenderDrawColor(m_sdlRenderer, backdrop.r, backdrop.g, backdrop.b, backdrop.a);
             SDL_RenderFillRect(m_sdlRenderer, &thumb);
             if (SDL_Texture* texture = galleryThumbnail(cell.thumbnail)) {
                 float tw = 0.0f, th = 0.0f;
@@ -235,17 +268,18 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
                     SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &dst);
                 }
             }
+            const SkinPaint paint = resolveSkin(frame, std::nullopt, toUiColor(borderColour), 1.0f, s);
+            paintSkinImage(thumb, paint, s);
+            paintSkinBorder(thumb, paint);
         } else {
-            // Locked: a flat dark box, never any part of the picture.
-            SDL_SetRenderDrawColor(m_sdlRenderer, ex.lockedFill.r, ex.lockedFill.g, ex.lockedFill.b,
-                                   ex.lockedFill.a);
-            SDL_RenderFillRect(m_sdlRenderer, &thumb);
+            // Locked: a flat dark box (or the locked skin), never any part of the picture.
+            const SkinPaint paint = resolveSkin(ex.cellSkin.pick(Rowl::State::UiSkinState::Locked), ex.lockedFill,
+                                                toUiColor(borderColour), 1.0f, s);
+            paintSkinFill(thumb, paint);
+            paintSkinImage(thumb, paint, s);
+            paintSkinImageOnly(thumb, ex.lockedImage, s);  // T2: picture in place of the "?"
+            paintSkinBorder(thumb, paint);
         }
-        const SDL_Color border = cell.selected ? sdl(ex.cellBorderSelected)
-                               : cell.unlocked ? sdl(ex.cellBorder)
-                                               : sdl(ex.lockedBorder);
-        SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
-        SDL_RenderRect(m_sdlRenderer, &thumb);
     }
 }
 
@@ -262,14 +296,23 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
     const float accessScale = std::max(1.0f, menuFont->textScale());
     float cx = 0.0f, cy = 0.0f;
     AspectGuardian::virtualToPhysical(LM::kRowX + LM::kRowW - 150.0f, 178.0f, metrics, cx, cy);
-    drawOverlayText(extras.counter, cx, cy, 24.0f * s / accessScale, sdl(uiTheme().menu.dimText), 150.0f * s,
+    // T2: the counter's colour / size can be set for the page (screens.<page>.counter_*).
+    const int screenIndex = Rowl::State::uiScreenIndex(view.page);
+    const Rowl::State::UiScreenTheme* screen =
+        screenIndex >= 0 ? &uiTheme().screens[static_cast<size_t>(screenIndex)] : nullptr;
+    drawOverlayText(extras.counter, cx, cy, (screen && screen->counterPx ? *screen->counterPx : 24.0f) * s / accessScale,
+                    sdl(screen && screen->counterColor ? *screen->counterColor : uiTheme().menu.dimText), 150.0f * s,
                     40.0f * s, "Left");
     if (extras.page == "achievements") {
         const float rowW = LM::kRowW * s;
         for (const auto& item : extras.items) {
             float px = 0.0f, py = 0.0f;
             AspectGuardian::virtualToPhysical(LM::kRowX, item.y, metrics, px, py);
-            const float padX = LM::kAchPadX * s;
+            // T2: the plate skin's padding is the text inset; an icon pushes the text right of it.
+            const Rowl::State::UiSkin& plateSkin = ex.plateSkin.normal;
+            float padX = (plateSkin.padding ? (*plateSkin.padding)[0] : LM::kAchPadX) * s;
+            const std::string& iconPath = item.unlocked ? item.icon : ex.lockedIcon.image;
+            if (!iconPath.empty() && loadTexture(iconPath) != nullptr) padX += (ex.iconSize + 12.0f) * s;
             const float titlePx = LM::kAchTitlePx * s / accessScale;
             const float descPx = LM::kAchDescPx * s / accessScale;
             const float datePx = LM::kAchDatePx * s / accessScale;
@@ -301,7 +344,9 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
     for (const auto& cell : extras.cells) {
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(cell.x, cell.y, metrics, px, py);
-        if (!cell.unlocked) {
+        // T2: a locked cell with the theme's locked picture drops the "?".
+        const bool lockedPicture = !ex.lockedImage.image.empty() && loadTexture(ex.lockedImage.image) != nullptr;
+        if (!cell.unlocked && !lockedPicture) {
             const float markPx = ex.markPx * s / accessScale;
             const float boxH = LM::kGalleryThumbH * s;
             drawOverlayText("?", px, py + boxH * 0.5f - markPx * 0.69f * accessScale, markPx, kDimText,
@@ -336,9 +381,12 @@ void Window::renderGalleryViewer(const Rowl::Core::PauseMenuView& view, const Vi
                                               metrics, px, py);
             const SDL_FRect dst{px, py, w * s, h * s};
             SDL_RenderTexture(m_sdlRenderer, texture, nullptr, &dst);
-            SDL_SetRenderDrawColor(m_sdlRenderer, ex.viewerFrame.r, ex.viewerFrame.g, ex.viewerFrame.b,
-                                   ex.viewerFrame.a);
-            SDL_RenderRect(m_sdlRenderer, &dst);
+            // T2: the frame skin goes around the picture (its padding grows it outward).
+            const Rowl::State::UiSkin& frame = ex.viewerFrameSkin.normal;
+            const auto pad = frame.padding.value_or(std::array<float, 4>{0, 0, 0, 0});
+            const SDL_FRect around{dst.x - pad[0] * s, dst.y - pad[1] * s, dst.w + (pad[0] + pad[2]) * s,
+                                   dst.h + (pad[1] + pad[3]) * s};
+            paintSkin(around, frame, std::nullopt, ex.viewerFrame, 1.0f, s);
         }
     }
     // The viewer repaints the whole frame every time (see renderPauseMenuOverlay).
@@ -384,14 +432,34 @@ void Window::renderUnlockToast(const std::string& text) {
         textW = menuFont->measureTextWidth(shown, px);
     }
     const float capsuleW = std::min(textW + 2.0f * kPadX * s, (kMaxTextW + 2.0f * kPadX) * s);
+    // T2: the capsule sits at its anchor (default top_centre == the former position).
+    const bool bottom = theme.anchor.rfind("bottom", 0) == 0;
+    const bool anchorLeft = theme.anchor.size() >= 4 && theme.anchor.compare(theme.anchor.size() - 4, 4, "left") == 0;
+    const bool anchorRight = theme.anchor.size() >= 5 && theme.anchor.compare(theme.anchor.size() - 5, 5, "right") == 0;
+    const float anchorY = bottom ? 1080.0f - kMarginTop - kCapsuleH : kMarginTop;
     float cx = 0.0f, cy = 0.0f;
-    AspectGuardian::virtualToPhysical(960.0f, kMarginTop, metrics, cx, cy);
-    const SDL_FRect capsule{cx - capsuleW * 0.5f, cy, capsuleW, kCapsuleH * s};
+    float capsuleX = 0.0f;
+    if (anchorLeft) {
+        AspectGuardian::virtualToPhysical(theme.marginX, anchorY, metrics, cx, cy);
+        capsuleX = cx;
+    } else if (anchorRight) {
+        AspectGuardian::virtualToPhysical(1920.0f - theme.marginX, anchorY, metrics, cx, cy);
+        capsuleX = cx - capsuleW;
+    } else {
+        AspectGuardian::virtualToPhysical(960.0f + theme.marginX, anchorY, metrics, cx, cy);
+        capsuleX = cx - capsuleW * 0.5f;
+    }
+    const SDL_FRect capsule{capsuleX, cy, capsuleW, kCapsuleH * s};
 
     SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
-    fillCapsule(m_sdlRenderer, capsule, sdl(theme.fill));
-    // Thin accent rule along the bottom edge.
-    if (theme.rulePx > 0.0f) {
+    bool skinned = false;
+    if (skinDraws(theme.skin.normal)) {
+        skinned = paintSkin(capsule, theme.skin.normal, theme.fill, std::nullopt, 0.0f, s);
+    } else {
+        fillCapsule(m_sdlRenderer, capsule, sdl(theme.fill));
+    }
+    // Thin accent rule along the bottom edge (a pictured capsule brings its own).
+    if (theme.rulePx > 0.0f && !skinned) {
         const SDL_FRect rule{capsule.x + 14.0f * s, capsule.y + capsule.h - 4.0f * s, capsule.w - 28.0f * s,
                              theme.rulePx * s};
         SDL_SetRenderDrawColor(m_sdlRenderer, theme.rule.r, theme.rule.g, theme.rule.b, theme.rule.a);

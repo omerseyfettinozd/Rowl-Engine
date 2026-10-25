@@ -50,6 +50,39 @@ void Engine::setPauseMenuVolume(int row, float volume) {
     if (mixerRow) commitMixerVolumesToGameState();
 }
 
+float Engine::pauseMenuFraction(int row) const {
+    if (row >= 3 && row <= 6) return std::clamp(pauseMenuVolume(row), 0.0f, 1.0f);
+    if (row == 7) return std::clamp((m_textSpeedMultiplier - 0.25f) / 3.75f, 0.0f, 1.0f);
+    if (row == 8) return std::clamp(m_autoDelay / 10.0f, 0.0f, 1.0f);
+    return -1.0f;
+}
+
+void Engine::pauseMenuSetFraction(int row, float fraction) {
+    if (!std::isfinite(fraction)) return;
+    fraction = std::clamp(fraction, 0.0f, 1.0f);
+    if (row >= 3 && row <= 6) {
+        setPauseMenuVolume(row, std::round(fraction * 100.0f) / 100.0f);
+    } else if (row == 7) {
+        setTextSpeedMultiplier(0.25f + std::round(fraction * 15.0f) * 0.25f);  // the keys' 0.25 steps
+    } else if (row == 8) {
+        setAutoDelay(std::round(fraction * 20.0f) * 0.5f);                      // the keys' 0.5 s steps
+    } else {
+        return;
+    }
+    persistPauseMenuPreference(row);
+    m_pauseConfirmQuit = false;
+}
+
+void Engine::sliderDragTo(float physicalX) {
+    if (m_sliderDragRow < 0 || !m_window || !std::isfinite(physicalX)) return;
+    float vx = 0.0f, vy = 0.0f;
+    bool bezel = false;
+    // A drag may leave the canvas sideways: clamp into it instead of dropping the event.
+    m_window->mapPhysicalToVirtual(physicalX, 0.0f, 1920, 1080, vx, vy, bezel);
+    if (bezel) vx = physicalX < static_cast<float>(m_window->getWidth()) * 0.5f ? 0.0f : 1920.0f;
+    pauseMenuSetFraction(m_sliderDragRow, PauseMenuLayout::sliderFractionAt(vx));
+}
+
 void Engine::pauseMenuAdjustSelected(int direction) {
     // D02: the preferences page maps its rows onto value rows 3..7 (D04-2: 8/9
     // for auto-delay / skip-mode, D05-2: 10..13 language / text size / contrast /

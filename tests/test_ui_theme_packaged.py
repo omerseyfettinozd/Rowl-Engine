@@ -17,9 +17,11 @@ import json
 import os
 import pathlib
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGER = ROOT / "tools" / "package_assets.py"
@@ -32,6 +34,23 @@ THEME = {
 }
 
 
+SKIN_THEME = {
+    "format": 1,
+    "menu": {"panel_skin": {"image": "ui/panel.png"}},
+    "title_screen": {"background": {"image": "ui/backdrop.png", "mode": "stretch"}},
+}
+
+
+def solid_png(width, height, rgb):
+    """Minimal RGBA PNG (zlib is in the standard library)."""
+    def chunk(kind, body):
+        data = kind + body
+        return struct.pack(">I", len(body)) + data + struct.pack(">I", zlib.crc32(data) & 0xFFFFFFFF)
+    row = b"\x00" + bytes(rgb + (255,)) * width
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) +
+            chunk(b"IDAT", zlib.compress(row * height)) + chunk(b"IEND", b""))
+
+
 def fail(message):
     print(f"[UiThemePackaged] FAIL: {message}", file=sys.stderr)
     sys.exit(1)
@@ -41,12 +60,16 @@ def ok(message):
     print(f"[PASS] {message}", flush=True)
 
 
-def build_release(sample_dir, base, name, theme):
+def build_release(sample_dir, base, name, theme, images=None):
     project = base / (name + "_src")
     shutil.copytree(sample_dir / "Assets", project / "Assets")
     shutil.copy2(sample_dir / "project.rowlproj", project / "project.rowlproj")
     if theme is not None:
         (project / "Assets" / "json" / "ui_theme.json").write_text(json.dumps(theme), encoding="utf-8")
+    for rel, data in (images or {}).items():
+        target = project / "Assets" / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
     release = base / name
     package = release / "Assets" / "packages" / "game.rowlpkg"
     package.parent.mkdir(parents=True)
@@ -121,6 +144,9 @@ def main():
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
         themed = build_release(sample_dir, base, "themed", THEME)
         plain = build_release(sample_dir, base, "plain", None)
+        skinned = build_release(sample_dir, base, "skinned", SKIN_THEME,
+                                {"ui/panel.png": solid_png(8, 8, (0, 0, 200)),
+                                 "ui/backdrop.png": solid_png(8, 8, (20, 180, 20))})
 
         path = str(engine_lib)
         lib = ctypes.CDLL(path, winmode=0) if os.name == "nt" else ctypes.CDLL(path)
@@ -167,6 +193,26 @@ def main():
         if any(abs(a - b) > 10 for a, b in zip(got, (15, 15, 26))):
             fail(f"built-in panel pixel {got}")
         ok(f"without the file the title screen keeps the old panel colour {got}")
+        lib.RowlEngine_Shutdown(handle)
+        lib.RowlEngine_Destroy(handle)
+
+        # --- T2: pictures travel in the package and the packaged player draws them ------
+        handle = open_engine(lib, skinned)
+        info = query(lib, handle, "RowlEngine_GetUiThemeJson")
+        if info["diagnostics"]:
+            fail(f"skin images not found in the package: {info['diagnostics']}")
+        if info["theme"]["menu"]["panel_skin"]["image"] != "ui/panel.png":
+            fail("the theme JSON does not report the skin")
+        lib.RowlEngine_OpenTitleScreen(handle)
+        lib.RowlEngine_SetPlayState(handle, 1)
+        frame(lib, handle)
+        got = pixel(lib, handle, 560, 67)
+        if any(abs(a - b) > 3 for a, b in zip(got, (0, 0, 200))):
+            fail(f"skinned panel pixel {got}")
+        back = pixel(lib, handle, 100, 300)
+        if any(abs(a - b) > 3 for a, b in zip(back, (20, 180, 20))):
+            fail(f"title backdrop pixel {back}")
+        ok(f"pictures in the .rowlpkg: panel skin {got}, title background {back}")
         lib.RowlEngine_Shutdown(handle)
         lib.RowlEngine_Destroy(handle)
     print("[UiThemePackaged] OK")

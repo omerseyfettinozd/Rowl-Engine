@@ -61,6 +61,13 @@ struct PauseMenuRow {
     std::string detail;
     /// D02: false draws the row dim and makes Confirm on it a no-op.
     bool enabled = true;
+    /// T2: slot pages - 0 not a slot row, 1 empty, 2 filled, 3 corrupt (row skins).
+    int slotState = 0;
+    /// T2: Preferences value rows - position 0..1 of the value in its range
+    /// (slider style); -1 = not a slider row.
+    float fraction = -1.0f;
+    /// T2: the pointer is dragging this row's slider (knob "pressed" skin).
+    bool dragging = false;
 };
 
 /// D02: per-slot metadata memo shared by the slot pages and the title screen.
@@ -137,6 +144,7 @@ struct PauseExtrasItemView {
     std::string title;        // masked while locked/hidden
     std::string detail;       // achievements: description ("???" while locked)
     std::string at;           // achievements: unlock date "YYYY-MM-DD" (unlocked only)
+    std::string icon;         // T2: achievements: VFS image of the icon (unlocked only; never for a locked one)
     float y = 0.0f;           // achievements: row box top / height in virtual pixels
     float h = 0.0f;
 };
@@ -164,6 +172,10 @@ struct PauseExtrasView {
 
 struct PauseMenuView {
     bool open = false;
+    /// T2: which page this is - "title" | "pause" | "save" | "load" | "preferences" |
+    /// "history" | "extras_root" | "gallery" | "music" | "achievements" | "confirm"
+    /// (a page with an armed "are you sure" row). The theme dresses pages by this name.
+    std::string page;
     std::string title;
     std::vector<PauseMenuRow> rows;
     int selected = 0;
@@ -370,6 +382,21 @@ struct PauseMenuLayout {
         const int index = static_cast<int>((vy - y0) / stride);
         if (index < 0 || index >= rowCount) return -1;
         return (vy <= y0 + index * stride + rowH(rowCount)) ? index : -1;
+    }
+
+    /// T2: slider style of the Preferences value rows (virtual canvas). The track
+    /// runs between these x values; a press within kSliderHitSlack of it sets the value.
+    static constexpr float kSliderX0 = kRowX + kRowW * 0.52f;
+    static constexpr float kSliderX1 = kRowX + kRowW - 120.0f;
+    static constexpr float kSliderValueX = kRowX + kRowW - 104.0f;
+    static constexpr float kSliderHitSlack = 16.0f;
+    static inline bool inSliderZone(float vx) {
+        return vx >= kSliderX0 - kSliderHitSlack && vx <= kSliderX1 + kSliderHitSlack;
+    }
+    /// Position 0..1 along the slider track for a virtual x.
+    static inline float sliderFractionAt(float vx) {
+        const float f = (vx - kSliderX0) / (kSliderX1 - kSliderX0);
+        return f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f);
     }
 
     /// -1 = minus zone, +1 = plus zone, 0 = middle (select only).

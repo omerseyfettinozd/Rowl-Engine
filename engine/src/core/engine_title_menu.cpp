@@ -210,13 +210,38 @@ bool Engine::openTitleScreen() {
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
     m_pauseSelected = m_continueSlot >= 0 ? 1 : 0;
+    startTitleMusic();  // T2
     ROWL_LOG_INFO("[Player] Title screen open (continue slot: " +
                   std::to_string(m_continueSlot) + ").");
     return true;
 }
 
 void Engine::leaveTitleScreen() {
-    setPaused(false);  // clears m_titleActive, hint and the menu navigation
+    setPaused(false);  // clears m_titleActive, hint and the menu navigation (and ends the title music)
+}
+
+// T2: the theme's title music (title_screen.music). It plays on the BGM channel with the
+// project's own transition; GameState is not told, like the music room.
+void Engine::startTitleMusic() {
+    const std::string& track = m_uiTheme.titleScreen.music;
+    if (track.empty() || !m_audio) return;
+    playBgmWithDefaultTransition(track);
+    m_titleMusicStarted = true;
+    if (!(m_audio->isBgmPlaying() && m_audio->getCurrentBgmPath() == track)) {
+        ROWL_LOG_WARN("[UiTheme] title music '" + track + "' could not start");
+    }
+}
+
+// Leaving the title: a story scene that wants BGM has already replaced (or kept) the track;
+// a story with none must not inherit the title music.
+void Engine::endTitleMusic() {
+    if (!m_titleMusicStarted) return;
+    m_titleMusicStarted = false;
+    if (!m_audio) return;
+    const bool storyWantsBgm = m_gameState && !m_gameState->activeBgm.empty();
+    if (!storyWantsBgm && m_audio->isBgmPlaying() && m_audio->getCurrentBgmPath() == m_uiTheme.titleScreen.music) {
+        m_audio->stopBgm();
+    }
 }
 
 void Engine::markPresentedDialoguesRead() {
@@ -426,6 +451,7 @@ PauseMenuView Engine::getTitleMenuView() const {
     const UiLang lang = getUiLanguage();
     auto T = [lang](UiText id) { return std::string(uiText(id, lang)); };
     if (m_pauseMode == PauseMenuMode::Preferences) {
+        view.page = "preferences";
         view.title = T(UiText::PreferencesTitle);
         view.rows = {
             {T(UiText::MasterVolume), pauseMenuPercent(pauseMenuVolume(3)), true, "", true},
@@ -443,9 +469,15 @@ PauseMenuView Engine::getTitleMenuView() const {
             {T(UiText::ReduceMotion), T(reducedMotion() ? UiText::On : UiText::Off), true, "", true},
             {T(UiText::Back), "", false, "", true},
         };
+        // T2: slider position of the numeric rows (volumes, text speed, auto delay).
+        for (int row = 0; row < 6; ++row) {
+            view.rows[static_cast<size_t>(row)].fraction = pauseMenuFraction(row + 3);
+            view.rows[static_cast<size_t>(row)].dragging = (m_sliderDragRow == row + 3);
+        }
         view.hint = T(UiText::HintPreferences);
         return view;
     }
+    view.page = m_pauseConfirmQuit ? "confirm" : "title";
     const std::string& name = m_gameIdentity.name;
     view.title = name.empty() ? "Rowl Engine" : name;
     PauseMenuRow cont;
