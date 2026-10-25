@@ -643,14 +643,43 @@ def walk_to_choice(eng, model, state):
     check(shown == ids, f"node {state['node']}: the choice buttons are the graph's options", f"{shown} vs {ids}")
 
 
-def choose(eng, model, state, option_id=None):
-    """Click a choice button. Default: the first option whose condition holds."""
+def pick_with_keyboard(eng, options, option, digit=False):
+    """D-K3: answer a choice menu from the keyboard. No option is focused when the menu
+    opens; the first Down focuses the first selectable one and Down walks the rest (or digit n picks the n-th);
+    Enter picks the focused one. (The offscreen shots backend has no key path: click.)"""
+    ids = [o["option_id"] for o in options]
+    if eng.api:
+        eng.click_choice(option["option_id"])
+        return
+    focused = [c["id"] for c in eng.choices() if c.get("focused")]
+    check(focused == [], "choice menu: it opens without a focus (Enter/Space mashing must not pick)",
+          f"focused {focused}, selectable {ids}")
+    if digit:
+        eng.press(str(ids.index(option["option_id"]) + 1))
+        return
+    for _ in range(len(ids)):
+        eng.press("down")  # the first Down focuses the first selectable option
+        focused = [c["id"] for c in eng.choices() if c.get("focused")]
+        check(len(focused) == 1, "exactly one choice option holds the focus", f"{focused}")
+        if focused[0] == option["option_id"]:
+            break
+    check([c["id"] for c in eng.choices() if c.get("focused")] == [option["option_id"]],
+          "Down moved the focus onto the wanted option")
+    eng.press("enter")
+
+
+def choose(eng, model, state, option_id=None, keyboard=None):
+    """Click a choice button (keyboard='arrows' / 'digit': use the keyboard instead).
+    Default: the first option whose condition holds."""
     options = model.selectable(state["node"], state["vars"])
     option = next(o for o in options if option_id in (None, o["option_id"]))
     eng.settle()
-    eng.click_choice(option["option_id"])
+    if keyboard:
+        pick_with_keyboard(eng, options, option, digit=(keyboard == "digit"))
+    else:
+        eng.click_choice(option["option_id"])
     target = option["target_node_id"]
-    check(eng.node() == target, f"clicking {option['option_id']!r} leads to node {target}",
+    check(eng.node() == target, f"{keyboard or 'clicking'} {option['option_id']!r} leads to node {target}",
           f"engine is on node {eng.node()}")
     state["vars"] = model.enter(state["vars"], target)
     state["node"] = target
@@ -779,7 +808,8 @@ def phase_play(ctx, model, eng):
     walk_to_choice(eng, model, state)
     check(state["node"] != state["choice1_node"], "the second choice is a different node")
     state["choice2_node"] = state["node"]
-    state["choice2"] = choose(eng, model, state)
+    # D-K3: the second choice is answered from the keyboard (arrows + Enter).
+    state["choice2"] = choose(eng, model, state, keyboard="arrows")
     for _ in range(2):
         step_forward(eng, model, state)
     # --- 4. save ---------------------------------------------------------------
@@ -1096,10 +1126,18 @@ def phase_playon(ctx, model, eng):
     note(f"shortest route to an ending: {len(plan)} nodes, {len(choice_ids)} choices -> node {ending}")
     goal = set(model.ending_unlock(ending))
     scripted_checked = False
+    scripted_digit = False
     for node, option_id in plan:
         if model.is_choice(cur["node"]):
             eng.settle()
-            eng.click_choice(option_id)
+            # D-K3: the route's first choice is picked with its digit key, the rest by click.
+            if not scripted_digit:
+                scripted_digit = True
+                options = model.selectable(cur["node"], cur["vars"])
+                pick_with_keyboard(eng, options, next(o for o in options if o["option_id"] == option_id),
+                                   digit=True)
+            else:
+                eng.click_choice(option_id)
             check(eng.node() == node, f"route: {option_id!r} -> node {node}", f"engine node {eng.node()}")
             cur["vars"] = model.enter(cur["vars"], node)
             cur["node"] = node

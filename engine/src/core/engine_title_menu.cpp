@@ -199,6 +199,7 @@ bool Engine::openTitleScreen() {
     }
     m_paused = true;
     m_titleActive = true;
+    m_titleSessionSeen = true;  // D-K3: this session returns to the title when the story ends
     m_skipActive = false;  // D04-1: the title ends Skip; Auto's credit starts over
     m_skipHold = false;
     resetAutoWait();

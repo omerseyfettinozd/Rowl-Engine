@@ -210,6 +210,11 @@ int main(int argc, char* argv[]) {
     test_boot_story_diagnostics();
     test_project_mount_cwd();
     test_choice_input_guard();
+    test_choice_keyboard();
+    test_pause_subpage_back();
+    test_ui_text_fit();
+    test_bgm_continuity();
+    test_end_of_story_title();
     test_title_screen();
     test_backlog_replay();
     test_backlog_screen();

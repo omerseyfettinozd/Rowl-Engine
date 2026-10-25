@@ -8,6 +8,7 @@
 #include "rowl/render/aspect_guardian.hpp"
 #include "rowl/render/gpu_truetype_text.hpp"
 #include "rowl/render/window_text_fallback.hpp"
+#include "rowl/render/ui_text_fit.hpp"
 #include "rowl/render/window_font_resolve.hpp"
 #include "rowl/render/window_msdf_shaped.hpp"
 #include "rowl/core/logger.hpp"
@@ -110,6 +111,23 @@ static SDL_Color parseHexColor(const std::string& hex, uint8_t defaultA = 255) {
         Rowl::Text::parseHexColor(hex, fallback, &ok);
     if (!ok) warnHexColorOnce(hex);
     return {parsed.r, parsed.g, parsed.b, parsed.a};
+}
+
+// D-K3: odaktaki secenegin sekil isaretleri (renk disinda da okunur: yuksek
+// kontrastta ve hover rengi arka planla yakin yazarlarda): ikinci ic cerceve
+// (yazi renginde) + sol serit (cerceve renginde), duraklatma menusu secili satiri gibi.
+void drawChoiceFocusMarks(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color border,
+                          SDL_Color text, float scale) {
+    const float inset = std::max(2.0f, 3.0f * scale);
+    if (rect.w > inset * 2.0f && rect.h > inset * 2.0f) {
+        const SDL_FRect inner{rect.x + inset, rect.y + inset, rect.w - inset * 2.0f,
+                              rect.h - inset * 2.0f};
+        SDL_SetRenderDrawColor(renderer, text.r, text.g, text.b, 255);
+        SDL_RenderRect(renderer, &inner);
+    }
+    const SDL_FRect bar{rect.x, rect.y, std::max(3.0f, 6.0f * scale), rect.h};
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
+    SDL_RenderFillRect(renderer, &bar);
 }
 
 // A3-tur3 (lifecycle): secim-dugmesi font onbellegi tavani — hikaye-JSON'undan
@@ -1054,14 +1072,11 @@ void Window::renderVisualNovelFrame(
         // Speaker Name Tag Badge (if speaker name provided)
         if (!dlg.speaker.empty()) {
             float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
-            float speakerTextW = (m_fontRenderer && m_fontRenderer->isLoaded())
-                ? m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx, dlg.language)
-                : (static_cast<float>(dlg.speaker.length()) * 10.0f * metrics.scaleFactor);
-
-            // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
-            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
-                                    120.0f * metrics.scaleFactor,
-                                    std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
+            // D-K3: etiket genisligi, kisaltma ve cizilen sekil ayni olcumden
+            // (yazi boyutu dahil); ad sarilmaz, kutuyu asarsa "…" ile kisalir.
+            const SpeakerTagLayout speakerLayout =
+                layoutSpeakerTag(dlg, scaledDlgW, metrics.scaleFactor);
+            float tagW = speakerLayout.tagWidth;
             // D05-2: the renderer draws the name at speakerFontPx * textScale, so
             // the badge height and the text's vertical centring follow that size.
             const float speakerTextScale = m_fontRenderer ? m_fontRenderer->textScale() : 1.0f;
@@ -1088,28 +1103,30 @@ void Window::renderVisualNovelFrame(
                 // ifade — :1491-1502 emsali; topY textDrawY :1489). Şekillenemezse
                 // ham-MSDF legacy (birebir eski piksel/davranış).
                 const float speakerWrapW = std::max(0.0f, tagW - (32.0f * metrics.scaleFactor));
-                const auto shapedSpeaker = m_fontRenderer
-                    ? m_fontRenderer->shapeTextShared(dlg.speaker, speakerFontPx, speakerWrapW)
-                    : nullptr;
+                const auto& shapedSpeaker = speakerLayout.shaped;
                 bool speakerMsdfOk = false;
                 if (shapedSpeaker && !shapedSpeaker->glyphs.empty()) {
                     speakerMsdfOk = drawMsdfShapedAllOrNothing(
                         m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
-                        *shapedSpeaker, dlg.speaker, tagX + 16.0f * metrics.scaleFactor,
+                        *shapedSpeaker, speakerLayout.text, tagX + 16.0f * metrics.scaleFactor,
                         tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
                         speakerFontPx, {255,255,255,255}, shapedSpeaker->revealUnits.size(),
                         speakerWrapW, "Left");
                 } else {
-                    speakerMsdfOk = renderGpuMsdfText(dlg.speaker, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255});
+                    speakerMsdfOk = renderGpuMsdfText(speakerLayout.text, tagX + 16.0f * metrics.scaleFactor, tagY + tagH * .72f, speakerFontPx, {255,255,255,255});
                 }
                 if (!speakerMsdfOk) {
                     // A11: MSDF kapsamıyorsa debug-bitmap değil TrueType (offscreen
                     // kolla aynı font ve yerleşim; bkz. gpu_truetype_text.hpp).
+                        // D-K3: hazir tek-satir sekil verilir (sarma yeniden hesaplanmaz);
+                    // sekilleyici yedek kolunda sekil bos: sarmasiz eski cizim.
+                    const bool haveShape = shapedSpeaker && !shapedSpeaker->glyphs.empty();
                     speakerMsdfOk = drawTrueTypeTextOnGpu(
-                        m_sdlRenderer, m_fontRenderer.get(), nullptr, dlg.speaker,
+                        m_sdlRenderer, m_fontRenderer.get(), haveShape ? shapedSpeaker.get() : nullptr,
+                        speakerLayout.text,
                         tagX + 16.0f * metrics.scaleFactor,
                         tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor),
-                        speakerFontPx, {255,255,255,255}, speakerWrapW, tagH, "Left");
+                        speakerFontPx, {255,255,255,255}, haveShape ? speakerWrapW : 0.0f, tagH, "Left");
                 }
                 if (!speakerMsdfOk) {
                     SDL_SetRenderDrawColor(m_sdlRenderer, 255, 255, 255, 255);
@@ -1174,7 +1191,10 @@ void Window::renderVisualNovelFrame(
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(choice.x, choice.y, metrics, px, py);
         SDL_FRect rect{px, py, choice.width * metrics.scaleFactor, choice.height * metrics.scaleFactor};
-        SDL_Color bg = parseHexColor(choice.backgroundColor, static_cast<uint8_t>(255.0f * std::clamp(choice.opacity, 0.0f, 1.0f)));
+        // D-K3: odaktaki secenek yazarin hover rengiyle dolar (duraklatma menusunun
+        // secili satiri gibi: dolgu + sol serit + kalin cerceve).
+        SDL_Color bg = parseHexColor(choice.focused ? choice.hoverColor : choice.backgroundColor,
+                                     static_cast<uint8_t>(255.0f * std::clamp(choice.opacity, 0.0f, 1.0f)));
         SDL_SetRenderDrawColor(m_sdlRenderer, bg.r, bg.g, bg.b, bg.a);
         SDL_RenderFillRect(m_sdlRenderer, &rect);
         if (!choice.backgroundImage.empty()) {
@@ -1183,6 +1203,9 @@ void Window::renderVisualNovelFrame(
         SDL_Color border = parseHexColor(choice.borderColor, 255);
         SDL_SetRenderDrawColor(m_sdlRenderer, border.r, border.g, border.b, border.a);
         SDL_RenderRect(m_sdlRenderer, &rect);
+        if (choice.focused) drawChoiceFocusMarks(m_sdlRenderer, rect, border,
+                                                 parseHexColor(choice.textColor, 255),
+                                                 metrics.scaleFactor);
         // D10: karar çekirdeği window_text_fallback.hpp'de (birebir delege).
         if (useFontFallbackPath(m_fontRenderer && m_fontRenderer->isLoaded(),
                                 m_offscreenSurface != nullptr)) {
@@ -1202,12 +1225,17 @@ void Window::renderVisualNovelFrame(
             const auto shapedChoice = choiceMsdfFont
                 ? choiceMsdfFont->shapeTextShared(choice.text, choiceFontPx, choiceWrapW)
                 : nullptr;
+            // D-K3: cok satirli / buyuk yazida blok dugmenin ortasina oturur.
+            const float choiceTextY = shapedChoice
+                ? choiceTextTop(py, rect.h, choiceFontPx, shapedChoice->height,
+                                shapedChoice->lines.size(), choiceMsdfFont->textScale())
+                : py + (rect.h - choiceFontPx) * 0.5f;
             bool choiceMsdfOk = false;
             if (shapedChoice && !shapedChoice->glyphs.empty()) {
                 choiceMsdfOk = drawMsdfShapedAllOrNothing(
                     m_sdlRenderer, m_msdfRenderState, m_msdfRenderer.get(), m_msdfAtlasTexture,
                     *shapedChoice, choice.text, px + 12.0f * metrics.scaleFactor,
-                    py + (rect.h - choiceFontPx) * 0.5f, choiceFontPx, text,
+                    choiceTextY, choiceFontPx, text,
                     shapedChoice->revealUnits.size(), choiceWrapW, choice.textAlignment);
             } else {
                 choiceMsdfOk = renderGpuMsdfText(choice.text, px + 12.0f * metrics.scaleFactor,
@@ -1218,7 +1246,7 @@ void Window::renderVisualNovelFrame(
                 // A11: TrueType yedeği (offscreen kolla aynı yerleşim).
                 choiceMsdfOk = drawTrueTypeTextOnGpu(
                     m_sdlRenderer, choiceMsdfFont, nullptr, choice.text,
-                    px + 12.0f * metrics.scaleFactor, py + (rect.h - choiceFontPx) * 0.5f,
+                    px + 12.0f * metrics.scaleFactor, choiceTextY,
                     choiceFontPx, text, choiceWrapW, rect.h, choice.textAlignment);
             }
             if (!choiceMsdfOk) {
@@ -1254,11 +1282,10 @@ void Window::renderVisualNovelFrame(
             // 4a. Speaker Name Text
             if (!dlg.speaker.empty()) {
                 float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
-                float speakerTextW = m_fontRenderer->measureTextWidth(dlg.speaker, speakerFontPx, dlg.language);
-                // B6 (#10): narrow boxes make lo > hi (std::clamp UB) — pin hi up.
-            float tagW = std::clamp(speakerTextW + (32.0f * metrics.scaleFactor),
-                                    120.0f * metrics.scaleFactor,
-                                    std::max(scaledDlgW * 0.8f, 120.0f * metrics.scaleFactor));
+                // D-K3: GPU koluyla ayni tek yerlesim (genislik + kisaltma + sekil).
+                const SpeakerTagLayout speakerLayout =
+                    layoutSpeakerTag(dlg, scaledDlgW, metrics.scaleFactor);
+                float tagW = speakerLayout.tagWidth;
                 // D05-2: same scaled-size rule as the GPU path above.
                 const float speakerTextScale = m_fontRenderer->textScale();
                 const float speakerDrawPx = speakerFontPx * speakerTextScale;
@@ -1267,9 +1294,10 @@ void Window::renderVisualNovelFrame(
                 float tagY = physBoxY - (tagH * 0.6f);
                 float textDrawY = tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor);
 
-                m_fontRenderer->renderText(
+                // D-K3: hazir tek-satir sekil (renderText yeniden sarar; ad kesilirdi).
+                m_fontRenderer->renderShapedText(
                     m_offscreenSurface,
-                    dlg.speaker,
+                    *speakerLayout.shaped,
                     tagX + (16.0f * metrics.scaleFactor),
                     textDrawY,
                     speakerFontPx,
@@ -1357,8 +1385,13 @@ void Window::renderVisualNovelFrame(
             const float w = choice.width * metrics.scaleFactor;
             const float h = choice.height * metrics.scaleFactor;
             const float fontPx = choice.fontSize * metrics.scaleFactor;
+            // D-K3: GPU koluyla ayni metin ustu (renderText ayni sekli kullanir).
+            const auto shapedChoice = choiceFont->shapeTextShared(
+                choice.text, fontPx, w - 24.0f * metrics.scaleFactor);
+            const float textY = choiceTextTop(py, h, fontPx, shapedChoice->height,
+                                              shapedChoice->lines.size(), choiceFont->textScale());
             choiceFont->renderText(m_offscreenSurface, choice.text, px + 12.0f * metrics.scaleFactor,
-                py + (h - fontPx) * 0.5f, fontPx, parseHexColor(choice.textColor, 255),
+                textY, fontPx, parseHexColor(choice.textColor, 255),
                 w - 24.0f * metrics.scaleFactor, h, choice.textAlignment);
         }
         m_lastFrameTextRasterizationMilliseconds = std::chrono::duration<double, std::milli>(
@@ -1500,6 +1533,8 @@ uint64_t Window::hashPackedFrameContent(bool hasBackground, const std::string& b
         fnvMixString(hash, choice.textAlignment);
         fnvMixString(hash, choice.fontFamily);
         fnvMixBool(hash, choice.enabled);
+        // D-K3: odak yalniz true iken karisir (odaksiz kare ozetleri degismez).
+        if (choice.focused) fnvMixBool(hash, true);
     }
     // Packed content ends here; dynamic state mixes in hashFrameContent.
     return hash;

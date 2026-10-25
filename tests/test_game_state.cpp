@@ -59,7 +59,7 @@ void test_game_state() {
             chainState = GameState::createNextState(chainState, 2 + step);
             std::vector<DialogueHistoryEntry> entries;
             for (size_t k = 0; k < kPerStep; ++k, ++serial) {
-                entries.push_back({serial + 1, "spk", "line" + std::to_string(serial), true, ""});
+                entries.push_back({serial + 1, "spk", "line" + std::to_string(serial), true, "", ""});
             }
             chainState = GameState::withDialogueHistory(chainState, entries);
         }
@@ -205,8 +205,8 @@ void test_game_state() {
     TEST_PASS("GameState JSON Serialization & Deserialization");
 
     const auto withHistory = Rowl::State::GameState::withDialogueHistory(s2, {
-        {101, "Evelyn", "First remembered line", true, ""},
-        {102, "Mina", "Second remembered line", true, ""},
+        {101, "Evelyn", "First remembered line", true, "", ""},
+        {102, "Mina", "Second remembered line", true, "", ""},
     });
     const auto restoredHistory = Rowl::State::GameState::deserializeJson(withHistory->serializeJson());
     if (!restoredHistory || !restoredHistory->dialogueHistory ||
@@ -222,8 +222,8 @@ void test_game_state() {
     // without the key decode to "" and stay loadable, while hostile ids are
     // rejected instead of persisted.
     const auto withIds = Rowl::State::GameState::withDialogueHistory(s2, {
-        {201, "Evelyn", "Tracked line", true, "11111111-2222-3333-4444-555555555555"},
-        {202, "Mina", "Legacy line", true, ""},
+        {201, "Evelyn", "Tracked line", true, "11111111-2222-3333-4444-555555555555", ""},
+        {202, "Mina", "Legacy line", true, "", ""},
     });
     const auto restoredIds = Rowl::State::GameState::deserializeJson(withIds->serializeJson());
     if (!restoredIds || !restoredIds->dialogueHistory ||

@@ -113,8 +113,8 @@ void Window::pollEvents(bool& outShouldQuit) {
                 // MS-6: Escape/P toggle the pause menu (never quit outright);
                 // quitting needs the menu's two-step confirmation. The OS
                 // window-close event below still exits immediately.
-                Rowl::Platform::RuntimeInputEvent input{
-                    Rowl::Platform::RuntimeInputEvent::Type::Advance};
+                Rowl::Platform::RuntimeInputEvent input =
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance);
                 if (mapKeyToRuntimeInput(static_cast<uint32_t>(event.key.key), input)) {
                     // D04-1: OS key repeat must not re-toggle Auto/Skip (the three
                     // new keys only; Space/arrows keep their repeat behavior).
@@ -129,8 +129,8 @@ void Window::pollEvents(bool& outShouldQuit) {
             }
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown,
-                                                        event.button.x, event.button.y});
+                    if (m_inputHandler) m_inputHandler(Rowl::Platform::makeRuntimeInput(
+                        Rowl::Platform::RuntimeInputEvent::Type::PointerDown, event.button.x, event.button.y));
                 } else if (event.button.button == SDL_BUTTON_RIGHT) {
                     // D03-2: right click closes the backlog (no story action).
                     Rowl::Platform::RuntimeInputEvent input{};
@@ -145,16 +145,16 @@ void Window::pollEvents(bool& outShouldQuit) {
                 // here, so press/release pairing was unobservable. Left-button
                 // only, mirroring BUTTON_DOWN above.
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerUp,
-                                                        event.button.x, event.button.y});
+                    if (m_inputHandler) m_inputHandler(Rowl::Platform::makeRuntimeInput(
+                        Rowl::Platform::RuntimeInputEvent::Type::PointerUp, event.button.x, event.button.y));
                 }
                 break;
             case SDL_EVENT_KEY_UP: {
                 // #16: key release was queued but branchless. Every release is
                 // observable (press/release pairing needs unmapped keys too);
                 // the SDL keycode rides along in `key`.
-                Rowl::Platform::RuntimeInputEvent input{
-                    Rowl::Platform::RuntimeInputEvent::Type::KeyUp};
+                Rowl::Platform::RuntimeInputEvent input =
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::KeyUp);
                 input.key = static_cast<uint32_t>(event.key.key);
                 if (m_inputHandler) m_inputHandler(input);
                 break;
@@ -162,8 +162,8 @@ void Window::pollEvents(bool& outShouldQuit) {
             case SDL_EVENT_MOUSE_MOTION:
                 // #16: motion never routed before the dispatcher fix; now it
                 // surfaces as hover position through the input channel.
-                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion,
-                                                    event.motion.x, event.motion.y});
+                if (m_inputHandler) m_inputHandler(Rowl::Platform::makeRuntimeInput(
+                    Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, event.motion.x, event.motion.y));
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
                 // #16: wheel never routed before the dispatcher fix. x/y carry
@@ -176,15 +176,16 @@ void Window::pollEvents(bool& outShouldQuit) {
                     dx = -dx;
                     dy = -dy;
                 }
-                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::Scroll, dx, dy});
+                if (m_inputHandler) m_inputHandler(
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Scroll, dx, dy));
                 break;
             }
             case SDL_EVENT_TEXT_INPUT: {
                 // #16: text never routed before the dispatcher fix. Null text
                 // carries nothing observable and stays unconsumed.
                 if (event.text.text == nullptr) break;
-                Rowl::Platform::RuntimeInputEvent input{
-                    Rowl::Platform::RuntimeInputEvent::Type::TextInput};
+                Rowl::Platform::RuntimeInputEvent input =
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::TextInput);
                 input.text = event.text.text;
                 if (m_inputHandler) m_inputHandler(input);
                 break;
@@ -193,8 +194,8 @@ void Window::pollEvents(bool& outShouldQuit) {
                 // #60: composition never routed (dispatcher nullopt-drop).
                 // Null text carries nothing observable and stays unconsumed.
                 if (event.edit.text == nullptr) break;
-                Rowl::Platform::RuntimeInputEvent input{
-                    Rowl::Platform::RuntimeInputEvent::Type::TextEditing};
+                Rowl::Platform::RuntimeInputEvent input =
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::TextEditing);
                 input.text = event.edit.text;
                 input.compositionStart = event.edit.start;
                 input.compositionLength = event.edit.length;
@@ -213,7 +214,8 @@ void Window::pollEvents(bool& outShouldQuit) {
                 // positions land in physical pixels.
                 const float x = touchCoordinateToPhysical(event.tfinger.x, m_width);
                 const float y = touchCoordinateToPhysical(event.tfinger.y, m_height);
-                if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, x, y});
+                if (m_inputHandler) m_inputHandler(
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, x, y));
                 break;
             }
             case SDL_EVENT_FINGER_DOWN: {
@@ -233,11 +235,14 @@ void Window::pollEvents(bool& outShouldQuit) {
                     static_cast<float>(m_width), static_cast<float>(m_height));
                 m_touchStarts.erase(start);
                 if (gesture == Rowl::Platform::InputEventType::SwipeForward) {
-                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeForward, x, y});
+                    if (m_inputHandler) m_inputHandler(
+                        Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::SwipeForward, x, y));
                 } else if (gesture == Rowl::Platform::InputEventType::SwipeBack) {
-                    if (m_inputHandler) m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::SwipeBack, x, y});
+                    if (m_inputHandler) m_inputHandler(
+                        Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::SwipeBack, x, y));
                 } else if (m_inputHandler) {
-                    m_inputHandler({Rowl::Platform::RuntimeInputEvent::Type::PointerDown, x, y});
+                    m_inputHandler(
+                        Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::PointerDown, x, y));
                 }
                 break;
             }

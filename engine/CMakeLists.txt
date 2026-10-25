@@ -319,6 +319,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani
     src/core/engine_player_drivers.cpp  # D04-1: oyuncu Otomatik / Atla surucusu
     src/core/engine_node_conditions.cpp  # D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
+    src/core/engine_choice_focus.cpp  # D-K3: secim menusunde klavye / fare odagi + sigdirilmis dugme yerlesimi
     src/core/engine_extras_menu.cpp  # D07-2: Ekstralar sayfalari (galeri / muzik odasi / basarimlar) + basarim bildirimi
     src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
@@ -332,6 +333,8 @@ set(ROWL_ENGINE_SOURCES
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
+    src/render/ui_text_fit.cpp  # D-K3: saf etiket / secenek yerlesim kararlari
+    src/render/window_choice_layout.cpp  # D-K3: etiket + secenek yerlesiminin Window baglantisi
     src/render/gpu_truetype_text.cpp     # A11: GPU yolunda TrueType metin yedeği
     src/render/window_msdf_shaped.cpp  # D11: şekilli-MSDF plan/çizim bölünmesi
     src/render/camera2d.cpp

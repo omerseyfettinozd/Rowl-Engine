@@ -324,6 +324,11 @@ public:
     const std::vector<Rowl::Render::ChoiceButtonRenderData>& getActiveChoiceButtons() const {
         return m_activeChoiceButtons;
     }
+    /// D-K3: the choice buttons exactly as drawn and hit-tested — geometry fitted
+    /// to the text scale (a button that cannot hold its text grows upward) and
+    /// `focused` set on the keyboard/hover focus. `getActiveChoiceButtons` stays
+    /// the authored data.
+    std::vector<Rowl::Render::ChoiceButtonRenderData> getLaidOutChoiceButtons() const;
     uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
     std::string getCurrentChapterId() const { return m_storyRuntime.currentChapterId(); }
     const StoryGraphDocument& getStoryGraphDocument() const { return m_storyRuntime.document(); }
@@ -593,6 +598,9 @@ private:
     Rowl::Render::DialogueRenderData m_activeDialogueData;
     std::vector<Rowl::Render::DialogueRenderData> m_activeDialogues;
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
+    /// D-K3: option id holding the keyboard/hover focus while a choice menu is
+    /// presented ("" = none, the state when a menu opens). Reset whenever the scene's buttons change.
+    std::string m_choiceFocusId;
     bool m_hasActiveScript = false;
     std::vector<std::string> m_activeScriptModuleIds;
     // #20/#21: the loaded source per module id (parallel to
@@ -686,6 +694,11 @@ private:
     // shown as corrupt and skipped by Continue until they are saved again.
     mutable std::bitset<100> m_slotLoadFailed;
     bool m_titleActive = false;
+    /// D-K3: the title screen has been shown in this engine session (the packaged
+    /// player opens it by default). Only such a session returns to it when the
+    /// story ends; editor previews and C API hosts that never open a title keep
+    /// the old "stay on the last frame" behaviour.
+    bool m_titleSessionSeen = false;
     UiText m_titleHint = UiText::None;  // D05-1: a key, resolved per view (locale-safe)
     bool m_windowAudioSuspended = false;
     // #160: stall-signal edge latch. Set on the first zero-dt step observed
@@ -753,6 +766,28 @@ private:
                            const std::vector<nlohmann::json>& audioComponents);
     /// Author-enabled and its condition holds right now.
     bool choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const;
+    /// D-K3: a manual advance (Enter / Space / click / swipe) on the finished last
+    /// node returns to the title screen - same path as the pause menu's "Ana Menü"
+    /// but without the confirmation (the story is over). Auto / Skip never reach it.
+    /// Returns true when it consumed the input.
+    bool tryEndOfStoryTitle();
+    // D-K3 (engine_choice_focus.cpp): keyboard / hover navigation of a presented
+    // choice menu. Indices point into m_activeChoiceButtons.
+    std::vector<std::size_t> selectableChoiceIndices() const;
+    /// Focused option (-1 = none: the menu just opened, or the remembered option
+    /// stopped being selectable).
+    int focusedChoiceIndex() const;
+    /// A choice menu with at least one selectable option is on screen, unpaused.
+    bool choiceMenuActive() const;
+    void moveChoiceFocus(int direction);
+    /// Enter/Space on a choice menu: completes a typing line first, then picks the
+    /// focused option. Returns false when there is no choice menu to answer.
+    bool activateFocusedChoice();
+    /// Digit n (1-based) picks the n-th selectable option. Returns false when no
+    /// choice menu is on screen (the digit keeps its quick-save-slot meaning).
+    bool selectChoiceByNumber(int number);
+    /// Pointer hover: moves the focus to the selectable option under the pointer.
+    void focusChoiceAt(float physicalX, float physicalY);
     // MS-6 pause-menu internals: keyboard and pointer funnels share these.
     int pauseMenuRowCount() const;
     void pauseMenuMoveSelection(int direction);

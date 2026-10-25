@@ -102,6 +102,17 @@ struct RuntimeInputEvent {
     int32_t compositionLength = -1;
 };
 
+/// Event builder that names every field: aggregate init of `{Type, x, y}` leaves
+/// the later members out and trips -Wmissing-field-initializers (D-K3).
+inline RuntimeInputEvent makeRuntimeInput(RuntimeInputEvent::Type type, float x = 0.0f,
+                                          float y = 0.0f) {
+    RuntimeInputEvent event{};
+    event.type = type;
+    event.x = x;
+    event.y = y;
+    return event;
+}
+
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this
 /// contract restricted to resources and signals that genuinely differ by host.
 ///

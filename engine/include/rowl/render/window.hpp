@@ -168,6 +168,9 @@ struct ChoiceButtonRenderData {
     bool authorEnabled = true;
     /// Lua gate ("" / "true" / "1" = always open). Re-checked at selection.
     std::string condition;
+    /// D-K3: klavye/fare odagi bu secenekte (cizimde vurgulanir). Yazar
+    /// verisi degil, Engine'in anlik durumudur; kare ozetine yalniz true iken girer.
+    bool focused = false;
 };
 
 class Window {
@@ -236,6 +239,12 @@ public:
                               uint32_t virtualWidth, uint32_t virtualHeight,
                               float& outVirtualX, float& outVirtualY,
                               bool& outBezelTap) const;
+
+    /// D-K3: secenek dugmelerini cizimle AYNI olcumden (yazi boyutu + pencere olcegi
+    /// dahil) sigdirir: metni sigmayan dugme alt kenari sabit yukari buyur, ustteki
+    /// kardesler yukari itilir (ui_text_fit.hpp). Cizim, tiklama ve gozlem bu
+    /// yerlesimi kullanir. Yazi/pencere yoksa ya da sigmayan yoksa girdi aynen kalir.
+    void fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) const;
 
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
@@ -459,6 +468,17 @@ private:
     std::string m_pauseThumbKey;
     std::string m_pauseThumbFailedKey;
     void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+
+    /// D-K3: konusmaci etiketinin tek yerlesimi (genislik + cizilecek metin + sekil).
+    /// Etiket genisligi, cizilen sekil ve kisaltma ayni olcumden (yazi boyutu dahil)
+    /// gelir; ad asla sarilmaz, kutu sinirini asarsa "…" ile kisalir.
+    struct SpeakerTagLayout {
+        std::string text;
+        float tagWidth = 0.0f;
+        std::shared_ptr<const Rowl::Text::ShapedText> shaped;
+    };
+    SpeakerTagLayout layoutSpeakerTag(const DialogueRenderData& dlg, float scaledDialogueWidth,
+                                      float scale) const;
     // D07-2: gallery thumbnails. Each visible cell needs a small texture; going
     // through loadTexture would hold 1920x1080 RGBA (8 MB) per cell and thrash
     // the 64 MB cache, so the grid keeps its own downscaled copies (at most

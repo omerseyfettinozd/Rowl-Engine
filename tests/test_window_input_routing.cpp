@@ -153,7 +153,7 @@ void test_window_input_routing() {
         using Event = Rowl::Platform::RuntimeInputEvent;
         using Type = Rowl::Platform::RuntimeInputEvent::Type;
         auto expect = [&](uint32_t key, Type type, int32_t slot = 0) {
-            Event event{Type::Advance};
+            Event event = Rowl::Platform::makeRuntimeInput(Type::Advance);
             event.slot = -1;
             if (!Rowl::Render::Window::mapKeyToRuntimeInput(key, event) ||
                 event.type != type || event.slot != slot) {
@@ -182,7 +182,7 @@ void test_window_input_routing() {
         expect(SDLK_S, Type::ToggleSkip);
         expect(SDLK_LCTRL, Type::SkipHold);
         expect(SDLK_RCTRL, Type::SkipHold);
-        Event unmapped{Type::Advance};
+        Event unmapped = Rowl::Platform::makeRuntimeInput(Type::Advance);
         if (Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_F1, unmapped) ||
             Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_Q, unmapped)) {
             std::cerr << "MS-6: unrelated keys must not map to player actions" << std::endl;

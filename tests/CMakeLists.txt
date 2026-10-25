@@ -36,6 +36,11 @@ add_executable(rowl_tests
     test_boot_story_diagnostics.cpp
     test_project_mount_cwd.cpp
     test_choice_input_guard.cpp
+    test_choice_keyboard.cpp
+    test_pause_subpage_back.cpp
+    test_ui_text_fit.cpp
+    test_bgm_continuity.cpp
+    test_end_of_story_title.cpp
     test_title_screen.cpp
     test_backlog_replay.cpp
     test_backlog_screen.cpp

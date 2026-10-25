@@ -289,14 +289,16 @@ PauseMenuView Engine::getPauseMenuView() const {
             m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
         const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
         view.title = T(UiText::Paused);
+        // D-K3: makePauseRow names every field (aggregate rows tripped
+        // -Wmissing-field-initializers); the rows are unchanged.
         view.rows = {
-            {T(UiText::Resume), "", false},
-            {T(UiText::SaveGame), T(UiText::PickSlotValue), false},
-            {T(UiText::LoadGame), T(UiText::PickSlotValue), false},
-            {T(UiText::Preferences), ">", false, "", true},
-            {T(UiText::History), T(UiText::LinesValue), false, "", true},
-            {T(UiText::MainMenu), confirmTitle ? T(UiText::AreYouSure) : "", false},
-            {T(UiText::Quit), confirmExit ? T(UiText::AreYouSure) : "", false},
+            makePauseRow(T(UiText::Resume), ""),
+            makePauseRow(T(UiText::SaveGame), T(UiText::PickSlotValue)),
+            makePauseRow(T(UiText::LoadGame), T(UiText::PickSlotValue)),
+            makePauseRow(T(UiText::Preferences), ">", false, "", true),
+            makePauseRow(T(UiText::History), T(UiText::LinesValue), false, "", true),
+            makePauseRow(T(UiText::MainMenu), confirmTitle ? T(UiText::AreYouSure) : ""),
+            makePauseRow(T(UiText::Quit), confirmExit ? T(UiText::AreYouSure) : ""),
         };
         view.hint = confirmTitle ? T(UiText::HintConfirmMainMenu)
                   : confirmExit ? T(UiText::HintConfirmQuit)

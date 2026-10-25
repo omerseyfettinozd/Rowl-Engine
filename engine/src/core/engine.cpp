@@ -179,15 +179,21 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // D02: Esc/P on the title screen never starts the story.
             // D03-2: on the backlog page it is Back (to the pause menu or the story).
             // D05-2: on the Preferences page it is Back too (to the pause menu).
+            // D-K3: so it is on every other pause sub-page (Save / Load slots,
+            // Extras) - the footer says "ESC: geri", it must not drop the player
+            // into the story. Only the main pause page resumes.
             if (m_titleActive || isBacklogOpen() ||
-                (m_paused && m_pauseMode == PauseMenuMode::Preferences)) menuBack();
+                (m_paused && m_pauseMode != PauseMenuMode::Main)) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
+            // D-K3: with a choice menu on screen the arrows walk its options.
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Up);
+            else moveChoiceFocus(-1);
             break;
         case Type::MenuDown:
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Down);
+            else moveChoiceFocus(1);
             break;
         case Type::MenuLeft:
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Left);
@@ -202,7 +208,9 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (m_paused) {
                 if (m_pauseMode == PauseMenuMode::SaveSlots ||
                     m_pauseMode == PauseMenuMode::LoadSlots) menuChooseSlot(event.slot);
-            } else {
+            } else if (!selectChoiceByNumber(event.slot)) {
+                // D-K3: a digit picks the n-th option while a choice menu is up;
+                // otherwise it keeps its quick-save-slot meaning.
                 setQuickSaveSlot(event.slot);
             }
             break;
@@ -210,8 +218,12 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // MS-6: Space/Enter confirm the menu selection while paused and
             // advance the story otherwise — one key, pause-routed.
             // D04-1: a manual advance ends a running Skip.
+            // D-K3: on a choice menu Enter/Space answer the focused option.
             if (m_paused) menuActivateSelected();
-            else { m_skipActive = false; advanceToNextNode(); }
+            else {
+                m_skipActive = false;
+                if (!activateFocusedChoice() && !tryEndOfStoryTitle()) advanceToNextNode();
+            }
             break;
         case Type::QuickSave:
             if (!m_paused) quickSave();
@@ -224,11 +236,11 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             break;
         case Type::PointerDown:
             if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
-            if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
+            if (!handlePointerDown(event.x, event.y) && !tryEndOfStoryTitle()) advanceToNextNode();
             break;
         case Type::SwipeForward:
             if (m_paused) menuActivateSelected();
-            else { m_skipActive = false; advanceToNextNode(); }
+            else { m_skipActive = false; if (!tryEndOfStoryTitle()) advanceToNextNode(); }
             break;
         case Type::SwipeBack:
             if (!m_paused) rewind(1);
@@ -274,8 +286,12 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // D04-1: releasing Ctrl ends the hold (an S-started Skip keeps going).
             if (event.key == SDLK_LCTRL || event.key == SDLK_RCTRL) m_skipHold = false;
             break;
-        case Type::PointerUp:
         case Type::PointerMotion:
+            // D-K3: hovering a choice option moves the focus there; it never
+            // advances anything (the story-silent contract of #16 stands).
+            if (!m_paused) focusChoiceAt(event.x, event.y);
+            break;
+        case Type::PointerUp:
         case Type::TextInput:
         case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
@@ -664,6 +680,23 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
     advanceStory(choiceIndex, false);
 }
 
+bool Engine::tryEndOfStoryTitle() {
+    if (!m_titleSessionSeen || m_paused || m_storyRuntime.empty()) return false;
+    const StoryNode* node = m_storyRuntime.currentNode();
+    // Only the last node: no outgoing edge, no open choice menu.
+    if (!node || !node->nextNodes.empty() || !m_activeChoiceButtons.empty()) return false;
+    // Its text must be finished first: a press on a still-typing line only
+    // completes it (the same click-to-complete rule as every other advance).
+    if (completeTypewriterIfTyping()) {
+        m_autoAdvanceElapsed = 0.0f;
+        resetAutoWait();
+        return true;
+    }
+    ROWL_LOG_INFO("End of story on Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
+                  ": returning to the title screen.");
+    return openTitleScreen();
+}
+
 bool Engine::choiceConditionHolds(const std::string& condition) const {
     if (condition.empty() || condition == "true" || condition == "1") return true;
     return m_luaSandbox && m_luaSandbox->evaluateCondition(condition);
@@ -824,7 +857,9 @@ bool Engine::handlePointerDown(float physicalX, float physicalY) {
     if (bezelTap) {
         return true;
     }
-    for (auto it = m_activeChoiceButtons.rbegin(); it != m_activeChoiceButtons.rend(); ++it) {
+    // D-K3: hit-test the geometry that is drawn (fitted to the text scale).
+    const auto laidOut = getLaidOutChoiceButtons();
+    for (auto it = laidOut.rbegin(); it != laidOut.rend(); ++it) {
         const auto& button = *it;
         if (!choiceButtonSelectable(button)) continue;
         if (x >= button.x && x <= button.x + button.width &&
@@ -981,6 +1016,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousCharacters = m_activeCharacters;
     const auto previousDialogues = m_activeDialogues;
     const auto previousChoices = m_activeChoiceButtons;
+    const auto previousChoiceFocusId = m_choiceFocusId;
     const auto previousSpeaker = m_activeSpeaker;
     const auto previousDialogue = m_activeDialogue;
     const auto previousBackground = m_activeBackground;
@@ -1050,6 +1086,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeCharacters = previousCharacters;
         m_activeDialogues = previousDialogues;
         m_activeChoiceButtons = previousChoices;
+        m_choiceFocusId = previousChoiceFocusId;
         m_activeSpeaker = previousSpeaker;
         m_activeDialogue = previousDialogue;
         m_activeBackground = previousBackground;
@@ -1170,6 +1207,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeCharacters.clear();
         m_activeDialogues.clear();
         m_activeChoiceButtons.clear();
+        m_choiceFocusId.clear();  // D-K3: a new button set starts on its first option
         m_activeSpeaker.clear();
         m_activeDialogue.clear();
         m_activeBackground.clear();
@@ -2400,7 +2438,7 @@ void Engine::step(float deltaTime) {
     frame.backgroundWidth = m_activeBackgroundWidth;
     frame.backgroundHeight = m_activeBackgroundHeight;
     frame.dialogues = m_activeDialogues;
-    frame.choices = m_activeChoiceButtons;
+    frame.choices = getLaidOutChoiceButtons();  // D-K3: fitted geometry + focus
     frame.backgroundRotation = m_activeBackgroundRotation;
     frame.backgroundParallaxX = m_activeBackgroundParallaxX;
     frame.backgroundParallaxY = m_activeBackgroundParallaxY;
@@ -2974,6 +3012,7 @@ void Engine::resetSessionProfile() {
     m_activeDialogueData = Rowl::Render::DialogueRenderData{};
     m_activeDialogues.clear();
     m_activeChoiceButtons.clear();
+    m_choiceFocusId.clear();
     m_hasActiveScript = false;
     m_activeScriptModuleIds.clear();
     m_activeScriptSources.clear();
@@ -3559,8 +3598,14 @@ void Engine::restoreAudioStateFromGameState() {
     }
 
     if (m_gameState->bgmPlaying && !m_gameState->activeBgm.empty()) {
-        m_audio->playAudio(m_gameState->activeBgm, Rowl::Audio::AudioChannelType::Bgm,
-                           m_audio->getActiveFilter());
+        // D-K3: the same track already playing is left alone. Every rewind step
+        // (and a load inside the same scene) used to start it over - the music
+        // cut out for ~1.4 s each Backspace. Volume and filter were applied above;
+        // only a different / stopped track is (re)started, as before.
+        if (!m_audio->isBgmPlaying() || m_audio->getCurrentBgmPath() != m_gameState->activeBgm) {
+            m_audio->playAudio(m_gameState->activeBgm, Rowl::Audio::AudioChannelType::Bgm,
+                               m_audio->getActiveFilter());
+        }
     } else {
         m_audio->stopBgm();
     }

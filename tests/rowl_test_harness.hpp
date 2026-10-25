@@ -223,6 +223,11 @@ void test_auto_skip_ui();  // D04-2: Tercihler Otomatik/Atlama satirlari + AUTO/
 void test_player_preferences_menu();  // D05-2: Tercihler pause'dan + dil / metin boyutu / kontrast / hareket satirlari, sigma
 void test_player_ui_language();  // D05-1: oyuncu arayuz dili (tr/en), UTF-8 menu yolu, profil dili
 void test_choice_input_guard();  // secim menusunu duz ilerleme yanitlamaz kilidi
+void test_choice_keyboard();  // D-K3: secim menusunde klavye / fare odagi kilidi
+void test_pause_subpage_back();  // D-K3: Esc duraklatma alt sayfalarinda Geri kilidi
+void test_ui_text_fit();  // D-K3: konusmaci etiketi + secenek dugmesi yazi boyutuyla sigar kilidi
+void test_bgm_continuity();  // D-K3: geri sarma / yukleme calan muzigi bastan baslatmaz kilidi
+void test_end_of_story_title();  // D-K3: hikaye bitince baslik ekrani kilidi
 void test_graph_vnext();
 void test_localization();
 void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)

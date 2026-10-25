@@ -243,7 +243,7 @@ void test_rc_soak_and_data_safety() {
             }
             host->lifecycle = Rowl::Platform::LifecycleState::Active;
             host->focus = Rowl::Platform::AudioFocus::Granted;
-            host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+            host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
             for (int i = 0; i < 5; ++i) engine.step(1.0f / 60.0f);
             if (!ringContains(engine.getCurrentNodeId()) ||
                 engine.getAudio()->isOutputSuspended()) {
@@ -596,7 +596,7 @@ void test_rc_soak_and_data_safety() {
         }
         host->lifecycle = Rowl::Platform::LifecycleState::Active;
         host->focus = Rowl::Platform::AudioFocus::Granted;
-        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+        host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
         for (int i = 0; i < 5; ++i) engine.step(1.0f / 60.0f);
         if (!engine.loadGameSlot(3) || !ringContains(engine.getCurrentNodeId())) {
             std::cerr << "Post-resume load of the mid-freeze save failed" << std::endl;

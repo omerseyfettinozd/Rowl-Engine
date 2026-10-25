@@ -263,13 +263,16 @@ ROWL_API int RowlEngine_QueryWorldJson(
         }
         // Story Choices
         nlohmann::json choicesArray = nlohmann::json::array();
-        for (const auto& chBtn : engine->getActiveChoiceButtons()) {
+        // D-K3: bounds are the drawn / hit-tested geometry (fitted to the text
+        // scale); "focused" is additive: the option holding keyboard/hover focus.
+        for (const auto& chBtn : engine->getLaidOutChoiceButtons()) {
             choicesArray.push_back({
                 {"id", chBtn.optionId},
                 {"text", chBtn.text},
                 {"bounds", {
                     {"x", chBtn.x}, {"y", chBtn.y}, {"w", chBtn.width}, {"h", chBtn.height}
-                }}
+                }},
+                {"focused", chBtn.focused}
             });
         }
         story["choices"] = choicesArray;

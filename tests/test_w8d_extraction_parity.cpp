@@ -75,7 +75,7 @@ std::string makeProjectRoot(const std::string& tag) {
 using Type = Rowl::Platform::RuntimeInputEvent::Type;
 
 bool mapKey(uint32_t key, Type& outType, int32_t& outSlot) {
-    Rowl::Platform::RuntimeInputEvent ev{Type::Advance};
+    Rowl::Platform::RuntimeInputEvent ev = Rowl::Platform::makeRuntimeInput(Type::Advance);
     const bool ok = Rowl::Render::Window::mapKeyToRuntimeInput(key, ev);
     outType = ev.type;
     outSlot = ev.slot;
