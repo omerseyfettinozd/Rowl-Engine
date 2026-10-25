@@ -10,9 +10,95 @@
 #include <algorithm>
 #include <cmath>
 #include <string_view>
+#include <atomic>
+#include <stdexcept>
 #include <unordered_set>
 
 namespace Rowl::State {
+
+// ── F1 (A-3): persistent dialogue backlog ───────────────────────────────────
+struct DialogueHistory::Node {
+    DialogueHistoryEntry entry;
+    std::shared_ptr<const Node> prev;
+    size_t total = 0;  // nodes from the first one through this one
+    uint64_t serial = 0;  // process-unique, never reused (memoization key)
+
+    Node() = default;
+    Node(const Node&) = delete;
+    Node& operator=(const Node&) = delete;
+    // Iterative release: a long session builds a chain thousands of nodes
+    // deep; the default recursive shared_ptr teardown would recurse per node.
+    ~Node() {
+        auto p = std::move(prev);
+        while (p && p.use_count() == 1) {
+            auto next = std::move(const_cast<Node*>(p.get())->prev);
+            p = std::move(next);
+        }
+    }
+};
+
+DialogueHistory::DialogueHistory(const std::vector<DialogueHistoryEntry>& entries) {
+    const size_t first = entries.size() > kMaxEntries ? entries.size() - kMaxEntries : 0;
+    for (size_t i = first; i < entries.size(); ++i) {
+        *this = appended(entries[i]);
+    }
+}
+
+size_t DialogueHistory::size() const noexcept {
+    return tail_ ? std::min(tail_->total, kMaxEntries) : 0;
+}
+
+uint64_t DialogueHistory::identity() const noexcept {
+    return tail_ ? tail_->serial : 0;
+}
+
+size_t DialogueHistory::totalNodes() const noexcept {
+    return tail_ ? tail_->total : 0;
+}
+
+const DialogueHistoryEntry& DialogueHistory::at(size_t index) const {
+    const size_t count = size();
+    if (index >= count) throw std::out_of_range("DialogueHistory::at");
+    const Node* node = tail_.get();
+    for (size_t back = count - 1 - index; back > 0; --back) node = node->prev.get();
+    return node->entry;
+}
+
+const DialogueHistoryEntry& DialogueHistory::back() const {
+    if (!tail_) throw std::out_of_range("DialogueHistory::back on an empty history");
+    return tail_->entry;
+}
+
+DialogueHistory DialogueHistory::appended(DialogueHistoryEntry entry) const {
+    auto node = std::make_shared<Node>();
+    node->entry = std::move(entry);
+    node->prev = tail_;
+    node->total = (tail_ ? tail_->total : 0) + 1;
+    static std::atomic<uint64_t> nextSerial{1};
+    node->serial = nextSerial.fetch_add(1, std::memory_order_relaxed);
+    DialogueHistory next;
+    next.tail_ = std::move(node);
+    return next;
+}
+
+std::vector<DialogueHistoryEntry> DialogueHistory::toVector() const {
+    const size_t count = size();
+    std::vector<DialogueHistoryEntry> out(count);
+    const Node* node = tail_.get();
+    for (size_t i = count; i > 0; --i) {
+        out[i - 1] = node->entry;
+        node = node->prev.get();
+    }
+    return out;
+}
+
+void DialogueHistory::collectNodeAddresses(std::vector<const void*>& out) const {
+    const Node* node = tail_.get();
+    for (size_t i = size(); i > 0; --i) {
+        out.push_back(node);
+        node = node->prev.get();
+    }
+}
 
 namespace {
 
@@ -20,7 +106,7 @@ constexpr uintmax_t kMaxSaveFileBytes = 4 * 1024 * 1024;
 constexpr size_t kMaxSaveVariables = 10'000;
 constexpr size_t kMaxVariableKeyBytes = 256;
 constexpr size_t kMaxVariableValueBytes = 64 * 1024;
-constexpr size_t kMaxDialogueHistoryEntries = 500;
+constexpr size_t kMaxDialogueHistoryEntries = DialogueHistory::kMaxEntries;
 constexpr size_t kMaxDialogueHistoryTextBytes = 64 * 1024;
 // Faz 2 content ids are UUIDs (36 chars); the cap only bounds hostile input.
 constexpr size_t kMaxContentIdBytes = 1024;
@@ -90,7 +176,8 @@ constexpr size_t kMaxDialogueHistoryVoiceBytes = 1024;
 
 bool historyEntryEq(const DialogueHistoryEntry& x, const DialogueHistoryEntry& y) {
     return x.nodeId == y.nodeId && x.read == y.read && x.speaker == y.speaker &&
-           x.dialogue == y.dialogue && x.contentId == y.contentId && x.voice == y.voice;
+           x.dialogue == y.dialogue && x.contentId == y.contentId && x.voice == y.voice &&
+           x.choice == y.choice;
 }
 
 nlohmann::json encodeHistoryEntry(const DialogueHistoryEntry& entry) {
@@ -101,6 +188,8 @@ nlohmann::json encodeHistoryEntry(const DialogueHistoryEntry& entry) {
     };
     // D03-1: optional key - voiceless lines keep the pre-D03 byte shape.
     if (!entry.voice.empty()) encoded["voice"] = entry.voice;
+    // F1: optional key - ordinary lines keep the pre-F1 byte shape.
+    if (entry.choice) encoded["choice"] = true;
     return encoded;
 }
 
@@ -128,6 +217,8 @@ nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail,
     j["step_id"] = s.stepId;
     j["active_node_id"] = s.activeNodeId;
     j["typewriter_index"] = s.typewriterIndex;
+    // F1: optional - links that are not node entries keep the pre-F1 shape.
+    if (s.nodeEntry) j["node_entry"] = true;
     j["active_background"] = s.activeBackground;
     j["dsp_filter"] = s.dspFilter;
     j["active_bgm"] = s.activeBgm;
@@ -139,21 +230,20 @@ nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail,
     j["sfx_volume"] = s.sfxVolume;
     j["voice_volume"] = s.voiceVolume;
     size_t windowHead = 0;
-    const bool windowed = historyRoot && s.dialogueHistory && historyRoot->dialogueHistory &&
-                          findHistoryWindow(*s.dialogueHistory, *historyRoot->dialogueHistory,
-                                            windowHead);
+    const std::vector<DialogueHistoryEntry> linkHistory = s.dialogueHistory.toVector();
+    const bool windowed =
+        historyRoot && findHistoryWindow(linkHistory, historyRoot->dialogueHistory.toVector(),
+                                         windowHead);
     if (windowed) {
         nlohmann::json head = nlohmann::json::array();
         for (size_t i = 0; i < windowHead; ++i) {
-            head.push_back(encodeHistoryEntry((*s.dialogueHistory)[i]));
+            head.push_back(encodeHistoryEntry(linkHistory[i]));
         }
         j["dialogue_history_root_window"] = {
-            {"head", std::move(head)}, {"shared", s.dialogueHistory->size() - windowHead}};
+            {"head", std::move(head)}, {"shared", linkHistory.size() - windowHead}};
     } else {
         nlohmann::json history = nlohmann::json::array();
-        if (s.dialogueHistory) {
-            for (const auto& entry : *s.dialogueHistory) history.push_back(encodeHistoryEntry(entry));
-        }
+        for (const auto& entry : linkHistory) history.push_back(encodeHistoryEntry(entry));
         j["dialogue_history"] = std::move(history);
     }
 
@@ -198,6 +288,8 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
     state->stepId = j.value("step_id", static_cast<uint64_t>(1));
     state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
     state->typewriterIndex = j.value("typewriter_index", static_cast<uint32_t>(0));
+    state->nodeEntry = j.contains("node_entry") && j["node_entry"].is_boolean() &&
+                       j["node_entry"].get<bool>();
     state->activeBackground = j.value("active_background", "bg_beach_sunset.png");
     state->dspFilter = j.value("dsp_filter", "Normal");
     state->activeBgm = j.value("active_bgm", "");
@@ -314,6 +406,9 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
             const auto& voice = rawEntry["voice"].get_ref<const std::string&>();
             if (voice.size() <= kMaxDialogueHistoryVoiceBytes) entry.voice = voice;
         }
+        // F1: optional choice-row marker; a wrong-typed value degrades to false.
+        entry.choice = rawEntry.contains("choice") && rawEntry["choice"].is_boolean() &&
+                       rawEntry["choice"].get<bool>();
         if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
             entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
             entry.contentId.size() > kMaxContentIdBytes) {
@@ -327,8 +422,8 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
         const auto& win = j["dialogue_history_root_window"];
         if (!win.is_object() || !win.contains("head") || !win["head"].is_array() ||
             win["head"].size() > kMaxHistoryWindowHead || !win.contains("shared") ||
-            !win["shared"].is_number_unsigned() || !historyRoot->dialogueHistory ||
-            win["shared"].get<uint64_t>() > historyRoot->dialogueHistory->size() ||
+            !win["shared"].is_number_unsigned() ||
+            win["shared"].get<uint64_t>() > historyRoot->dialogueHistory.size() ||
             win["head"].size() + win["shared"].get<uint64_t>() > kMaxDialogueHistoryEntries) {
             return nullptr;
         }
@@ -338,8 +433,9 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
             history->push_back(std::move(entry));
         }
         const auto shared = static_cast<size_t>(win["shared"].get<uint64_t>());
-        history->insert(history->end(), historyRoot->dialogueHistory->begin(),
-                        historyRoot->dialogueHistory->begin() + shared);
+        const auto rootEntries = historyRoot->dialogueHistory.toVector();
+        history->insert(history->end(), rootEntries.begin(),
+                        rootEntries.begin() + static_cast<std::ptrdiff_t>(shared));
     } else if (j.contains("dialogue_history")) {
         if (!j["dialogue_history"].is_array() ||
             j["dialogue_history"].size() > kMaxDialogueHistoryEntries) {
@@ -352,7 +448,7 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
             history->push_back(std::move(entry));
         }
     }
-    state->dialogueHistory = std::move(history);
+    state->dialogueHistory = DialogueHistory(*history);
     state->previousState = nullptr;
     return state;
 }
@@ -407,7 +503,7 @@ std::shared_ptr<const GameState> GameState::createInitialState(uint64_t startNod
     state->activeNodeId = startNodeId;
     state->previousState = nullptr;
     state->variables = std::make_shared<VariableMap>();
-    state->dialogueHistory = std::make_shared<std::vector<DialogueHistoryEntry>>();
+    state->dialogueHistory = DialogueHistory{};
     return state;
 }
 
@@ -415,11 +511,13 @@ std::shared_ptr<const GameState> GameState::createNextState(
     const std::shared_ptr<const GameState>& current,
     uint64_t nextNodeId,
     const std::string& varKey,
-    const std::string& varValue) {
+    const std::string& varValue,
+    bool nodeEntry) {
 
     auto nextState = std::make_shared<GameState>();
     nextState->stepId = current ? current->stepId + 1 : 1;
     nextState->activeNodeId = nextNodeId;
+    nextState->nodeEntry = nodeEntry;
     nextState->previousState = current;
 
     if (current) {
@@ -551,8 +649,7 @@ std::shared_ptr<const GameState> GameState::createNextStateWithAudio(
     nextState->sfxVolume = std::isfinite(sfxVolume) ? std::clamp(sfxVolume, 0.0f, 1.0f) : fallbackSfx;
     nextState->voiceVolume = std::isfinite(voiceVolume) ? std::clamp(voiceVolume, 0.0f, 1.0f) : fallbackVoice;
     nextState->variables = current ? current->variables : std::make_shared<VariableMap>();
-    nextState->dialogueHistory = current ? current->dialogueHistory :
-        std::make_shared<std::vector<DialogueHistoryEntry>>();
+    nextState->dialogueHistory = current ? current->dialogueHistory : DialogueHistory{};
     return nextState;
 }
 
@@ -561,37 +658,23 @@ std::shared_ptr<const GameState> GameState::withDialogueHistory(
     const std::vector<DialogueHistoryEntry>& entries) {
     if (!current || entries.empty()) return current;
     auto nextState = std::make_shared<GameState>(*current);
-    auto history = std::make_shared<std::vector<DialogueHistoryEntry>>(
-        current->dialogueHistory ? *current->dialogueHistory : std::vector<DialogueHistoryEntry>{});
+    DialogueHistory history = current->dialogueHistory;
     for (const auto& entry : entries) {
         if (entry.nodeId == 0 || entry.speaker.size() > kMaxDialogueHistoryTextBytes ||
             entry.dialogue.size() > kMaxDialogueHistoryTextBytes ||
             entry.contentId.size() > kMaxContentIdBytes) {
             continue;
         }
-        history->push_back(entry);
+        history = history.appended(entry);
     }
-    if (history->size() > kMaxDialogueHistoryEntries) {
-        history->erase(history->begin(), history->begin() +
-            static_cast<std::ptrdiff_t>(history->size() - kMaxDialogueHistoryEntries));
-    }
-    // Ölçüldü (probe_rw_accounting, deterministik capacity muhasebesi): her
-    // halka kendi dialogueHistory KOPYASINI taşıyor ve kopya std::vector'ün
-    // 2x büyüme politikası yüzünden BOYUTUN ~2 KATI kapasite ayırıyordu;
-    // erase() baştan sildiği için bu kapasite hiç geri dönmez. Zincir N halka
-    // olduğunda boşa ayrılan alan O(N·500·112).
-    //     300 advance : 10 234 112 B ->  5 210 912 B  (1,96x)
-    //     1200 advance: 106 936 512 B -> 53 764 400 B  (1,99x)
-    // Halkanın düğümleri 1200'de yalnızca 480 400 B (toplamın %0,9'u); asıl
-    // maliyet halka başına dialogueHistory kopyasıdır.
-    //
-    // Kırpma (previousState zincirini sınırlamak) UYGULANMADI: ölçüldü ki
-    // 1200 advance sonrası rewind(2000) köke (stepId=1) ulaşmak zorunda —
-    // K=4 halkaya kırpılırsa stepId 1197'de, K=64'te 1137'de kalır ve
-    // test_rc_soak 7. bölüm kırılır. Derin-rewind bir ÖZELLİK, yan etki
-    // değil; zincir derinliğine dokunmadan tahsis bütçesini daraltıyoruz.
-    // MUTASYON: bu satırı silerseniz rewind_history_budget_probe KIRMIZI döner.
-    history->shrink_to_fit();
+    // F1 (A-3): the backlog is a persistent list. The previous design copied
+    // the whole (up to 500 entry) vector into every rewind link: ~95 KB per
+    // advance, 778 MB after 8000 advances (audit A bulgu 3). Appending now
+    // allocates one node and shares all older nodes with the previous link, so
+    // per-link memory is constant. The previousState chain is untouched, so
+    // rewind depth (down to the root) is unchanged. MUTASYON: copying the
+    // list back into a fresh private vector per link turns
+    // test_history_sharing red.
     nextState->dialogueHistory = std::move(history);
     return nextState;
 }
@@ -652,6 +735,36 @@ std::shared_ptr<const GameState> GameState::rewind(
         target = target->previousState;
     }
     ROWL_LOG_INFO("Rewound GameState from Step #" + std::to_string(current->stepId) + " back to Step #" + std::to_string(target->stepId) + " (Active Node #" + std::to_string(target->activeNodeId) + ")");
+    return target;
+}
+
+std::shared_ptr<const GameState> GameState::rewindNodes(
+    const std::shared_ptr<const GameState>& current, uint64_t nodes) {
+    if (!current || nodes == 0) return nullptr;
+    auto target = current;
+    uint64_t done = 0;
+    for (; done < nodes; ++done) {
+        // Walk to the first link of the visit target belongs to, then one
+        // more: the last link of the previous visit.
+        auto link = target;
+        bool crossed = false;
+        while (link->previousState) {
+            const bool visitStart =
+                link->nodeEntry || link->previousState->activeNodeId != link->activeNodeId;
+            link = link->previousState;
+            if (visitStart) {
+                crossed = true;
+                break;
+            }
+        }
+        if (!crossed) break;
+        target = link;
+    }
+    if (done == 0) return nullptr;
+    ROWL_LOG_INFO("Rewound GameState by " + std::to_string(done) + " node(s) from Step #" +
+                  std::to_string(current->stepId) + " back to Step #" +
+                  std::to_string(target->stepId) + " (Active Node #" +
+                  std::to_string(target->activeNodeId) + ")");
     return target;
 }
 

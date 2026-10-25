@@ -296,9 +296,9 @@ ROWL_API int RowlEngine_QueryWorldJson(
                 cur = cur->previousState;
             }
 
-            if (gs->dialogueHistory) {
+            {
                 nlohmann::json historyArr = nlohmann::json::array();
-                const auto& hist = *gs->dialogueHistory;
+                const auto& hist = gs->dialogueHistory;
                 size_t startIdx = hist.size() > 5 ? hist.size() - 5 : 0;
                 for (size_t i = startIdx; i < hist.size(); ++i) {
                     historyArr.push_back({

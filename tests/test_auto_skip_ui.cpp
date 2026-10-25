@@ -20,8 +20,9 @@
  *     ses / metin hizi satirlari Tercihler arkasina tasindi).
  *  6. Gosterge: A ile AUTO kapsulu sag ustte belirir (bolge farki, disi ayni),
  *     kapaninca kare ilk hikaye karesiyle BIT BIT ayni (bayat kare yok, cache'li
- *     kareler dahil); SKIP (Ctrl basili, okunmamis satir: ilerlemez) kapsulu;
- *     ikisi yan yana; duraklatma / baslik / gecmis acikken gorunmez; menu
+ *     kareler dahil); SKIP kapsulu YALNIZ gercekten atlarken (F1/A-7: Ctrl
+ *     basili + okunmamis satir = kapsul YOK; politika Hepsi ile gercek atlama =
+ *     sag ustte kapsul, tekdüze 400 dugumlu hikayede); ikisi yan yana; duraklatma / baslik / gecmis acikken gorunmez; menu
  *     kapaninca geri gelir.
  *
  * Bilerek-boz: (a) Window::renderComposedFrame'deki m_bakedBadges
@@ -80,17 +81,21 @@ std::string cid(int id) {
 }
 
 // 1..6 chain of plain lines with content ids (unread in a fresh profile).
-std::string buildGraph() {
+// F1 (A-7): `uniform` makes every node look the same and `count` long, so a REAL skip
+// (the SKIP capsule only shows while Skip really skips) walks nodes without the frame
+// changing anywhere but under the capsule.
+std::string buildGraph(int count = 6, bool uniform = false) {
     json nodes = json::array();
-    for (int id = 1; id <= 6; ++id) {
+    for (int id = 1; id <= count; ++id) {
         json dialogue = {{"speaker", "Anlatici"},
-                         {"dialogue", "Bu hikaye satiri " + std::to_string(id) + " icin yeterince uzun bir metin."},
+                         {"dialogue", uniform ? std::string("Bu hikaye satiri icin yeterince uzun bir metin.")
+                                              : "Bu hikaye satiri " + std::to_string(id) + " icin yeterince uzun bir metin."},
                          {"typewriter_enabled", false},
                          {"content_id", cid(id)}};
         json components = json::array(
             {{{"type", "dialogue"}, {"id", "d" + std::to_string(id)}, {"enabled", true}, {"data", dialogue}}});
         json edges = json::array();
-        if (id < 6) edges.push_back({{"id", id + 1}});
+        if (id < count) edges.push_back({{"id", id + 1}});
         nodes.push_back({{"id", id}, {"title", "N" + std::to_string(id)},
                          {"objects", json::array({{{"id", "o" + std::to_string(id)}, {"name", "D"},
                                                    {"is_active", true}, {"components", components}}})},
@@ -244,7 +249,7 @@ void test_auto_skip_ui() {
     const fs::path game2 = root / "game2";
     writeBytes(game2 / "project.rowlproj",
                R"({"project_uuid":"7d3f1b75-7d3e-4e8f-8b21-1d3c8e6f9a78","name":"Auto Skip UI Badges"})");
-    writeBytes(game2 / "Assets" / "json" / "full_story_graph.json", buildGraph());
+    writeBytes(game2 / "Assets" / "json" / "full_story_graph.json", buildGraph(400, true));
 
     const char* previousXdg = std::getenv("XDG_DATA_HOME");
     const std::string savedXdg = previousXdg ? previousXdg : "";
@@ -457,9 +462,16 @@ void test_auto_skip_ui() {
         }
         req(rig.frame() == story, "toggle storm: story frame intact");
 
-        // SKIP: Ctrl held on an unread line shows the capsule without moving the story.
+        // F1 (A-7): Ctrl held on an unread line (read_only) skips nothing, so NO SKIP capsule.
         rig.key(SDLK_LCTRL);
         req(RowlEngine_GetCurrentNodeId(h) == 1, "read_only Ctrl on an unread line does not advance");
+        req(rig.frame() == story, "Ctrl on an unread line: no SKIP capsule (nothing is being skipped)");
+        rig.keyUp(SDLK_LCTRL);
+        req(rig.frame() == story, "releasing Ctrl: still the clean story frame");
+        // A real skip (policy All walks the uniform nodes) shows the capsule top-right only.
+        req(RowlEngine_SetSkipPolicy(h, 2) == ROWL_RESULT_OK, "policy all");
+        rig.key(SDLK_LCTRL);
+        req(RowlEngine_GetCurrentNodeId(h) > 1, "policy all: Ctrl really skips");
         const std::string skipOn = rig.frame();
         {
             const Diff d = diff(story, skipOn);

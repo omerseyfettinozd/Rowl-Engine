@@ -44,6 +44,7 @@ add_executable(rowl_tests
     test_title_screen.cpp
     test_backlog_replay.cpp
     test_backlog_screen.cpp
+    test_f1_audit_fixes.cpp
     test_auto_skip.cpp
     test_auto_skip_ui.cpp
     test_condition_component.cpp
@@ -730,16 +731,11 @@ set_tests_properties(test_p1_7_resize_save PROPERTIES
     TIMEOUT 300
 )
 
-# Rewind dialogueHistory tahsis bütçesi probu. withDialogueHistory her
-# append'de geçmişin tam kopyasını alır ve kopya zincirin her halkasında
-# tutulur; std::vector 2x büyüme + erase'in kapasiteyi geri vermemesi
-# yüzünden tutulan alan ~2x şişer. shrink_to_fit bu sabit çarpanı kaldırır
-# (ölçüm, deterministik capacity — RSS değil: glibc serbest bıraktığı sayfaları
-# geri vermediği için RSS gerçek büyümeyi görmez):
-#   300 advance : 10.234.112 B -> 5.210.912 B (1,96x)
-#   1200 advance: 106.936.512 B -> 53.764.400 B (1,99x)
-# KIRMIZI: bir halka size() < capacity() taşır veya toplam bütçe aşılır.
-# YEŞİL: her halka size()==capacity() ve toplam bütçe içinde.
+# Rewind dialogueHistory bellek bütçesi probu (F1 / A-3). Geçmiş kalıcı
+# (paylaşımlı) bir liste: zincirdeki tüm halkaların geçmişlerinde erişilen
+# FARKLI düğüm sayısı eklenen satır sayısını aşmamalı (eski tasarım: halka
+# sayısı x 500 özel kopya). Deterministik sayaç, RSS değil.
+# KIRMIZI: halkalar arası paylaşım bozulur. YEŞİL: düğüm sayısı = satır sayısı.
 add_executable(rowl_rewind_history_budget_probe test_rewind_history_budget_probe.cpp)
 target_include_directories(rowl_rewind_history_budget_probe PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/include

@@ -232,7 +232,7 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (!m_paused) quickLoad();
             break;
         case Type::Rewind:
-            if (!m_paused) rewind(1);
+            if (!m_paused) rewindNodes(1);  // F1: one press = one node back
             break;
         case Type::PointerDown:
             if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
@@ -243,7 +243,7 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             else { m_skipActive = false; if (!tryEndOfStoryTitle()) advanceToNextNode(); }
             break;
         case Type::SwipeBack:
-            if (!m_paused) rewind(1);
+            if (!m_paused) rewindNodes(1);
             break;
         case Type::Backlog:
             // D03-2: B opens the backlog from the story and closes it again;
@@ -281,6 +281,11 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
                 m_skipStepCredit = 0.05f;
                 resetAutoWait();
             }
+            break;
+        case Type::FocusLost:
+            // F1 (A-9): the KeyUp of a held Ctrl never arrives once the window
+            // lost focus; the hold ends here (an S-started Skip keeps going).
+            m_skipHold = false;
             break;
         case Type::KeyUp:
             // D04-1: releasing Ctrl ends the hold (an S-started Skip keeps going).
@@ -706,6 +711,13 @@ bool Engine::choiceConditionHolds(const std::string& condition) const {
 
 void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     if (m_storyRuntime.empty()) return;
+    // F1: a choice answer belongs to THIS advance only; whatever happens
+    // (typewriter completion, refusal, a node without components) it never
+    // leaks into a later, unrelated node.
+    struct PendingAnswerGuard {
+        std::string& answer;
+        ~PendingAnswerGuard() { answer.clear(); }
+    } pendingAnswerGuard{m_pendingChoiceAnswer};
     // MS-6: the pause menu is modal — story advance is suspended until resume.
     // (Paused Advance/Pointer inputs are rerouted to menu actions before
     // reaching here; this guard seals direct API calls too.)
@@ -753,8 +765,10 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     resolveNodeEntryConditions();
 
     if (m_gameState) {
+        // F1 (A-1): this link is the node ENTRY; the entry commits that follow
+        // (variables, script, audio) belong to the same visit for rewindNodes.
         m_gameState = Rowl::State::GameState::createNextState(
-            m_gameState, m_storyRuntime.currentNodeId());
+            m_gameState, m_storyRuntime.currentNodeId(), "", "", true);
     }
 
     if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
@@ -827,6 +841,16 @@ bool Engine::advanceToChoice(const std::string& optionId) {
         }
     }
 
+    // F1 (A ürün kararı 1): the picked option becomes a backlog row of the node
+    // it leads to (not of the choice node: rewinding to the choice must show
+    // the question unanswered).
+    m_pendingChoiceAnswer.clear();
+    for (const auto& candidate : m_activeChoiceButtons) {
+        if (candidate.optionId == optionId) {
+            m_pendingChoiceAnswer = candidate.text;
+            break;
+        }
+    }
     advanceStory(choice->index, true);
     return m_lastAdvanceRedirected || m_storyRuntime.currentNodeId() == choice->targetNodeId;
 }
@@ -1600,6 +1624,14 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             }
         }
 
+        // F1 (A-6): while Skip is requested the node's sfx / voice clip are held
+        // back (BGM and volumes still apply); they play when Skip stops here.
+        const bool deferEntrySounds = replayEntryEffects && m_isPlaying && isSkipEffective() &&
+            m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId();
+        // Every scene refresh (entry, load, rewind) starts without a held sound.
+        m_deferredEntryNodeId = 0;
+        m_deferredEntrySfx.clear();
+        m_deferredEntryVoice = false;
         for (const auto& data : pendingAudioComponents) {
             if (!replayEntryEffects) continue;
             std::string dsp = data.value("dsp_filter", "Normal");
@@ -1634,8 +1666,11 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             // a property edit repeat the sound. A node may still play several
             // SFX components, but only once for each entry.
             if (!sfx.empty() && m_isPlaying &&
-                m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId())
-                m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+                m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId()) {
+                // F1 (A-6): Skip holds the sfx back until it stops on this node.
+                if (deferEntrySounds) m_deferredEntrySfx.push_back(sfx);
+                else m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+            }
         }
 
         // D03-1: full voice line = node-entry event, same one-shot marker as
@@ -1653,14 +1688,27 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 m_audio->stopVoice();
             if (replayEntryEffects && !m_activeNodeVoiceTrack.empty() &&
                 m_lastSfxPlaybackNodeId != entryNodeId) {
-                m_audio->stopVoice();
-                m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
-                m_voiceClipNodeId = entryNodeId;
+                if (deferEntrySounds) {
+                    m_deferredEntryVoice = true;  // F1 (A-6): played when Skip stops here
+                } else {
+                    m_audio->stopVoice();
+                    m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
+                    m_voiceClipNodeId = entryNodeId;
+                }
             }
         }
 
-        if (m_isPlaying && !pendingAudioComponents.empty())
+        // F1 (A-2): the one-shot marker follows EVERY real node entry, not only
+        // entries of audio nodes. It used to move on audio nodes alone, so after
+        // A(voice) -> B(plain) -> A the marker still named A and A's voice / sfx
+        // stayed silent on the second visit.
+        if (m_isPlaying && (replayEntryEffects || !pendingAudioComponents.empty())) {
             m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+            if (replayEntryEffects && deferEntrySounds &&
+                (m_deferredEntryVoice || !m_deferredEntrySfx.empty())) {
+                m_deferredEntryNodeId = m_storyRuntime.currentNodeId();
+            }
+        }
 
         // #20/#21: script fazi — firlatabilen JSON/VFS okumalari (stage)
         // canli kume dururken kosar; yikim + aktivasyon ancak hepsi
@@ -2436,6 +2484,7 @@ void Engine::step(float deltaTime) {
     // D04-1: player-driven Skip / Auto (separate from the author flag above).
     stepPlayerDrivers(deltaTime, m_storyRuntime.currentNodeId() != driverNodeBefore ||
                                      getCurrentStepId() != driverStepBefore);
+    playDeferredEntrySounds();  // F1 (A-6)
     } // end MS-6 pause freeze of story simulation
 
     // D07-2: achievement toast clock (frozen and hidden while any menu is up).
@@ -2457,7 +2506,7 @@ void Engine::step(float deltaTime) {
     // D04-2: AUTO / SKIP capsules only over a running, unpaused story (never
     // on the title, pause menu, backlog or preferences).
     frame.showAutoBadge = m_isPlaying && !m_paused && m_autoMode;
-    frame.showSkipBadge = m_isPlaying && !m_paused && isSkipEffective();
+    frame.showSkipBadge = m_isPlaying && !m_paused && isSkipping();  // F1 (A-7)
     frame.toastText = unlockToastText();  // D07-2: empty unless a toast is showing
     // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
     // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
@@ -2823,8 +2872,28 @@ void Engine::markScriptStatus(const std::string& moduleId, const std::string& so
 }
 
 const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory() const {
+    // F1: GameState keeps the backlog as a persistent list; the vector view is
+    // memoized per (list identity, locale). A-4: rows that carry a content id
+    // are re-resolved in the ACTIVE locale (the stored text is the fallback),
+    // so a language switch re-translates the whole backlog like the live line.
     static const std::vector<Rowl::State::DialogueHistoryEntry> empty;
-    return (m_gameState && m_gameState->dialogueHistory) ? *m_gameState->dialogueHistory : empty;
+    if (!m_gameState) return empty;
+    const uint64_t identity = m_gameState->dialogueHistory.identity();
+    const std::string& locale = m_localization.getLocale();
+    if (!m_historyViewValid || m_historyViewIdentity != identity || m_historyViewLocale != locale) {
+        m_historyView = m_gameState->dialogueHistory.toVector();
+        for (auto& entry : m_historyView) {
+            if (entry.contentId.empty()) continue;
+            if (!entry.speaker.empty()) {
+                entry.speaker = m_localization.resolveSpeaker(entry.contentId, entry.speaker).value;
+            }
+            entry.dialogue = m_localization.resolveText(entry.contentId, entry.dialogue).value;
+        }
+        m_historyViewIdentity = identity;
+        m_historyViewLocale = locale;
+        m_historyViewValid = true;
+    }
+    return m_historyView;
 }
 
 void Engine::recordActiveDialogueHistory() {
@@ -2834,21 +2903,38 @@ void Engine::recordActiveDialogueHistory() {
     // presentation (also when nothing is recorded: a node re-entered with the
     // same id is still presented).
     refreshReadSnapshot();
+    const bool answered = !m_pendingChoiceAnswer.empty();
     if (!m_isPlaying || !m_gameState || m_storyRuntime.currentNodeId() == 0 ||
-        m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId() ||
-        m_activeDialogues.empty()) {
+        (!answered && m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId()) ||
+        (m_activeDialogues.empty() && !answered)) {
         return;
     }
     std::vector<Rowl::State::DialogueHistoryEntry> entries;
-    entries.reserve(m_activeDialogues.size());
+    entries.reserve(m_activeDialogues.size() + 1);
+    if (answered) {
+        // The answer row: no speaker, no voice, no content id, never marked read.
+        Rowl::State::DialogueHistoryEntry answer;
+        answer.nodeId = m_storyRuntime.currentNodeId();
+        answer.dialogue = m_pendingChoiceAnswer;
+        answer.choice = true;
+        entries.push_back(std::move(answer));
+        m_pendingChoiceAnswer.clear();
+    }
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
             // D01c-1: presented to the player (play state, same point as the
             // backlog) -> read. Legacy lines have no id and are never marked.
             if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
+            // A-4: keep the node-original text; a row with a content id is
+            // re-resolved in the ACTIVE locale when the backlog is shown.
+            const bool keepOriginal = !dialogue.contentId.empty();
             entries.push_back(
-                {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
-                 dialogue.contentId, m_activeNodeVoiceTrack});
+                {m_storyRuntime.currentNodeId(),
+                 keepOriginal && !dialogue.originalSpeaker.empty() ? dialogue.originalSpeaker
+                                                                   : dialogue.speaker,
+                 keepOriginal && !dialogue.originalDialogue.empty() ? dialogue.originalDialogue
+                                                                    : dialogue.dialogue,
+                 true, dialogue.contentId, m_activeNodeVoiceTrack});
         }
     }
     if (!entries.empty()) {
@@ -2867,7 +2953,10 @@ bool Engine::replayBacklogVoice(size_t index) {
     const uint32_t clipsBefore = m_audio->getVoiceClipCount();
     m_audio->stopVoice();
     m_audio->playAudio(voicePath, Rowl::Audio::AudioChannelType::Voice);
-    return m_audio->getVoiceClipCount() != clipsBefore;
+    const bool started = m_audio->getVoiceClipCount() != clipsBefore;
+    // F1 (karar 6): the replayed clip belongs to the open backlog page.
+    if (started) m_backlogReplayActive = true;
+    return started;
 }
 
 void Engine::refreshActiveDialogueLocalization() {
@@ -2965,6 +3054,7 @@ void Engine::resetSessionProfile() {
     m_pauseMode   = PauseMenuMode::Main;
     m_pauseSelected = 0;
     m_backlogTop = 0;  // D03-2
+    m_backlogLineOffset = 0;
     m_backlogFromPause = false;
     m_prefsFromPause = false;  // D05-2
     m_extrasTop = 0;           // D07-2 (the audio engine is gone already)
@@ -3111,9 +3201,16 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
             break;
         }
     }
-    if (m_gameState && m_gameState->dialogueHistory && !m_gameState->dialogueHistory->empty()) {
-        metadata.summary = Rowl::State::truncateSummary(
-            m_gameState->dialogueHistory->back().dialogue);
+    if (m_gameState) {
+        // Last presented dialogue line (a choice row is not a line), in the
+        // active language like the live line.
+        const auto& history = getDialogueHistory();
+        for (size_t i = history.size(); i > 0; --i) {
+            const auto& entry = history[i - 1];
+            if (entry.choice) continue;
+            metadata.summary = Rowl::State::truncateSummary(entry.dialogue);
+            break;
+        }
     }
     uint32_t width = 0, height = 0, pitch = 0;
     const uint8_t* pixels = getPixelBuffer(&width, &height, &pitch);
@@ -3472,17 +3569,35 @@ bool Engine::rewind(uint64_t steps) {
         }
         return false;
     }
-    auto rewound = Rowl::State::SessionPersistence::rewind(m_gameState, steps);
+    return applyRewoundState(Rowl::State::SessionPersistence::rewind(m_gameState, steps),
+                             "rewind", steps);
+}
+
+bool Engine::rewindNodes(uint64_t nodes) {
+    if (!m_initialized) {
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Cannot rewind: engine is not initialized",
+                                "rewind_nodes", std::to_string(nodes));
+        }
+        return false;
+    }
+    return applyRewoundState(Rowl::State::SessionPersistence::rewindNodes(m_gameState, nodes),
+                             "rewind_nodes", nodes);
+}
+
+bool Engine::applyRewoundState(std::shared_ptr<const Rowl::State::GameState> rewound,
+                               const char* what, uint64_t steps) {
     if (!rewound) {
         // D4/R-48: refuse-yolu last-result'a yazılmadan 0 dönüyordu; host
         // bayat Ok kodunu okuyup hatayı kaçırıyordu. Fail-loud.
         m_context->setError(RuntimeErrorCode::InvalidArgument,
                             steps == 0
                                 ? "Cannot rewind zero steps"
-                                : "Cannot rewind " + std::to_string(steps) +
-                                      " steps from step #" +
-                                      std::to_string(getCurrentStepId()),
-                            "rewind", std::to_string(steps));
+                                : std::string("Cannot rewind ") + std::to_string(steps) +
+                                      (std::string(what) == "rewind_nodes" ? " node(s)" : " steps") +
+                                      " from step #" + std::to_string(getCurrentStepId()),
+                            what, std::to_string(steps));
         return false;
     }
 
@@ -3579,14 +3694,16 @@ bool Engine::rewind(uint64_t steps) {
         m_context->setError(RuntimeErrorCode::UnknownError,
                             std::string("Rewind restore failed; session rolled back: ") +
                                 restoreError.what(),
-                            "rewind", std::to_string(steps));
+                            what, std::to_string(steps));
         return false;
     }
     // D04-1: same as load - snapshot from the read set, Skip / Auto start over.
     refreshReadSnapshot();
     m_skipActive = false;
-    resetAutoWait();
-    m_context->setSuccess("rewind", std::to_string(steps));
+    // F1 (karar 3): going back ends Auto for the session (the profile keeps the
+    // player's remembered Auto choice; only the live driver and its badge stop).
+    setAutoMode(false);
+    m_context->setSuccess(what, std::to_string(steps));
     return true;
 }
 

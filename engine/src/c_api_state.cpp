@@ -20,6 +20,18 @@ extern "C" {
 // R1 (#6): WithLength boyutları bu tamponlardan alır.
 static thread_local std::string g_scriptDiagnosticsBuf;
 static thread_local std::string g_dialogueHistoryBuf;
+
+// One row of the history JSON (both the const char* and the caller-buffer
+// variants must stay byte-identical). F1: "choice" marks the player's answer.
+static nlohmann::json dialogueHistoryEntryJson(const Rowl::State::DialogueHistoryEntry& entry) {
+    return {
+        {"node_id", entry.nodeId}, {"speaker", entry.speaker},
+        {"dialogue", entry.dialogue}, {"read", entry.read},
+        {"content_id", entry.contentId},
+        {"voice", entry.voice},
+        {"choice", entry.choice},
+    };
+}
 static thread_local std::string g_variableBuf;
 static thread_local std::string g_lastResultOpBuf;
 static thread_local std::string g_lastResultMsgBuf;
@@ -53,12 +65,7 @@ const char* RowlEngine_GetDialogueHistoryJson(RowlEngineHandle handle) {
         auto checked = toEngineChecked(handle);
         if (!checked) return "[]";
         for (const auto& entry : checked->getDialogueHistory()) {
-            history.push_back({
-                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
-                {"dialogue", entry.dialogue}, {"read", entry.read},
-                {"content_id", entry.contentId},
-                {"voice", entry.voice},
-            });
+            history.push_back(dialogueHistoryEntryJson(entry));
         }
         buffer = history.dump();
         return buffer.c_str();
@@ -109,12 +116,7 @@ RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
         for (const auto& entry : engine->getDialogueHistory()) {
-            history.push_back({
-                {"node_id", entry.nodeId}, {"speaker", entry.speaker},
-                {"dialogue", entry.dialogue}, {"read", entry.read},
-                {"content_id", entry.contentId},
-                {"voice", entry.voice},
-            });
+            history.push_back(dialogueHistoryEntryJson(entry));
         }
         return copyUtf8ToCaller(history.dump(), buffer,
                                 bufferSize, outRequiredSize);
@@ -230,6 +232,19 @@ int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps) {
     return invokeNoexcept<int>([&] {
         auto checked = toEngineChecked(handle);
         return (checked && checked->rewind(steps)) ? 1 : 0;
+    }, 0);
+}
+
+int RowlEngine_RewindNodes(RowlEngineHandle handle, uint32_t nodes) {
+    // F1: same thread gate as RowlEngine_Rewind (writes the m_gameState chain).
+    if (claimHandleOrClassify(handle) == HandleStanding::Foreign) {
+        stampWrongThread(handle, "rewind_nodes");
+        return 0;
+    }
+    if (!isLiveHandle(handle)) return 0;
+    return invokeNoexcept<int>([&] {
+        auto checked = toEngineChecked(handle);
+        return (checked && checked->rewindNodes(nodes)) ? 1 : 0;
     }, 0);
 }
 

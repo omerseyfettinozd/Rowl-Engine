@@ -165,10 +165,12 @@ chapter 2):
   streaming decision) and replays no entry effect; loading a pre-boundary save
   from inside chapter 2 returns to chapter 1 and its memory track.
 - Rewind across the boundary returns to the earlier chapter and its music and
-  replays no sfx. `Rewind(1)` moves one state link, and a node with entry
-  effects owns several links (a variable and a BGM change each add one), so a
-  player may need several presses to leave a node; every landing in between is
-  still a consistent state of that node.
+  replays no sfx. The player's Backspace (`RowlEngine_RewindNodes(1)`) moves
+  one NODE back and lands on the last link of the previous node (its variables,
+  music and history line intact). The raw `RowlEngine_Rewind(1)` still moves
+  one state link, and a node with entry effects owns several links (a variable
+  and a BGM change each add one); every landing in between is still a
+  consistent state of that node.
 - The chapter files of a split project never decide play: the runtime plays
   `json/full_story_graph.json`; the files only feed prefetch
   (`PREFETCH_AND_CHAPTERS_CONTRACT.md` section 8).

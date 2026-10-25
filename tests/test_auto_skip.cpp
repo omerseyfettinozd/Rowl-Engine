@@ -528,7 +528,13 @@ void test_auto_skip() {
         rig.step(0.25f, 6);
         req(RowlEngine_Rewind(rig.h, 1) == 1, "rewind");
         rig.step(0.1f);
-        req(near(rig.remaining(), fresh), "rewind resets the credit: " + std::to_string(rig.remaining()));
+        // F1 (karar 3): going back ends Auto for the session; the credit is gone with it
+        // and switching Auto on again starts a fresh wait.
+        req(!rig.autoOn() && near(rig.remaining(), 0.0f),
+            "rewind ends Auto and its credit: " + std::to_string(rig.remaining()));
+        req(RowlEngine_SetAutoMode(rig.h, 1) == ROWL_RESULT_OK, "Auto on again after the rewind");
+        rig.step(0.1f);
+        req(near(rig.remaining(), fresh), "Auto after a rewind starts a fresh wait: " + std::to_string(rig.remaining()));
 
         // language change
         rig.step(0.25f, 6);
@@ -536,7 +542,7 @@ void test_auto_skip() {
         rig.step(0.1f);
         req(near(rig.remaining(), fresh), "language change resets the credit: " + std::to_string(rig.remaining()));
     }
-    TEST_PASS("Auto: manual advance, load, rewind and language change reset the credit");
+    TEST_PASS("Auto: manual advance, load and language change reset the credit; rewind ends Auto");
 
     // 2g. The node's own voice clip is waited out (cap 30 s in total).
     {

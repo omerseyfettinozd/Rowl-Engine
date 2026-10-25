@@ -47,6 +47,7 @@ void Engine::setPaused(bool paused) {
     m_pauseSelected = 0;
     m_pauseConfirmQuit = false;
     m_backlogTop = 0;  // D03-2: a fresh open never inherits backlog state
+    m_backlogLineOffset = 0;
     m_backlogFromPause = false;
     m_prefsFromPause = false;  // D05-2
     // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
@@ -140,6 +141,7 @@ void Engine::menuActivateSelected() {
             m_pauseConfirmQuit = false;
             m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
             m_backlogTop = m_pauseSelected;
+            m_backlogLineOffset = 0;
             backlogEnsureVisible();
             break;
         case PauseMenuLayout::kMainTitleRow:
@@ -420,6 +422,14 @@ std::string Engine::getPauseMenuJson() const {
             appendPauseMenuJsonString(out, entry.speaker);
             out += ",\"dialogue\":";
             appendPauseMenuJsonString(out, entry.dialogue);
+            out += ",\"lines\":[";  // F1: what is drawn (selected row = full text window)
+            for (size_t l = 0; l < entry.lines.size(); ++l) {
+                if (l > 0) out.push_back(',');
+                appendPauseMenuJsonString(out, entry.lines[l]);
+            }
+            out.push_back(']');
+            out += ",\"choice\":";
+            out += entry.choice ? "true" : "false";
             out += ",\"has_voice\":";
             out += entry.hasVoice ? "true" : "false";
             out += ",\"selected\":";

@@ -249,6 +249,10 @@ void Window::pollEvents(bool& outShouldQuit) {
             case SDL_EVENT_FINGER_CANCELED:
                 m_touchStarts.erase(event.tfinger.fingerID);
                 break;
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                if (m_inputHandler) m_inputHandler(
+                    Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::FocusLost));
+                break;
             case SDL_EVENT_WINDOW_RESIZED:
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                 int rw = 0, rh = 0;

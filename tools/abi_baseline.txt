@@ -204,6 +204,7 @@ RowlEngine_ResetVoiceBlipCount
 RowlEngine_ResizeViewport
 RowlEngine_ResizeViewportChecked
 RowlEngine_Rewind
+RowlEngine_RewindNodes
 RowlEngine_Run
 RowlEngine_RunWithFrameCallback
 RowlEngine_SaveGameSlot

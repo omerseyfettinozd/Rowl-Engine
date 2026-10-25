@@ -99,6 +99,7 @@ struct PauseBacklogEntryView {
     std::string dialogue;     // full text (JSON); `lines` is what is drawn
     std::vector<std::string> lines;
     bool hasVoice = false;
+    bool choice = false;      // F1: the player's own answer row ("> option")
     bool selected = false;
 };
 

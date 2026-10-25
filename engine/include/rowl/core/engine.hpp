@@ -256,6 +256,11 @@ public:
     bool isSkipActive() const { return m_skipActive; }
     /// True while skip is requested by S or by holding Ctrl.
     bool isSkipEffective() const { return (m_skipActive || m_skipHold) && m_skipPolicy != SkipPolicy::Off; }
+    /// F1 (A-6/A-7): Skip is REALLY skipping here - requested (S / Ctrl) AND
+    /// the current node can be skipped over (no open choice menu, a next node
+    /// exists, the line is allowed by the policy). Drives the SKIP badge and
+    /// the voice/sfx mute; isSkipEffective() alone only says it was requested.
+    bool isSkipping() const;
     void setSkipPolicy(SkipPolicy policy);
     SkipPolicy getSkipPolicy() const { return m_skipPolicy; }
     /// NaN keeps the last value; finite values clamp to [0, 10].
@@ -465,6 +470,12 @@ public:
     /// scene, Lua sandbox, playtime clock and live audio mixer to the target
     /// step; failure restores the pre-rewind session and fails loud.
     bool rewind(uint64_t steps = 1);
+    /// F1 (A-1): the player's "back": rewinds by NODE visits (see
+    /// GameState::rewindNodes) - lands on the last link of the previous node,
+    /// so every entry commit of that node (variables, music, backlog line) is
+    /// intact. Same rollback contract as rewind(); false when there is no
+    /// earlier node.
+    bool rewindNodes(uint64_t nodes = 1);
     uint64_t getCurrentStepId() const;
     /// stepId right after the engine presented the start node (graph load,
     /// reset, endSession). The start node's own entry effects are not
@@ -682,6 +693,15 @@ private:
     // entry (the clip is cut when a different node is entered).
     std::string m_activeNodeVoiceTrack;
     uint64_t m_voiceClipNodeId = 0;
+    // F1 (A-6): entry sounds (sfx list + the node's voice clip) that Skip held
+    // back; played by playDeferredEntrySounds once Skip stops on that node.
+    uint64_t m_deferredEntryNodeId = 0;
+    std::vector<std::string> m_deferredEntrySfx;
+    bool m_deferredEntryVoice = false;
+    // F1 (karar 6): the Voice channel currently carries a clip replayed from
+    // the backlog; closing the backlog stops it (the node's own voice is not
+    // restarted).
+    bool m_backlogReplayActive = false;
 
     // E2b sunum-durumu (canli listeye dokunmaz; yalnizca kare-birlestirmede
     // okunur — bkz. ustteki metot blogu).
@@ -705,7 +725,35 @@ private:
     // D03-2: backlog page. m_pauseSelected is the selected history index;
     // m_backlogTop the first visible one (kept consistent by backlogEnsureVisible,
     // mutable because the const view builder re-fits it after a font/scale change).
+    /// Shared tail of rewind()/rewindNodes(): restores `rewound` (scene, Lua,
+    /// audio, playtime) with the load-style rollback; `what`/`amount` label logs.
+    bool applyRewoundState(std::shared_ptr<const Rowl::State::GameState> rewound,
+                           const char* what, uint64_t amount);
     mutable int m_backlogTop = 0;
+    // F1 (A-5): first visible line inside the selected (long) row; reset
+    // whenever the selection moves.
+    mutable int m_backlogLineOffset = 0;
+    // Wrapped lines of the selected row, memoized (full text, up to 64 KiB).
+    struct BacklogWrapCache {
+        uint64_t identity = 0;
+        std::string locale;
+        int index = -1;
+        float scale = 0.0f;
+        bool haveFont = false;
+        std::vector<std::string> lines;
+        bool valid = false;
+    };
+    mutable BacklogWrapCache m_backlogWrapCache;
+    // F1 (A ürün kararı 1): option text of the choice just answered; consumed
+    // by recordActiveDialogueHistory as a "choice" row of the NEXT node.
+    std::string m_pendingChoiceAnswer;
+    // F1 (A-3/A-4): the backlog view is a memoized copy of the persistent
+    // GameState list, with content-id rows re-resolved in the active locale.
+    // Key = list identity + locale; rebuilt only when either changes.
+    mutable std::vector<Rowl::State::DialogueHistoryEntry> m_historyView;
+    mutable uint64_t m_historyViewIdentity = 0;
+    mutable std::string m_historyViewLocale;
+    mutable bool m_historyViewValid = false;
     bool m_backlogFromPause = false;
     // D05-2: the Preferences page was opened from the pause main page (Back and
     // Esc return there); false = opened from the title screen.
@@ -758,6 +806,7 @@ private:
     /// language change, title, new game).
     void resetAutoWait();
     void stepPlayerDrivers(float deltaTime, bool advancedThisStep);
+    void playDeferredEntrySounds();
     float autoWaitSeconds() const;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
@@ -832,6 +881,11 @@ private:
     struct BacklogCell {
         std::vector<std::string> lines;
         float height = 0.0f;
+        // F1 (A-5): the SELECTED row shows its whole text; when it outgrows the
+        // list area `lines` is a window of `fitLines` lines starting at
+        // m_backlogLineOffset out of `totalLines`.
+        size_t totalLines = 0;
+        size_t fitLines = 0;
     };
     BacklogCell backlogCell(size_t index) const;
     void backlogEnsureVisible() const;

@@ -1380,6 +1380,18 @@ ROWL_API int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotInde
  * Requires a prior RowlEngine_Init (D1/B1b): pre-init rewind returns 0 with StateError. */
 ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
 
+/** F1 (additive): node-granular rewind - the player's "back" action. Rewinds
+ * by `nodes` NODE visits (not state links): a node's entry can write several
+ * links (variable / script / audio commits); this lands on the LAST link of the
+ * previous node, i.e. the state after all of that node's entry effects
+ * (variables, music, backlog line), so one call = one node back.
+ * RowlEngine_Rewind(steps) keeps its raw state-link meaning for hosts that
+ * address individual links. Also ends Auto for the session. Returns 1 on
+ * success, 0 when there is no earlier node (the first node, or a loaded
+ * chain without one) or on failure; same init/rollback contract as
+ * RowlEngine_Rewind. Hosts detect it via the symbol (no capability bit). */
+ROWL_API int RowlEngine_RewindNodes(RowlEngineHandle handle, uint32_t nodes);
+
 /** Returns the current history step ID. */
 ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
 

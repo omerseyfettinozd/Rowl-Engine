@@ -218,6 +218,7 @@ int main(int argc, char* argv[]) {
     test_title_screen();
     test_backlog_replay();
     test_backlog_screen();
+    test_f1_audit_fixes();
     test_auto_skip();
     test_auto_skip_ui();
     test_condition_component();
