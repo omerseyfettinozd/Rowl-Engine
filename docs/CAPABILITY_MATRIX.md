@@ -125,8 +125,9 @@ helpers it calls. "Editor" means the field written by `editor/ViewModels/Compone
    `collectNodeAssets` together with its test.
 2. `character.expressions` is dead data at run time. Decision needed: keep the "bake at author
    time" rule (and say so in the editor) or add a runtime expression selector.
-3. Rewind granularity: `Rewind(1)` moves one state link, and a node with entry effects (variable,
-   BGM change) owns several links, so a single Backspace can land on the same node with its effects
-   undone. Observed in `test_chapter_boundary_persistence.cpp` (it presses until the node changes).
-   Not changed here.
+3. Rewind granularity (fixed in F1): the player's Backspace / swipe-back now rewinds one NODE
+   (`Engine::rewindNodes`, `RowlEngine_RewindNodes`): it lands on the last state link of the previous
+   node, i.e. after all of that node's entry commits (variables, script, music, history line).
+   `RowlEngine_Rewind(steps)` stays the raw state-link step for hosts that address single links
+   (the editor's timeline); a node with entry effects owns several links there.
 4. Auto / Skip exist twice (C# editor drivers, native player drivers) with no parity test.

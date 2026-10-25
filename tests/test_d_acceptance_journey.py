@@ -238,6 +238,11 @@ class Model:
         raise Fail("no ending reachable in the graph model")
 
 
+def story_rows(history):
+    """History rows that are story lines (F1: the player's own answers are extra "choice" rows)."""
+    return [h for h in history if not h.get("choice")]
+
+
 def number(text):
     return float(text)
 
@@ -321,6 +326,8 @@ class Engine:
         self.PointerDown = f("RowlEngine_PointerDown", c.c_int, HANDLE, c.c_float, c.c_float)
         self.AdvanceC = f("RowlEngine_AdvanceNode", None, HANDLE, c.c_uint32)
         self.RewindC = f("RowlEngine_Rewind", c.c_int, HANDLE, c.c_uint32)
+        # F1: the player's Backspace is "one node back" (RowlEngine_Rewind stays the raw link step).
+        self.RewindNodesC = f("RowlEngine_RewindNodes", c.c_int, HANDLE, c.c_uint32)
         self.OpenBacklogC = f("RowlEngine_OpenBacklog", c.c_int32, HANDLE)
         self.SetAutoC = f("RowlEngine_SetAutoMode", c.c_int32, HANDLE, c.c_int)
         self.SetSkipC = f("RowlEngine_SetSkipActive", c.c_int32, HANDLE, c.c_int)
@@ -492,7 +499,7 @@ class Engine:
                 self.SetPaused(self.h, 0 if paused else 1)
         elif name == "bksp":
             if not paused:
-                self.RewindC(self.h, 1)
+                self.RewindNodesC(self.h, 1)
         elif name == "b":
             if menu.get("mode") == 5:
                 self.PauseCmd(self.h, 4)
@@ -908,9 +915,14 @@ def phase_resume(ctx, model, eng):
     check(sha(slot_file) == state["save"]["hash"], "loading does not rewrite the slot")
     hist = eng.history()
     saved_path = state["save"]["path"]
-    check([h["node_id"] for h in hist] == saved_path and
-          [h["dialogue"] for h in hist] == [model.text(n) for n in saved_path],
+    lines = story_rows(hist)
+    check([h["node_id"] for h in lines] == saved_path and
+          [h["dialogue"] for h in lines] == [model.text(n) for n in saved_path],
           "the history was restored line by line", f"{len(hist)} rows")
+    answers = [h for h in hist if h.get("choice")]
+    check(all(h["speaker"] == "" and h["voice"] == "" and h["dialogue"] for h in answers),
+          "the player's answers came back as speaker-less history rows",
+          json.dumps(answers)[:200])
     meta = eng.json("meta", 1)
     check(meta["summary"] == state["save"]["meta_summary"] and meta["chapter_id"] == "",
           "the slot metadata still matches what was saved")
@@ -925,12 +937,17 @@ def phase_resume(ctx, model, eng):
     menu = eng.menu()
     check(menu["mode"] == 5, "B opens the history (Geçmiş)")
     backlog = menu["backlog"]
-    check(backlog["total"] == len(saved_path) and backlog["selected"] == backlog["total"] - 1,
-          "history lists every line, the newest selected", f"{backlog['total']} {backlog['selected']}")
+    check(backlog["total"] == len(hist) and backlog["selected"] == backlog["total"] - 1,
+          "history lists every line and answer, the newest selected", f"{backlog['total']} {backlog['selected']}")
     window = backlog["entries"]
     for entry in window:
-        check(entry["dialogue"] == model.text(saved_path[entry["index"]]),
-              f"history row {entry['index']} is the graph's line for node {saved_path[entry['index']]}")
+        row = hist[entry["index"]]
+        if row.get("choice"):
+            check(entry["choice"] is True and entry["dialogue"] == row["dialogue"],
+                  f"history row {entry['index']} is the player's answer")
+        else:
+            check(entry["dialogue"] == model.text(row["node_id"]),
+                  f"history row {entry['index']} is the graph's line for node {row['node_id']}")
     eng.shot("history")
     for _ in range(3):
         eng.press("up")
@@ -1021,9 +1038,9 @@ def phase_playon(ctx, model, eng):
     check(eng.node() == saved["node"], "Oyunu Yükle returns to the saved node mid-session")
     cur.update(node=saved["node"], vars=dict(saved["vars"]), path=list(saved["path"]))
     step_forward(eng, model, cur, expect_node=first_after_save)
-    check([h["node_id"] for h in eng.history()] == cur["path"],
+    check([h["node_id"] for h in story_rows(eng.history())] == cur["path"],
           "after a mid-session load, walking back into the same node records its line once",
-          f"{[h['node_id'] for h in eng.history()][-6:]} vs {cur['path'][-6:]}")
+          f"{[h['node_id'] for h in story_rows(eng.history())][-6:]} vs {cur['path'][-6:]}")
     # --- 9a. Skip (read lines only) -----------------------------------------------------
     check(eng.driver()["skip_policy"] == "read_only" and not eng.driver()["skip_active"], "Skip policy is 'read only'")
     walked = []
@@ -1097,13 +1114,11 @@ def phase_playon(ctx, model, eng):
     expect_vars(eng, after_vars, "after the choice")
     check(after_vars != before_vars, "the choice node has a variable side effect to watch")
     hist_after = len(eng.history())
-    presses = 0
     stepid = eng.world()["stepId"]
-    while eng.node() != rewind_node and presses < 6:
-        eng.press("bksp")
-        presses += 1
-    check(eng.node() == rewind_node, "Backspace rewinds to the choice screen",
-          f"engine node {eng.node()} after {presses} presses")
+    presses = 1
+    eng.press("bksp")  # F1: ONE Backspace is one node back, however many links the node's entry wrote
+    check(eng.node() == rewind_node, "ONE Backspace rewinds to the choice screen",
+          f"engine node {eng.node()} after {presses} press")
     note(f"rewind: {presses} Backspace press(es) to leave node {target} (steps {stepid} -> {eng.world()['stepId']})")
     expect_vars(eng, before_vars, "after the rewind the variables are the earlier ones")
     check(len(eng.history()) == hist_before, "after the rewind the history is the earlier one",
@@ -1127,6 +1142,7 @@ def phase_playon(ctx, model, eng):
     goal = set(model.ending_unlock(ending))
     scripted_checked = False
     scripted_digit = False
+    component_rewound = False
     for node, option_id in plan:
         if model.is_choice(cur["node"]):
             eng.settle()
@@ -1139,6 +1155,23 @@ def phase_playon(ctx, model, eng):
             else:
                 eng.click_choice(option_id)
             check(eng.node() == node, f"route: {option_id!r} -> node {node}", f"engine node {eng.node()}")
+            if not component_rewound and (list(model.comps(node, "variable")) or list(model.comps(node, "audio"))):
+                # F1: a node with component entry effects (variable / music write several links):
+                # ONE Backspace returns to the choice with the earlier variables, the same choice
+                # lands on the node again with its effects applied once.
+                component_rewound = True
+                choice_node, vars_before = cur["node"], dict(cur["vars"])
+                rows_after = len(eng.history())
+                eng.press("bksp")
+                check(eng.node() == choice_node, f"component node {node}: ONE Backspace returns to the choice",
+                      f"engine node {eng.node()}")
+                expect_vars(eng, vars_before, f"component node {node}: variables back to the choice's")
+                check(len(eng.history()) < rows_after, f"component node {node}: its history rows left with it")
+                eng.settle()
+                eng.click_choice(option_id)
+                check(eng.node() == node, f"component node {node}: the same choice reaches it again")
+                check(len(eng.history()) == rows_after, f"component node {node}: no duplicate history rows",
+                      f"{len(eng.history())} vs {rows_after}")
             cur["vars"] = model.enter(cur["vars"], node)
             cur["node"] = node
             cur["path"].append(node)
@@ -1207,11 +1240,8 @@ def check_scripted_node(eng, model, cur, node):
           f"a save made on the scripted node {node} holds the script's variable change",
           f"saved {saved_vars} expected {vars_at}")
     step_forward(eng, model, cur)
-    presses = 0
-    while eng.node() != node and presses < 6:
-        eng.press("bksp")
-        presses += 1
-    check(eng.node() == node, f"Backspace rewinds onto the scripted node {node}", f"engine node {eng.node()}")
+    eng.press("bksp")  # F1: one press, not "until it lands" (a scripted node writes several links)
+    check(eng.node() == node, f"ONE Backspace rewinds onto the scripted node {node}", f"engine node {eng.node()}")
     expect_vars(eng, vars_at, f"after the rewind onto the scripted node {node} the script's change is still there")
     cur["node"], cur["vars"] = node, vars_at
 

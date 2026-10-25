@@ -156,14 +156,14 @@ void test_bgm_continuity() {
     // 1. Rewind inside the same track: no restart, volume restored from the state.
     plantLatch();
     audio->setBgmVolume(0.9f);
-    req(RowlEngine_Rewind(h, 1) == 1, "rewind failed");
+    req(RowlEngine_RewindNodes(h, 1) == 1, "rewind failed");
     settle();
     req(RowlEngine_GetCurrentNodeId(h) == 2, "rewound to node 2");
     req(latchIntact(), "rewind restarted the playing track (playAudio ran)");
     req(audio->isBgmPlaying() && audio->getCurrentBgmPath() == "a.wav", "track A must still be playing");
     req(std::abs(audio->getBgmVolume() - 0.5f) < 1e-6f, "the BGM volume is still restored from the state");
     plantLatch();
-    req(RowlEngine_Rewind(h, 1) == 1, "second rewind failed");
+    req(RowlEngine_RewindNodes(h, 1) == 1, "second rewind failed");
     settle();
     req(latchIntact() && audio->getCurrentBgmPath() == "a.wav", "a second Backspace restarts nothing either");
     TEST_PASS("Rewind within the same track leaves the music alone, volume still restored");
@@ -173,12 +173,11 @@ void test_bgm_continuity() {
     advance(3);
     advance(4);
     req(audio->getCurrentBgmPath() == "b.wav", "node 4 switches to track B");
-    // A node that commits audio takes two state steps (node + audio), so one
-    // Backspace may stay on the node: rewind until the earlier node shows.
-    for (int i = 0; i < 3 && RowlEngine_GetCurrentNodeId(h) != 3; ++i) {
-        req(RowlEngine_Rewind(h, 1) == 1, "rewind failed");
-        settle();
-    }
+    // F1 (A-1): a node that commits audio writes two state links (node + audio);
+    // the player's Backspace is ONE node back, so a single call lands on node 3
+    // with track A (this used to need "rewind until the earlier node shows").
+    req(RowlEngine_RewindNodes(h, 1) == 1, "rewind failed");
+    settle();
     req(RowlEngine_GetCurrentNodeId(h) == 3, "rewound to node 3, got " + std::to_string(RowlEngine_GetCurrentNodeId(h)));
     req(audio->isBgmPlaying() && audio->getCurrentBgmPath() == "a.wav",
         "rewinding before the switch brings track A back, got '" + audio->getCurrentBgmPath() + "'");
@@ -187,7 +186,7 @@ void test_bgm_continuity() {
     // 3. A stopped BGM is started again when the state says it should be playing.
     audio->stopBgm();
     req(!audio->isBgmPlaying(), "stopBgm did not stop");
-    RowlEngine_Rewind(h, 1);
+    RowlEngine_RewindNodes(h, 1);
     settle();
     req(audio->isBgmPlaying() && audio->getCurrentBgmPath() == "a.wav",
         "a stopped track must come back when the restored state is playing");

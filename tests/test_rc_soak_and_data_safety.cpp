@@ -294,9 +294,7 @@ void test_rc_soak_and_data_safety() {
                     exit(1);
                 }
                 expectedStep = savedProbe.state->stepId;
-                expectedHist = savedProbe.state->dialogueHistory
-                                   ? savedProbe.state->dialogueHistory->size()
-                                   : 0;
+                expectedHist = savedProbe.state->dialogueHistory.size();
                 if (savedProbe.state->activeNodeId != expected) {
                     std::cerr << "N-stress slot node disagrees at iteration " << i
                               << std::endl;
@@ -332,9 +330,8 @@ void test_rc_soak_and_data_safety() {
             }
             if (deepCheck) {
                 const auto loadedProbe = probe.loadSlotDetailed(slot);
-                const size_t loadedHist = (loadedProbe.succeeded() && loadedProbe.state &&
-                                           loadedProbe.state->dialogueHistory)
-                                              ? loadedProbe.state->dialogueHistory->size()
+                const size_t loadedHist = (loadedProbe.succeeded() && loadedProbe.state)
+                                              ? loadedProbe.state->dialogueHistory.size()
                                               : static_cast<size_t>(-1);
                 if (!loadedProbe.succeeded() || !loadedProbe.state ||
                     loadedProbe.state->stepId != expectedStep ||

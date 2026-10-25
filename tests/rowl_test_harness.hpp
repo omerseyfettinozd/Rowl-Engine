@@ -213,6 +213,7 @@ void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt
 void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi kilidi
 void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
 void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
+void test_f1_audit_fixes();  // F1: dugum geri sarma, kalici gecmis, giris sesleri, gecmis ekrani
 void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
 void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
 void test_chapter_boundary_persistence();  // D06-3: bolum siniri kayit/yukle/geri sarma + muzik + oyuncu prefetch surucusu

@@ -15,6 +15,7 @@
 
 #include "rowl/core/engine.hpp"
 
+#include "rowl/audio/audio_engine.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/render/font_renderer.hpp"
 #include "rowl/text/markup_parser.hpp"
@@ -30,7 +31,9 @@ namespace {
 
 using LM = PauseMenuLayout;
 
-constexpr size_t kBacklogWrapInputBytes = 2048;  // never shape 64 KiB per frame
+constexpr size_t kBacklogWrapInputBytes = 2048;  // unselected rows: never shape 64 KiB per frame
+constexpr size_t kBacklogSelectedInputBytes = 64 * 1024;  // selected row: whole text, wrapped once
+const std::string kChoiceMark = "> ";  // F1: marks the player's own answer row
 constexpr size_t kFallbackLineCodepoints = 44;   // no font: coarse hard wrap
 
 // UTF-8 safe prefix: never cuts inside a multi-byte sequence.
@@ -81,22 +84,64 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
     Rowl::Render::FontRenderer* fonts = m_window ? m_window->getMenuFontRenderer() : nullptr;
     const bool haveFont = fonts && fonts->isLoaded();
     // Accessibility text scale grows glyphs (and so the line pitch) with it.
-    const float lineH = LM::kBacklogLineH * (haveFont ? std::max(1.0f, fonts->textScale()) : 1.0f);
+    const float scale = haveFont ? std::max(1.0f, fonts->textScale()) : 1.0f;
+    const float lineH = LM::kBacklogLineH * scale;
+    // F1: the player's own answer is a "> option" row without a speaker.
     const float speakerH = entry.speaker.empty() ? 0.0f : lineH;
-
-    const std::string input = utf8Prefix(entry.dialogue, kBacklogWrapInputBytes);
-    cell.lines = haveFont
-        ? fonts->wrapText(input, LM::kBacklogFontPx, LM::kBacklogTextW)
-        : fallbackWrap(Rowl::Text::stripMarkup(input));
-    if (cell.lines.empty()) cell.lines.emplace_back();
+    const std::string text = entry.choice ? kChoiceMark + entry.dialogue : entry.dialogue;
 
     // An entry never outgrows the list area (large text scale / long line).
     const float areaH = LM::kBacklogY1 - LM::kBacklogY0;
     const int fit = std::max(1, static_cast<int>((areaH - 2.0f * LM::kBacklogPadY - speakerH) / lineH));
-    const size_t maxLines = static_cast<size_t>(std::min(LM::kBacklogMaxLines, fit));
-    const bool cut = cell.lines.size() > maxLines || input.size() < entry.dialogue.size();
-    if (cell.lines.size() > maxLines) cell.lines.resize(maxLines);
-    if (cut) cell.lines.back() += "...";
+
+    const bool selected =
+        getDialogueHistory().size() > 0 &&
+        static_cast<int>(index) == std::clamp(m_pauseSelected, 0, static_cast<int>(history.size()) - 1);
+
+    if (selected) {
+        // A-5: the selected row is shown in full (wrapped once, memoized); a
+        // text longer than the area scrolls inside the row.
+        const uint64_t identity = m_gameState ? m_gameState->dialogueHistory.identity() : 0;
+        auto& cache = m_backlogWrapCache;
+        if (!cache.valid || cache.identity != identity || cache.index != static_cast<int>(index) ||
+            cache.locale != m_localization.getLocale() || cache.scale != scale ||
+            cache.haveFont != haveFont) {
+            const std::string input = utf8Prefix(text, kBacklogSelectedInputBytes);
+            cache.lines = haveFont
+                ? fonts->wrapText(input, LM::kBacklogFontPx, LM::kBacklogTextW)
+                : fallbackWrap(Rowl::Text::stripMarkup(input));
+            if (cache.lines.empty()) cache.lines.emplace_back();
+            cache.identity = identity;
+            cache.index = static_cast<int>(index);
+            cache.locale = m_localization.getLocale();
+            cache.scale = scale;
+            cache.haveFont = haveFont;
+            cache.valid = true;
+        }
+        const size_t total = cache.lines.size();
+        cell.totalLines = total;
+        cell.fitLines = static_cast<size_t>(fit);
+        const size_t maxOffset = total > cell.fitLines ? total - cell.fitLines : 0;
+        const size_t offset = std::min(static_cast<size_t>(std::max(0, m_backlogLineOffset)), maxOffset);
+        m_backlogLineOffset = static_cast<int>(offset);
+        const size_t end = std::min(total, offset + cell.fitLines);
+        cell.lines.assign(cache.lines.begin() + static_cast<std::ptrdiff_t>(offset),
+                          cache.lines.begin() + static_cast<std::ptrdiff_t>(end));
+        if (offset > 0) cell.lines.front().insert(0, "... ");
+        if (end < total) cell.lines.back() += " ...";
+    } else {
+        const std::string input = utf8Prefix(text, kBacklogWrapInputBytes);
+        cell.lines = haveFont
+            ? fonts->wrapText(input, LM::kBacklogFontPx, LM::kBacklogTextW)
+            : fallbackWrap(Rowl::Text::stripMarkup(input));
+        if (cell.lines.empty()) cell.lines.emplace_back();
+        cell.totalLines = cell.lines.size();
+        const size_t maxLines = static_cast<size_t>(std::min(LM::kBacklogMaxLines, fit));
+        const bool cut = cell.lines.size() > maxLines || input.size() < text.size();
+        if (cell.lines.size() > maxLines) cell.lines.resize(maxLines);
+        if (cut) cell.lines.back() += " ...";
+        cell.fitLines = cell.lines.size();
+    }
 
     cell.height = 2.0f * LM::kBacklogPadY + speakerH +
                   static_cast<float>(cell.lines.size()) * lineH;
@@ -154,6 +199,7 @@ PauseBacklogView Engine::buildBacklogView() const {
         entry.dialogue = history[static_cast<size_t>(i)].dialogue;
         entry.lines = std::move(cell.lines);
         entry.hasVoice = !history[static_cast<size_t>(i)].voice.empty();
+        entry.choice = history[static_cast<size_t>(i)].choice;
         entry.selected = (i == sel);
         y += entry.h + LM::kBacklogGap;
         view.entries.push_back(std::move(entry));
@@ -187,6 +233,7 @@ bool Engine::openBacklog() {
     m_titleHint = UiText::None;
     m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
     m_backlogTop = 0;
+    m_backlogLineOffset = 0;
     backlogEnsureVisible();  // newest row at the bottom, as many above as fit
     ROWL_LOG_INFO("[Player] Backlog open (" + std::to_string(getDialogueHistory().size()) +
                   " rows).");
@@ -196,7 +243,22 @@ bool Engine::openBacklog() {
 void Engine::backlogMoveSelection(int direction) {
     const int total = static_cast<int>(getDialogueHistory().size());
     if (total <= 0) return;
-    m_pauseSelected = std::clamp(std::clamp(m_pauseSelected, 0, total - 1) + direction, 0, total - 1);
+    // A-5: a long selected row scrolls inside itself before the selection moves.
+    {
+        const BacklogCell cell = backlogCell(static_cast<size_t>(std::clamp(m_pauseSelected, 0, total - 1)));
+        const int hidden = static_cast<int>(cell.totalLines) - static_cast<int>(cell.fitLines);
+        if (direction > 0 && m_backlogLineOffset < hidden) {
+            ++m_backlogLineOffset;
+            return;
+        }
+        if (direction < 0 && m_backlogLineOffset > 0) {
+            --m_backlogLineOffset;
+            return;
+        }
+    }
+    const int before = std::clamp(m_pauseSelected, 0, total - 1);
+    m_pauseSelected = std::clamp(before + direction, 0, total - 1);
+    if (m_pauseSelected != before) m_backlogLineOffset = 0;
     m_pauseConfirmQuit = false;
     m_titleHint = UiText::None;
     backlogEnsureVisible();
@@ -225,6 +287,12 @@ void Engine::backlogActivateSelected() {
 }
 
 void Engine::backlogClose() {
+    // F1 (karar 6): a clip replayed from the backlog stops when the page
+    // closes; the node's own voice (cut when the replay started) stays silent.
+    if (m_backlogReplayActive) {
+        m_backlogReplayActive = false;
+        if (m_audio) m_audio->stopVoice();
+    }
     if (m_backlogFromPause) {
         m_backlogFromPause = false;
         m_pauseMode = PauseMenuMode::Main;
@@ -241,6 +309,7 @@ bool Engine::backlogClick(float virtualX, float virtualY) {
     const PauseBacklogView view = buildBacklogView();
     for (const auto& entry : view.entries) {
         if (virtualY >= entry.y && virtualY <= entry.y + entry.h) {
+            if (m_pauseSelected != entry.index) m_backlogLineOffset = 0;
             m_pauseSelected = entry.index;
             backlogActivateSelected();
             return true;

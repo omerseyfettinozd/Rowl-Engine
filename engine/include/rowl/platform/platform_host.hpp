@@ -82,7 +82,10 @@ struct RuntimeInputEvent {
         // Ctrl pressed (its release arrives as KeyUp with the Ctrl keycode).
         ToggleAuto,
         ToggleSkip,
-        SkipHold
+        SkipHold,
+        // F1 (A-9): the window lost input focus; held-key state (Ctrl Skip-hold)
+        // ends because the matching KeyUp will never arrive.
+        FocusLost
     };
 
     Type type;

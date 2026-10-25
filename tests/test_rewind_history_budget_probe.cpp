@@ -1,126 +1,91 @@
 /**
- * test_rewind_history_budget_probe.cpp — dialogueHistory tahsis bütçesi probu.
+ * test_rewind_history_budget_probe.cpp — dialogueHistory bellek bütçesi probu.
  *
- * KÖK NEDEN (bu kapının varlık sebebi):
- *   GameState::withDialogueHistory her append'de geçmişin TAM KOPYASINI
- *   alır ve bu kopya previousState zincirinin her halkasında TUTULUR.
- *   std::vector büyüme politikası 2x olduğu için kopya boyutunun ~2 KATI
- *   kapasite ayırır; kuyruktan erase() bu kapasiteyi geri vermez. Zincir
- *   N halka olduğunda boşa ayrılan alan O(N · 500 · 112) bayttır.
+ * KÖK NEDEN (F1 / denetim A bulgu 3): GameState::withDialogueHistory her
+ * append'de geçmişin (en çok 500 girdi) TAM KOPYASINI alıp previousState
+ * zincirinin her halkasında tutuyordu: halka başına ~95 KB, 8000 ilerlemede
+ * 778 MB RSS. Geçmiş artık kalıcı (persistent) bir liste: append tek düğüm
+ * ayırır, eski düğümler önceki halkayla paylaşılır.
  *
- *   ÖLÇÜM (probe_rw_accounting, Linux, deterministik capacity muhasebesi —
- *   RSS DEĞİL: glibc serbest bıraktığı sayfaları geri vermediği için RSS
- *   ölçümü Linux'ta gerçek büyümeyi görmez):
- *       300 advance : 10 234 112 B  ->  5 210 912 B   (1,96x azalma)
- *       1200 advance: 106 936 512 B -> 53 764 400 B   (1,99x azalma)
- *   Kırpma YAPMADAN: 1200 halkanın düğümleri yalnızca 480 400 B tutuyor,
- *   yani toplamın %0,9'u. Asıl maliyet halkanın dialogueHistory kopyası.
+ * ÖLÇÜM (deterministik bayt/düğüm sayacı, RSS DEĞİL — RSS makineye ve
+ * allocator'a bağlı): zincirdeki TÜM halkaların geçmişlerinde erişilen
+ * farklı düğüm adresleri sayılır.
+ *   eski tasarım: halka sayısı x 500 özel girdi (4000 halka -> 2 000 000)
+ *   yeni tasarım: eklenen satır sayısı kadar (4000)
+ * Bayt bütçesi = düğüm sayısı x (sizeof(girdi) + 120 baytlık satır + sabit
+ * düğüm yükü); 8000 ilerlemede < 150 MB hedefinin çok altındadır.
  *
- *   ÖNCEKİ AJANIN "42x / 9.7 MB -> 0.23 MB" İDDİASI YANLIŞTI: gerçek
- *   oran ~2x'tir. 2x, std::vector'ün büyüme politikasından gelir ve
- *   tam olarak shrink_to_fit'in kazandığı miktardır. Kapı bu oranı kilitler.
- *
- *   NEDEN KIRPMA YAPILMADI (OLÇÜLDÜ, probe_rw_prune): zincir K halkaya
- *   kırpılırsa test_rc_soak 7. bölümün sözleşmesi KIRILIR — 1200 advance
- *   sonrası rewind(2000) köke (stepId=1) ulaşmak yerine K adım geride
- *   durur:  K=4 -> stepId 1197, K=8 -> 1193, K=64 -> 1137, K=512 -> 689.
- *   Derin-rewind bir ÖZELLİK (kok'a dek geri al), bir yan etki değil.
- *   Bu yüzden kırpma uygulanmadı; bunun yerine tahsis bütçesi daraltıldı.
- *
- * KIRMIZI: bir halka size() < capacity() taşır (gizli kapasite geri gelir)
- *          VEYA toplam tutulan kapasite bütçeyi aşar.
- * YEŞİL  : her halka size()==capacity() ve toplam bütçe içinde.
- *
- * MUTASYON (OLÇÜLDÜ): game_state.cpp'deki shrink_to_fit() satırı silinirse
- *   kapı KIRMIZI döner — "ring 0 carries hidden capacity: size=500
- *   capacity=512 (1344B wasted)".
- *
- * Bu kapı zincir DERİNLİĞİNE dokunmaz: rewind kapasitesi aynen korunur,
- * bu yüzden test_rc_soak 7. bölümdeki derin-rewind sözleşmesi bozulmaz.
+ * KIRMIZI: halkalar arasında paylaşılmayan (özel kopya) düğüm sayısı eklenen
+ *          satır sayısını aşar.
+ * MUTASYON: GameState::withDialogueHistory içinde listeyi her halkada
+ *   `DialogueHistory(history.toVector())` ile yeniden kurmak bu kapıyı
+ *   KIRMIZI yapar. Zincir DERİNLİĞİ değişmez (test_rc_soak derin-rewind
+ *   sözleşmesi korunur).
  */
 #include "rowl_test_harness.hpp"
 #include "rowl/state/game_state.hpp"
 
 #include <iostream>
+#include <unordered_set>
 #include <vector>
 
-namespace {
-
-// Üst bütçe: 64 halka × 500 girdi × sizeof(DialogueHistoryEntry).
-// shrink_to_fit OLMADANDA kapasite bunun ~2 katına çıkar ve kapı kırmızı
-// döner; shrink_to_fit İLE gerçek tutulan kapasite tam olarak budur.
-constexpr size_t kRings = 64;
-constexpr size_t kMaxHistoryEntries = 500;
-constexpr size_t kPerEntryBudget = sizeof(Rowl::State::DialogueHistoryEntry);
-
-// 64 halka, her biri 500 girdiye kadar dolu: en kötü yasal durum.
-std::vector<Rowl::State::DialogueHistoryEntry> makeEntries(size_t n) {
-    std::vector<Rowl::State::DialogueHistoryEntry> v;
-    v.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-        Rowl::State::DialogueHistoryEntry e;
-        e.nodeId = static_cast<uint64_t>(i + 1);   // 0 değil — decode reddiyor
-        e.speaker = "S";
-        e.dialogue = "line " + std::to_string(i);
-        e.contentId = "00000000-0000-4000-8000-000000000000";
-        v.push_back(std::move(e));
-    }
-    return v;
-}
-
-} // namespace
-
 int main() {
-    TEST_SECTION("rewind history allocation budget");
+    TEST_SECTION("rewind history memory budget (structural sharing)");
 
-    const auto full = makeEntries(kMaxHistoryEntries);
-
-    // 64 halka kur, her append tam 500 girdilik kopya üretir (kuyruk hep dolu).
+    constexpr size_t kLinks = 4000;   // 8x the 500 cap: every link past 500 trims
+    constexpr size_t kLineBytes = 120;
     auto state = Rowl::State::GameState::createInitialState(101);
-    size_t totalCapacity = 0;
-    size_t totalSize = 0;
-    for (size_t i = 0; i < kRings; ++i) {
-        state = Rowl::State::GameState::withDialogueHistory(state, full);
+    size_t appended = 0;
+    for (size_t i = 0; i < kLinks; ++i) {
+        state = Rowl::State::GameState::createNextState(state, 101 + i % 60);
+        Rowl::State::DialogueHistoryEntry entry;
+        entry.nodeId = 101 + i % 60;
+        entry.speaker = "Speaker";
+        entry.dialogue = std::string(kLineBytes, static_cast<char>('a' + i % 26));
+        state = Rowl::State::GameState::withDialogueHistory(state, {entry});
         if (!state) {
-            std::cerr << "withDialogueHistory returned null at ring " << i << std::endl;
+            std::cerr << "withDialogueHistory returned null at link " << i << std::endl;
             return 1;
         }
-        const auto& h = *state->dialogueHistory;
-        // Kırmızı koşulu 1: gizli kapasite. size()==capacity() değilse
-        // vektör büyüme politikasının 2x payı hâlâ tutuluyor demektir.
-        if (h.capacity() != h.size()) {
-            std::cerr << "RED: ring " << i << " carries hidden capacity: size="
-                      << h.size() << " capacity=" << h.capacity() << " ("
-                      << (h.capacity() - h.size()) * kPerEntryBudget
-                      << "B wasted)" << std::endl;
-            return 1;
-        }
-        totalCapacity += h.capacity();
-        totalSize += h.size();
+        ++appended;
     }
-
-    // Kırmızı koşulu 2: toplam bütçe (BAYT cinsinden; totalCapacity girdi
-    // sayısıdır, byte'a çeviriyoruz).
-    const size_t expectedEntries = kRings * kMaxHistoryEntries;
-    const size_t budgetBytes = expectedEntries * kPerEntryBudget;
-    if (totalCapacity * kPerEntryBudget > budgetBytes) {
-        std::cerr << "RED: total retained capacity " << totalCapacity * kPerEntryBudget
-                  << "B > budget " << budgetBytes << "B ("
-                  << (totalCapacity * kPerEntryBudget - budgetBytes) << "B over)"
-                  << std::endl;
+    if (state->dialogueHistory.size() != Rowl::State::DialogueHistory::kMaxEntries) {
+        std::cerr << "RED: visible history is " << state->dialogueHistory.size()
+                  << ", expected the 500 cap" << std::endl;
         return 1;
     }
 
-    // Kuyruk sınırı korunuyor: her halka tam 500 girdi tutar.
-    if (totalSize != expectedEntries) {
-        std::cerr << "RED: total entries " << totalSize << " != expected "
-                  << expectedEntries << " (kMaxDialogueHistoryEntries cap regressed)"
-                  << std::endl;
+    // Distinct entry storage reachable from the WHOLE rewind chain.
+    std::unordered_set<const void*> distinct;
+    size_t links = 0;
+    std::vector<const void*> scratch;
+    for (auto link = std::shared_ptr<const Rowl::State::GameState>(state); link;
+         link = link->previousState) {
+        scratch.clear();
+        link->dialogueHistory.collectNodeAddresses(scratch);
+        distinct.insert(scratch.begin(), scratch.end());
+        ++links;
+    }
+    if (distinct.size() > appended) {
+        std::cerr << "RED: " << distinct.size() << " distinct history nodes across " << links
+                  << " rewind links for " << appended << " appended lines (private copies: "
+                  << (distinct.size() - appended) << ")" << std::endl;
         return 1;
     }
 
-    TEST_PASS("withDialogueHistory retains no hidden capacity (size==capacity per ring)");
-    TEST_PASS("64 rings x 500 entries stays inside the " + std::to_string(budgetBytes / 1024) +
-              "KB allocation budget");
+    const size_t perNodeBytes = sizeof(Rowl::State::DialogueHistoryEntry) + kLineBytes +
+                                3 * sizeof(void*) + 2 * sizeof(size_t);
+    const size_t totalBytes = distinct.size() * perNodeBytes;
+    constexpr size_t kBudgetBytes = 8u * 1024u * 1024u;
+    if (totalBytes > kBudgetBytes) {
+        std::cerr << "RED: history storage " << totalBytes << " B > budget " << kBudgetBytes
+                  << " B" << std::endl;
+        return 1;
+    }
+
+    TEST_PASS("4000 rewind links share their history nodes (" + std::to_string(distinct.size()) +
+              " distinct for " + std::to_string(appended) + " lines)");
+    TEST_PASS("history storage " + std::to_string(totalBytes / 1024) + " KB inside the " +
+              std::to_string(kBudgetBytes / 1024) + " KB budget");
     return 0;
 }

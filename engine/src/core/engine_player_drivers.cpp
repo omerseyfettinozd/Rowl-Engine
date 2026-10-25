@@ -113,17 +113,48 @@ float Engine::autoWaitSeconds() const {
     return std::clamp(wait, kAutoWaitMin, kAutoWaitMax);
 }
 
+bool Engine::isSkipping() const {
+    if (!isSkipEffective() || !m_isPlaying || !m_activeChoiceButtons.empty()) return false;
+    const StoryNode* node = m_storyRuntime.currentNode();
+    if (!node || node->nextNodes.empty()) return false;
+    return m_skipPolicy == SkipPolicy::All ||
+           (m_skipPolicy == SkipPolicy::ReadOnly && m_activeLinesReadBeforePresentation);
+}
+
+void Engine::playDeferredEntrySounds() {
+    // F1 (A-6): Skip muted the node's sfx / voice clip on entry. When Skip
+    // stops ON that node (unread line, choice menu, end of chain, key
+    // released) its sound plays once, now. Skip moving on drops the deferral.
+    if (m_deferredEntryNodeId == 0) return;
+    if (m_deferredEntryNodeId != m_storyRuntime.currentNodeId()) {
+        m_deferredEntryNodeId = 0;
+        m_deferredEntrySfx.clear();
+        m_deferredEntryVoice = false;
+        return;
+    }
+    if (m_paused || isSkipping()) return;
+    if (m_audio) {
+        for (const auto& sfx : m_deferredEntrySfx) {
+            m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+        }
+        if (m_deferredEntryVoice && !m_activeNodeVoiceTrack.empty()) {
+            m_audio->stopVoice();
+            m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
+            m_voiceClipNodeId = m_deferredEntryNodeId;
+        }
+    }
+    m_deferredEntryNodeId = 0;
+    m_deferredEntrySfx.clear();
+    m_deferredEntryVoice = false;
+}
+
 void Engine::stepPlayerDrivers(float deltaTime, bool advancedThisStep) {
     // ---- Skip (takes priority over Auto) -----------------------------------
     // At most one node per step and at least kSkipStepIntervalSeconds between
     // two nodes.
     bool advancedNow = advancedThisStep;
     if (isSkipEffective() && m_isPlaying && !advancedThisStep) {
-        const StoryNode* node = m_storyRuntime.currentNode();
-        const bool lineAllowed =
-            m_skipPolicy == SkipPolicy::All ||
-            (m_skipPolicy == SkipPolicy::ReadOnly && m_activeLinesReadBeforePresentation);
-        if (!m_activeChoiceButtons.empty() || !node || node->nextNodes.empty() || !lineAllowed) {
+        if (!isSkipping()) {
             // Choice menu, chain end or an unread line under read_only.
             m_skipActive = false;
         } else {
@@ -176,6 +207,7 @@ std::string Engine::getPlayerDriverStateJson() const {
     nlohmann::json state = nlohmann::json::object();
     state["auto"] = m_autoMode;
     state["skip_active"] = m_skipActive;
+    state["skipping"] = isSkipping();  // F1 (A-7): really skipping (the badge)
     state["skip_policy"] = skipPolicyName(m_skipPolicy);
     state["auto_delay"] = m_autoDelay;
     state["line_read_before"] = m_activeLinesReadBeforePresentation;

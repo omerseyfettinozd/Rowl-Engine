@@ -78,7 +78,15 @@ optional fields and ignore unknown fields unless stated otherwise.
 - **History:** states form an immutable chain (`previousState`);
   `SessionPersistence::checkpoint` aligns the chain with the live cursor
   before a save, and `rewind` steps back over it (surfaced as
-  `RowlEngine_Rewind`).
+  `RowlEngine_Rewind`). F1: `rewindNodes` steps over whole node visits
+  (`RowlEngine_RewindNodes`, the player's Backspace): a visit starts at a link
+  with the optional `node_entry: true` key (written by a real node entry) or
+  where `active_node_id` changes. The dialogue backlog is a persistent,
+  structurally shared list (≤ 500 visible rows; a link costs one node, not a
+  copy), so memory per advance is constant. Optional, additive keys: `node_entry`
+  on a state link and `choice: true` on a `dialogue_history` row (the player's
+  own answer; `dialogue` = the option text, no speaker/voice); older saves load
+  with both absent.
 - **Sürüm karar kilidi (Faz 6 Dilim 7 IS 2/2):** yazıcı her zaman
   `j["version"] = 3` yazar (`engine/src/state/game_state.cpp:206`;
   `CurrentSaveFormatVersion = 3` — `engine/include/rowl/state/game_state.hpp:67`).
@@ -378,4 +386,4 @@ ignored, so older engines read newer files. T2 added skins (images, 9-slice fram
 music, cursor, slider, continue mark; all additive keys, `"format": 1` unchanged) and the optional
 `extras.json` achievement `icon`; layout and label texts are a later slice. Full field table:
 `docs/PLAYER_UI_THEME.md`. C API: `RowlEngine_GetUiThemeJson` / `ReloadUiTheme` / `SetUiThemeJson`
-(`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 271 symbols).
+(`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 272 symbols (F1 adds `RowlEngine_RewindNodes`)).
