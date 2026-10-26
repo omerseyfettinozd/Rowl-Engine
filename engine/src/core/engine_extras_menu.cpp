@@ -54,6 +54,7 @@ int Engine::extrasItemCount() const {
 }
 
 void Engine::extrasEnsureVisible() const {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the page layout the window draws with
     const int total = extrasItemCount();
     if (m_pauseMode == PauseMenuMode::Extras || total <= 0) {
         m_extrasTop = 0;
@@ -62,11 +63,11 @@ void Engine::extrasEnsureVisible() const {
     const int sel = std::clamp(m_pauseSelected, 0, total - 1);
     int row = sel;
     int rows = total;
-    int visible = m_pauseMode == PauseMenuMode::Achievements ? LM::kAchVisibleRows : LM::kExtrasListRows;
+    int visible = m_pauseMode == PauseMenuMode::Achievements ? lm.achVisibleRows() : lm.comfortRows;
     if (m_pauseMode == PauseMenuMode::Gallery) {
-        row = sel / LM::kGalleryColumns;
-        rows = (total + LM::kGalleryColumns - 1) / LM::kGalleryColumns;
-        visible = LM::kGalleryVisibleRows;
+        row = sel / lm.galleryColumns;
+        rows = (total + lm.galleryColumns - 1) / lm.galleryColumns;
+        visible = lm.galleryVisibleRows();
     }
     int top = std::clamp(m_extrasTop, 0, std::max(0, rows - visible));
     if (row < top) top = row;
@@ -75,6 +76,7 @@ void Engine::extrasEnsureVisible() const {
 }
 
 void Engine::extrasMove(int direction) {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the page layout the window draws with
     if (!isExtrasMode(m_pauseMode) || m_galleryViewing) return;
     const int total = extrasItemCount();
     if (total <= 0) return;
@@ -86,11 +88,11 @@ void Engine::extrasMove(int direction) {
         case PauseMenuMode::Gallery: {
             // Up/Down move a whole grid row; the last row is reached from a
             // shorter column by landing on the final item. Never wraps.
-            int target = sel + direction * LM::kGalleryColumns;
+            int target = sel + direction * lm.galleryColumns;
             if (target < 0) {
                 target = sel;
             } else if (target >= total) {
-                const bool lastRow = sel / LM::kGalleryColumns >= (total - 1) / LM::kGalleryColumns;
+                const bool lastRow = sel / lm.galleryColumns >= (total - 1) / lm.galleryColumns;
                 target = lastRow ? sel : total - 1;
             }
             m_pauseSelected = target;
@@ -234,6 +236,7 @@ void Engine::extrasBack() {
 }
 
 void Engine::extrasClick(float virtualX, float virtualY) {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the page layout the window draws with
     if (m_galleryViewing) {  // any click closes the full-screen viewer
         m_galleryViewing = false;
         return;
@@ -241,7 +244,7 @@ void Engine::extrasClick(float virtualX, float virtualY) {
     const int total = extrasItemCount();
     switch (m_pauseMode) {
         case PauseMenuMode::Extras: {
-            const int row = LM::rowAt(virtualX, virtualY, LM::kExtrasRootRows);
+            const int row = lm.rowAt(virtualX, virtualY, LM::kExtrasRootRows);
             if (row < 0) return;
             m_pauseSelected = row;
             extrasActivateSelected();
@@ -249,8 +252,8 @@ void Engine::extrasClick(float virtualX, float virtualY) {
         }
         case PauseMenuMode::Gallery: {
             int column = 0, visibleRow = 0;
-            if (!LM::galleryCellAt(virtualX, virtualY, column, visibleRow)) return;
-            const int index = (m_extrasTop + visibleRow) * LM::kGalleryColumns + column;
+            if (!lm.galleryCellAt(virtualX, virtualY, column, visibleRow)) return;
+            const int index = (m_extrasTop + visibleRow) * lm.galleryColumns + column;
             if (index < 0 || index >= total) return;
             m_pauseSelected = index;
             galleryOpenViewer(index);  // a locked cell only gets selected
@@ -258,16 +261,16 @@ void Engine::extrasClick(float virtualX, float virtualY) {
             break;
         }
         case PauseMenuMode::MusicRoom: {
-            const int visible = std::min(LM::kExtrasListRows, std::max(0, total - m_extrasTop));
-            const int row = LM::rowAt(virtualX, virtualY, visible);
+            const int visible = std::min(lm.comfortRows, std::max(0, total - m_extrasTop));
+            const int row = lm.rowAt(virtualX, virtualY, visible);
             if (row < 0) return;
             m_pauseSelected = m_extrasTop + row;
             extrasActivateSelected();
             break;
         }
         case PauseMenuMode::Achievements: {  // its own two-line row geometry
-            const int visible = std::min(LM::kAchVisibleRows, std::max(0, total - m_extrasTop));
-            const int row = LM::achRowAt(virtualX, virtualY, visible);
+            const int visible = std::min(lm.achVisibleRows(), std::max(0, total - m_extrasTop));
+            const int row = lm.achRowAt(virtualX, virtualY, visible);
             if (row < 0) return;
             m_pauseSelected = m_extrasTop + row;  // a read-only list: selecting is all a click does
             break;
@@ -313,6 +316,7 @@ bool Engine::openExtras() {
 // ── view ────────────────────────────────────────────────────────────────────
 
 PauseExtrasView Engine::buildExtrasView() const {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the page layout the window draws with
     PauseExtrasView view;
     if (!isExtrasMode(m_pauseMode)) return view;
     view.active = true;
@@ -335,23 +339,23 @@ PauseExtrasView Engine::buildExtrasView() const {
         }
         case PauseMenuMode::Gallery: {
             view.page = "gallery";
-            view.columns = LM::kGalleryColumns;
+            view.columns = lm.galleryColumns;
             const auto& gallery = m_extrasCatalog.gallery;
             for (const auto& item : gallery) {
                 if (profile.isUnlocked(UnlockKind::Cg, item.id)) ++view.unlocked;
             }
             view.counter = total > 0 ? std::to_string(sel + 1) + " / " + std::to_string(total) : "0 / 0";
-            for (int row = 0; row < LM::kGalleryVisibleRows; ++row) {
-                for (int column = 0; column < LM::kGalleryColumns; ++column) {
-                    const int index = (m_extrasTop + row) * LM::kGalleryColumns + column;
+            for (int row = 0; row < lm.galleryVisibleRows(); ++row) {
+                for (int column = 0; column < lm.galleryColumns; ++column) {
+                    const int index = (m_extrasTop + row) * lm.galleryColumns + column;
                     if (index >= total) break;
                     const auto& item = gallery[static_cast<size_t>(index)];
                     PauseGalleryCellView cell;
                     cell.index = index;
-                    cell.x = LM::galleryCellX(column);
-                    cell.y = LM::galleryCellY(row);
-                    cell.w = LM::kGalleryCellW;
-                    cell.h = LM::kGalleryCellH;
+                    cell.x = lm.galleryCellX(column);
+                    cell.y = lm.galleryCellY(row);
+                    cell.w = lm.galleryCellW;
+                    cell.h = lm.galleryCellH();
                     cell.unlocked = profile.isUnlocked(UnlockKind::Cg, item.id);
                     cell.selected = (index == sel);
                     if (cell.unlocked) {
@@ -380,7 +384,7 @@ PauseExtrasView Engine::buildExtrasView() const {
             }
             view.playingId = m_musicPlayingId;
             view.counter = total > 0 ? std::to_string(sel + 1) + " / " + std::to_string(total) : "0 / 0";
-            const int end = std::min(total, m_extrasTop + LM::kExtrasListRows);
+            const int end = std::min(total, m_extrasTop + lm.comfortRows);
             for (int index = m_extrasTop; index < end; ++index) {
                 const auto& item = music[static_cast<size_t>(index)];
                 PauseExtrasItemView entry;
@@ -401,7 +405,7 @@ PauseExtrasView Engine::buildExtrasView() const {
                 if (profile.isUnlocked(UnlockKind::Achievement, item.id)) ++view.unlocked;
             }
             view.counter = total > 0 ? std::to_string(sel + 1) + " / " + std::to_string(total) : "0 / 0";
-            const int end = std::min(total, m_extrasTop + LM::kAchVisibleRows);
+            const int end = std::min(total, m_extrasTop + lm.achVisibleRows());
             for (int index = m_extrasTop; index < end; ++index) {
                 const auto& item = list[static_cast<size_t>(index)];
                 PauseExtrasItemView entry;
@@ -416,8 +420,8 @@ PauseExtrasView Engine::buildExtrasView() const {
                 if (entry.unlocked) entry.at = dateOnly(profile.achievementTime(item.id));
                 // T2: a locked achievement never reveals its icon (the view carries no path for it).
                 if (entry.unlocked) entry.icon = item.icon;
-                entry.y = LM::achRowTop(index - m_extrasTop);
-                entry.h = LM::kAchRowH;
+                entry.y = lm.achRowTop(index - m_extrasTop);
+                entry.h = lm.achRowH;
                 view.items.push_back(std::move(entry));
             }
             return view;

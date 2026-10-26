@@ -227,6 +227,7 @@ int main(int argc, char* argv[]) {
     test_extras_screens();
     test_ui_theme();
     test_ui_skin();
+    test_menu_layout();
     test_chapter_boundary_persistence();
     test_player_ui_language();
     test_player_preferences_menu();

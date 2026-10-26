@@ -3,6 +3,7 @@
 #include "rowl/render/window.hpp"
 #include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
+#include "rowl/core/menu_layout.hpp"
 #include "rowl/core/pause_menu.hpp"
 #include "rowl/core/player_ui_strings.hpp"
 #include "rowl/platform/game_identity.hpp"
@@ -488,6 +489,10 @@ public:
     std::string getProfileDirectory() const;
     std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
+    /// T2b: project `save_slot_count` (project.rowlproj): how many slots the Save / Load pages
+    /// list, 1..100 (clamped); default 10. The pages show them in pages of the layout's size.
+    void setSaveSlotCount(int count);
+    int saveSlotCount() const { return m_saveSlotCount; }
     /// D01a: identity of the mounted game (see platform/game_identity.hpp).
     void setGameIdentity(Rowl::Platform::GameIdentity identity) { m_gameIdentity = std::move(identity); }
     const Rowl::Platform::GameIdentity& getGameIdentity() const { return m_gameIdentity; }
@@ -655,6 +660,24 @@ private:
     bool m_uiThemeFileFound = false;
     bool m_uiThemeUsable = false;
     void installUiTheme(Rowl::State::UiThemeLoad load, std::string source);
+    // T2b: checked per-page layouts of the installed theme (engine_ui_theme.cpp) and the
+    // slot pages' paging (engine_title_menu.cpp). activeMenuLayout() is the ONE geometry
+    // source of the current page: clicks, wheel, drags and the window's drawing read it.
+    ResolvedMenuLayouts m_menuLayouts;
+    int m_saveSlotCount = 10;
+    mutable int m_slotPage = 0;
+    MenuLayout menuLayoutFor(int screenIndex) const;
+    MenuLayout activeMenuLayout() const;
+    int activeMenuScreenIndex() const;
+    int slotPageCount() const;
+    int slotRowsOnPage() const;
+    int slotAtRow(int row) const;
+    void slotSetPage(int page);
+    void slotPageMove(int direction);
+    void slotCardsMove(int dx, int dy);
+    std::string slotNumberText(int slot) const;
+    PauseMenuView getPauseMenuViewBase() const;
+    void fillSlotPageView(PauseMenuView& view, const MenuLayout& layout) const;
     /// Sets every field of `dlg` / `button` the component did not write itself
     /// (authoredMask) to the theme default.
     void applyUiThemeTo(Rowl::Render::DialogueRenderData& dlg) const;
@@ -772,7 +795,7 @@ private:
     mutable bool m_pauseSlotCacheValid = false;
     // D02: the memo now carries metadata per quick slot (0..9) plus the
     // Continue candidate scanned over every valid slot (0..99).
-    mutable std::array<PauseSlotInfo, 10> m_pauseSlotInfo{};
+    mutable std::array<PauseSlotInfo, 100> m_pauseSlotInfo{};
     mutable int m_continueSlot = -1;
     mutable std::string m_continueSavedAt;
     // D02: slots whose load failed this session (graph mismatch etc.) are

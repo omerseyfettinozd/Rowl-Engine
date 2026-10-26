@@ -80,7 +80,7 @@ void Engine::sliderDragTo(float physicalX) {
     // A drag may leave the canvas sideways: clamp into it instead of dropping the event.
     m_window->mapPhysicalToVirtual(physicalX, 0.0f, 1920, 1080, vx, vy, bezel);
     if (bezel) vx = physicalX < static_cast<float>(m_window->getWidth()) * 0.5f ? 0.0f : 1920.0f;
-    pauseMenuSetFraction(m_sliderDragRow, PauseMenuLayout::sliderFractionAt(vx));
+    pauseMenuSetFraction(m_sliderDragRow, activeMenuLayout().sliderFractionAt(vx));
 }
 
 void Engine::pauseMenuAdjustSelected(int direction) {
@@ -89,6 +89,12 @@ void Engine::pauseMenuAdjustSelected(int direction) {
     // motion); the pause main page has none since D05-2.
     if (isExtrasMode(m_pauseMode)) {  // D07-2: gallery grid / viewer stepping
         extrasAdjust(direction);
+        return;
+    }
+    if (m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) {
+        // T2b: Left / Right turn the slot page (a card grid steps along its line instead).
+        if (activeMenuLayout().cards) slotCardsMove(direction, 0);
+        else slotPageMove(direction);
         return;
     }
     if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;

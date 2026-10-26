@@ -126,6 +126,11 @@ void Engine::installUiTheme(Rowl::State::UiThemeLoad load, std::string source) {
     m_uiThemeFileFound = load.fileFound;
     m_uiThemeUsable = load.usable;
     m_uiThemeSource = std::move(source);
+    // T2b: the page layouts; one that fails the checks keeps the built-in page and says why.
+    m_menuLayouts = resolveMenuLayouts(m_uiTheme);
+    for (const auto& line : m_menuLayouts.diagnostics) m_uiThemeDiagnostics.push_back(line);
+    m_slotPage = 0;
+    m_backlogWrapCache.valid = false;  // the history list may be wrapped to a new width
     for (const auto& line : m_uiThemeDiagnostics) ROWL_LOG_WARN("[UiTheme] " + line);
 
     // What is on screen follows the new theme without re-entering the node:

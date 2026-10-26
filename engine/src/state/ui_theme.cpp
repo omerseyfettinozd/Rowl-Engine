@@ -46,6 +46,119 @@ std::string echo(const Json& value) {
     return out;
 }
 
+// ── T2b: screens.<page>.layout ──────────────────────────────────────────────
+// Sections: panel title rows hint counter thumbnail slider gallery achievements history cards
+// slots pager. Unset keys are not written back (the document stays small).
+template <typename V>
+void visitScreenLayout(UiScreenLayout& l, const std::string& base, V& v) {
+    const auto sec = [&](const char* name) { return base + "." + name; };
+    constexpr float kPosLo = -4000.0f, kPosHi = 4000.0f, kSizeHi = 4000.0f;
+    {
+        const std::string s = sec("panel");
+        v.lnum(s.c_str(), "x", l.panelX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.panelY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.panelW, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "h", l.panelH, 0.0f, kSizeHi);
+    }
+    {
+        const std::string s = sec("title");
+        v.lnum(s.c_str(), "x", l.titleX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.titleY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.titleW, 0.0f, kSizeHi);
+        v.lalign(s.c_str(), "align", l.titleAlign);
+    }
+    {
+        const std::string s = sec("rows");
+        v.lnum(s.c_str(), "x", l.rowX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.rowY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.rowW, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "h", l.rowH, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "gap", l.rowGap, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "compact_y", l.compactY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "compact_h", l.compactH, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "compact_gap", l.compactGap, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "comfort_rows", l.comfortRows, 1.0f, 100.0f);
+        v.lalign(s.c_str(), "label_align", l.labelAlign);
+        v.lalign(s.c_str(), "value_align", l.valueAlign);
+        v.lnum(s.c_str(), "label_width", l.labelWidth, 0.0f, 1.0f);
+        v.lnum(s.c_str(), "value_x", l.valueX, 0.0f, 1.0f);
+        v.lnum(s.c_str(), "value_width", l.valueWidth, 0.0f, 1.0f);
+        v.lnum(s.c_str(), "pad_x", l.rowPadX, 0.0f, 400.0f);
+    }
+    {
+        const std::string s = sec("hint");
+        v.lnum(s.c_str(), "x", l.hintX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.hintY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.hintW, 0.0f, kSizeHi);
+        v.lalign(s.c_str(), "align", l.hintAlign);
+    }
+    {
+        const std::string s = sec("counter");
+        v.lnum(s.c_str(), "x", l.counterX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.counterY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.counterW, 0.0f, kSizeHi);
+    }
+    {
+        const std::string s = sec("thumbnail");
+        v.lnum(s.c_str(), "x", l.thumbX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.thumbY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.thumbW, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "h", l.thumbH, 0.0f, kSizeHi);
+        v.lflag(s.c_str(), "hidden", l.thumbHidden);
+    }
+    {
+        const std::string s = sec("slider");
+        v.lnum(s.c_str(), "start", l.sliderStart, 0.0f, 1.0f);
+        v.lnum(s.c_str(), "end_inset", l.sliderEndInset, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "value_inset", l.sliderValueInset, 0.0f, kSizeHi);
+    }
+    {
+        const std::string s = sec("gallery");
+        v.lnum(s.c_str(), "columns", l.galleryColumns, 1.0f, 12.0f);
+        v.lnum(s.c_str(), "cell_w", l.galleryCellW, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "thumb_h", l.galleryThumbH, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "gap_x", l.galleryGapX, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "gap_y", l.galleryGapY, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "y", l.galleryY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "bottom", l.galleryBottom, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "caption_h", l.galleryCaptionH, 0.0f, 400.0f);
+    }
+    {
+        const std::string s = sec("achievements");
+        v.lnum(s.c_str(), "y", l.achY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "bottom", l.achBottom, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "row_h", l.achRowH, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "gap", l.achGap, 0.0f, 400.0f);
+    }
+    {
+        const std::string s = sec("history");
+        v.lnum(s.c_str(), "y", l.historyY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "bottom", l.historyBottom, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "pad_x", l.historyPadX, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "gap", l.historyGap, 0.0f, 400.0f);
+    }
+    {
+        const std::string s = sec("cards");
+        v.lnum(s.c_str(), "columns", l.cardColumns, 1.0f, 6.0f);
+        v.lnum(s.c_str(), "h", l.cardH, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "gap_x", l.cardGapX, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "gap_y", l.cardGapY, 0.0f, 400.0f);
+        v.lnum(s.c_str(), "y", l.cardY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "bottom", l.cardBottom, kPosLo, kPosHi);
+    }
+    {
+        const std::string s = sec("slots");
+        v.lnum(s.c_str(), "per_page", l.slotsPerPage, 1.0f, 100.0f);
+    }
+    {
+        const std::string s = sec("pager");
+        v.lnum(s.c_str(), "x", l.pagerX, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "y", l.pagerY, kPosLo, kPosHi);
+        v.lnum(s.c_str(), "w", l.pagerW, 0.0f, kSizeHi);
+        v.lnum(s.c_str(), "h", l.pagerH, 0.0f, kSizeHi);
+    }
+}
+
 // ── the field table ─────────────────────────────────────────────────────────
 // `full` = the whole theme (false for the high_contrast override: menus,
 // Ekstralar, toast, badges and scene colours only).
@@ -143,7 +256,10 @@ void visitTheme(UiTheme& t, V& v, bool full) {
         v.flag(sec.c_str(), "hint_hidden", screen.hintHidden);
         v.optColor(sec.c_str(), "counter_color", screen.counterColor);
         v.optNum(sec.c_str(), "counter_px", screen.counterPx, 8.0f, 120.0f);
+        visitScreenLayout(screen.layout, sec + ".layout", v);
     }
+    v.oneOf("slots", "layout", t.slots.layout, {"list", "cards"});
+    v.num("slots", "number_base", t.slots.numberBase, 0.0f, 1.0f);
     v.skin("slots", "row_skin", t.slots.rowSkin);
     v.skin("slots", "thumb_frame_skin", t.slots.thumbFrameSkin);
     v.skin1("slots", "thumb_placeholder", t.slots.thumbPlaceholder);
@@ -399,6 +515,26 @@ struct Reader {
         num(sec, key, parsed, lo, hi);  // reports and clamps like every number
         if (value->is_number() && std::isfinite(value->get<double>())) out = parsed;
     }
+
+
+    /// T2b layout keys: absent / null = unset.
+    void lnum(const char* sec, const char* key, std::optional<float>& out, float lo, float hi) {
+        optNum(sec, key, out, lo, hi);
+    }
+    void lalign(const char* sec, const char* key, std::string& out) {
+        const Json* value = field(sec, key);
+        if (value == nullptr) return;
+        if (value->is_null() || (value->is_string() && value->get<std::string>().empty())) {
+            out.clear();
+            return;
+        }
+        std::string text = value->is_string() ? value->get<std::string>() : std::string();
+        for (char& c : text) c = lowerAscii(c);
+        if (text == "left" || text == "center" || text == "right") out = text;
+        else note(label(sec, key) + ": invalid alignment '" + echo(*value) +
+                  "' (left / center / right); default kept");
+    }
+    void lflag(const char* sec, const char* key, bool& out) { flag(sec, key, out); }
 
     void oneOf(const char* sec, const char* key, std::string& out, std::initializer_list<const char*> allowed) {
         const Json* value = field(sec, key);
@@ -672,6 +808,16 @@ struct Writer {
     void oneOf(const char* sec, const char* key, std::string& value, std::initializer_list<const char*>) {
         at(sec)[key] = value;
     }
+    void lnum(const char* sec, const char* key, std::optional<float>& value, float, float) {
+        if (value) at(sec)[key] = std::round(static_cast<double>(*value) * 10000.0) / 10000.0;
+    }
+    void lalign(const char* sec, const char* key, std::string& value) {
+        if (!value.empty()) at(sec)[key] = value;
+    }
+    void lflag(const char* sec, const char* key, bool& value) {
+        if (value) at(sec)[key] = true;
+    }
+
     void imagePath(const char* sec, const char* key, std::string& value) { at(sec)[key] = value; }
     void audioPath(const char* sec, const char* key, std::string& value) { at(sec)[key] = value; }
 
@@ -723,6 +869,9 @@ struct NullVisitor {
     void align(const char*, const char*, std::string&) {}
     void oneOf(const char*, const char*, std::string&, std::initializer_list<const char*>) {}
     void flag(const char*, const char*, bool&) {}
+    void lnum(const char*, const char*, std::optional<float>&, float, float) {}
+    void lalign(const char*, const char*, std::string&) {}
+    void lflag(const char*, const char*, bool&) {}
     void path(const char*, const char*, std::string&) {}
     void imagePath(const char*, const char*, std::string&) {}
     void audioPath(const char*, const char*, std::string&) {}

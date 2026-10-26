@@ -55,6 +55,10 @@ constexpr std::array<Entry, static_cast<std::size_t>(UiText::Count)> kTable = {{
     /* HintSlots */
     {"ENTER/tık: seç   0-9: doğrudan seç   ESC: geri",
      "ENTER/click: choose   0-9: pick directly   ESC: back"},
+    /* SlotPage */ {"Sayfa", "Page"},
+    /* HintSlotsPaged */
+    {"ENTER/tık: seç   0-9: doğrudan seç   SOL/SAĞ: sayfa   ESC: geri",
+     "ENTER/click: choose   0-9: pick directly   LEFT/RIGHT: page   ESC: back"},
 
     /* HistoryEmpty */ {"Geçmiş boş", "History is empty"},
     /* HintBacklog */ {"YUKARI/AŞAĞI: gez   ESC/B: kapat",

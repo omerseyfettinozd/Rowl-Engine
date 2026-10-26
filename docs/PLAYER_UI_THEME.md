@@ -12,8 +12,8 @@ pixel** (every default below is the former constant). The theme is not part of t
 it invalidates the cached frame and the baked AUTO/SKIP/toast state.
 
 Skins (images, 9-slice frames, backgrounds, cursor, slider, continue mark; T2) are described in
-"Skins" below. Not covered yet (later slices): layout (positions, sizes, row pitch; T2b), label texts,
-which rows are listed, durations, UI sounds, and the editor window.
+"Skins" below; where each page puts its parts (T2b) in "Layout" below. Not covered yet (later slices):
+label texts, which rows are listed, durations, UI sounds, and the editor window.
 
 ## Rules
 
@@ -257,11 +257,74 @@ press, so the state never shows on a button (the slider knob does use `pressed` 
 6. Want no frame at all on a page? `"panel_skin": "none"`, then colour the text with `menu.text` /
    `screens.<page>.title_color` so it reads over the story frame.
 
-### Not in T2
+## Layout (T2b): where each page puts its parts
 
-Layout is still the engine's fixed grid (panel 880x860 at 520,110; row pitch; thumbnail box; gallery columns;
-achievement rows). Moving or resizing those, the slot "card grid" and the text of the menu labels are the next
-slice (T2b); hit-testing will then come from the same runtime layout as drawing.
+Every menu page can be placed and sized by the author: `screens.<page>.layout` (pages: `title`, `pause`, `save`,
+`load`, `preferences`, `history`, `extras_root`, `gallery`, `music`, `achievements`, `confirm`). All numbers are
+virtual pixels of the 1920x1080 canvas; every key is optional. **Without a layout the page is the old fixed grid,
+pixel for pixel.** The engine builds ONE layout per page; drawing, clicks, the wheel, slider drags and the
+scrolling of the lists all read that same layout, so what you see is what you hit.
+
+```json
+{"format": 1,
+ "screens": {
+   "title": {"panel_skin": "none",
+             "layout": {"rows":  {"x": 80, "y": 640, "w": 520, "h": 56, "gap": 8},
+                        "title": {"x": 80, "y": 520, "w": 900},
+                        "hint":  {"x": 80, "y": 1030, "w": 900}}},
+   "gallery": {"layout": {"gallery": {"columns": 6}}}},
+ "slots": {"layout": "cards", "number_base": 1}}
+```
+
+| section | keys (all optional) | default |
+|---|---|---|
+| `panel` | `x y w h` | 520, 110, 880x860 |
+| `title` | `x y w align` (`left`/`center`/`right`) | x = `rows.x`, y = panel top + 60, w = `rows.w` |
+| `rows` | `x y w h gap`, `compact_y compact_h compact_gap`, `comfort_rows`, `label_align`, `value_align`, `label_width`, `value_x`, `value_width` (fractions of `w`), `pad_x` | 580, 270, 760 x 54, gap 4; more than `comfort_rows` (11) rows use the compact pitch (250, 50, 4); label column 0.55, value column 0.55..0.95, both left aligned |
+| `hint` | `x y w align` | rows.x, panel bottom - 44, rows.w |
+| `counter` | `x y w` | right end of the rows, y = panel top + 68, 150 wide ("3 / 10" of History / Ekstralar) |
+| `thumbnail` | `x y w h hidden` | slot pages: top-right of the panel, 192x108 |
+| `slider` | `start` (fraction of `rows.w`), `end_inset`, `value_inset` | 0.52, 120, 104 |
+| `gallery` | `columns` (1-12), `cell_w`, `thumb_h`, `gap_x`, `gap_y`, `y`, `bottom`, `caption_h` | 4 columns filling the row width, 16:9 pictures (100 px at 4 columns) |
+| `achievements` | `y bottom row_h gap` | 96 px rows, gap 8 |
+| `history` | `y bottom pad_x gap` | list area 250..900 |
+| `cards` | `columns` (1-6), `h`, `gap_x`, `gap_y`, `y`, `bottom` | 2 columns, 140 px cards (slot pages with `slots.layout: "cards"`) |
+| `slots` | `per_page` | 10 rows per page |
+| `pager` | `x y w h` | the "< Page 1 / 3 >" strip above the hint line |
+
+* **What follows what.** `title`, `hint`, `counter`, the thumbnail and the list areas sit relative to the panel and
+  the row block: move only `panel` (or only `rows`) and they keep their offsets. Name a key to pin it.
+* **Alignment.** `label_align` / `value_align` / `title.align` / `hint.align`: a centred narrow menu is
+  `"rows": {"x": 760, "w": 400, "label_align": "center", "label_width": 1}`. Put value rows' text in the second
+  column (`value_x`, `value_width`) or keep it short.
+* **Page rules.** The *confirm* page keeps the rows of the page it was armed on (`title` or `pause`) unless
+  `screens.confirm.layout` names its own. The Preferences page uses the compact pitch for its 12 rows; the
+  music-room list shows `comfort_rows` rows.
+* **Checks.** A layout that is off the canvas, has a zero size, whose rows do not fit the panel (or the canvas when
+  the page has `"panel_skin": "none"`), or whose gallery / achievement / history / card area cannot hold one row
+  is refused as a whole: that page uses the built-in layout and `RowlEngine_GetUiThemeJson(...)["diagnostics"]`
+  says why (`ui_theme.json: screens.<page>.layout: ...`). Other pages are not affected. Numbers outside their range
+  are clamped with a diagnostic, like every other theme number.
+* **Text size.** With "Metin Boyutu" 125% / 150% a slot row (it has a detail line) grows by that factor and fewer
+  slots fit a page - the pager takes the rest; the detail line grows with the label and is shortened with "..."
+  instead of leaving the row. Long values (the title's "Devam Et" row with its slot + date) take the room left of
+  their column up to the label, then end in "...".
+* **High Contrast** only drops the pictures; the layout stays.
+
+### Save / Load pages
+
+* **`save_slot_count`** in `project.rowlproj` (1-100, default 10; the editor's Settings page writes it) is how many
+  slots the pages list. Files stay `save_slot_<n>.json` with `n` from 0; digits `0-9` pick the n-th row of the
+  visible page.
+* **Pages.** More slots than fit a page add the `< Sayfa 2 / 3 >` strip; Left / Right, the mouse wheel and a click on
+  the strip's ends turn the page. Quick slots (F5 / F9, digits outside menus) stay 0-9.
+* **`slots.layout`**: `"list"` (rows, default) or `"cards"` - a grid of cards, each with the slot's picture, the date
+  and the chapter / summary (the card is dressed by `slots.row_skin`, the picture by `slots.thumb_frame_skin`).
+  Up / Down step a card line, Left / Right a card; stepping off the page turns it.
+* **`slots.number_base`**: `0` (default, "Yuva 0") or `1` ("Yuva 1" for slot file 0). The digit keys follow the labels
+  (with base 1: key 1 = first row, key 0 = tenth). Save files are never renamed.
+* The pause-menu JSON (`RowlEngine_GetPauseMenuJson`) reports `layout` (panel, rows, row tops), `slot_page`
+  (page, page_count, slot_count, first_slot, pager) and, for cards, `cards` (slot, x, y, w, h).
 
 ## Authoring note for the editor (T4)
 

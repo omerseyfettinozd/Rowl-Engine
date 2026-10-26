@@ -521,6 +521,15 @@ private:
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
     // D02: pause/title slot thumbnail, one texture keyed "slot|saved_at".
     SDL_Texture* m_pauseThumbTexture = nullptr;
+    // T2b: thumbnails of the slot cards (one texture per slot|saved_at key, LRU-bounded).
+    struct CardThumb {
+        SDL_Texture* texture = nullptr;
+        uint64_t lastUsed = 0;
+    };
+    std::unordered_map<std::string, CardThumb> m_cardThumbs;
+    std::unordered_set<std::string> m_cardThumbFailed;
+    uint64_t m_cardThumbClock = 0;
+    SDL_Texture* slotCardThumbnail(const std::string& key, const std::string& png);
     std::string m_pauseThumbKey;
     std::string m_pauseThumbFailedKey;
     void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);

@@ -23,6 +23,7 @@ enum class UiText : unsigned char {
     // Slot pages
     SaveSlotTitle, LoadSlotTitle, SlotLabel, SlotFull, SlotEmpty, SlotCorrupt,
     HintSlots,
+    SlotPage, HintSlotsPaged,  // T2b: "Sayfa" and the hint of a slot page with several pages
 
     // Backlog
     HistoryEmpty, HintBacklog, HintBacklogVoiced, VoiceMark,

@@ -68,7 +68,7 @@ int Engine::pauseMenuRowCount() const {
         case PauseMenuMode::Achievements: return extrasItemCount();
         case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
         case PauseMenuMode::Backlog: return static_cast<int>(getDialogueHistory().size());
-        default: return PauseMenuLayout::kSlotRows;
+        default: return slotRowsOnPage();  // T2b: the visible page of the Save / Load slots
     }
 }
 
@@ -81,6 +81,11 @@ void Engine::pauseMenuMoveSelection(int direction) {
         extrasMove(direction);
         return;
     }
+    if ((m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) &&
+        activeMenuLayout().cards) {  // T2b: a card grid - Up / Down step a whole card line
+        slotCardsMove(0, direction);
+        return;
+    }
     const int count = pauseMenuRowCount();
     if (count <= 0) return;
     m_pauseSelected = (m_pauseSelected + direction + count) % count;
@@ -91,7 +96,7 @@ void Engine::pauseMenuMoveSelection(int direction) {
 void Engine::menuChooseSlot(int32_t slotIndex) {
     if (m_pauseMode != PauseMenuMode::SaveSlots &&
         m_pauseMode != PauseMenuMode::LoadSlots) return;
-    if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) return;
+    if (slotIndex < 0 || slotIndex >= m_saveSlotCount) return;  // T2b: project save_slot_count
     if (m_titleActive) {  // D02: title Load page leaves the title on success
         titleLoadSlot(slotIndex);
         return;
@@ -120,13 +125,13 @@ void Engine::menuActivateSelected() {
         return;
     }
     if (m_pauseMode != PauseMenuMode::Main) {
-        menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
+        menuChooseSlot(slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, slotRowsOnPage() - 1))));
         return;
     }
     switch (m_pauseSelected) {
         case 0: setPaused(false); break;
-        case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
-        case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false; break;
+        case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false; break;
         case PauseMenuLayout::kMainPrefsRow:
             // D05-2: the shared Preferences page opens over the pause menu and
             // Back / Esc return to this row.
@@ -220,7 +225,19 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
         return;
     }
     m_sliderDragRow = -1;  // a new press ends any drag
-    const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
+    // T2b: the same MenuLayout the window draws with.
+    const MenuLayout layout = activeMenuLayout();
+    const bool slotPage = m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots;
+    if (slotPage && slotPageCount() > 1) {
+        const int turn = layout.pagerDirectionAt(virtualX, virtualY);
+        if (turn != 0) {
+            slotPageMove(turn);
+            return;
+        }
+    }
+    const int rowCount = pauseMenuRowCount();
+    const int row = (slotPage && layout.cards) ? layout.cardAt(virtualX, virtualY, rowCount)
+                                               : layout.rowAt(virtualX, virtualY, rowCount);
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
     m_pauseSelected = row;
@@ -231,12 +248,12 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
         // T2: with the slider style a press on the track sets the value and starts a drag.
         const int valueRow = pauseMenuValueRow();
         if (m_uiTheme.preferences.valueStyle == "slider" && pauseMenuFraction(valueRow) >= 0.0f &&
-            PauseMenuLayout::inSliderZone(virtualX)) {
+            layout.inSliderZone(virtualX)) {
             m_sliderDragRow = valueRow;
-            pauseMenuSetFraction(valueRow, PauseMenuLayout::sliderFractionAt(virtualX));
+            pauseMenuSetFraction(valueRow, layout.sliderFractionAt(virtualX));
             return;
         }
-        const int dir = PauseMenuLayout::adjustDirection(virtualX);
+        const int dir = layout.adjustDirection(virtualX);
         if (dir != 0) {
             pauseMenuAdjustSelected(dir);
             return;
@@ -267,7 +284,54 @@ std::string pauseMenuDelayText(float seconds, UiLang lang) {
            uiText(UiText::SecondsUnit, lang);
 }
 
+// ── T2b: which layout the current page uses ──────────────────────────────────
+
+int Engine::activeMenuScreenIndex() const {
+    using Rowl::State::uiScreenIndex;
+    const char* name = "pause";
+    switch (m_pauseMode) {
+        case PauseMenuMode::Main: name = m_pauseConfirmQuit ? "confirm" : "pause"; break;
+        case PauseMenuMode::Title: name = m_pauseConfirmQuit ? "confirm" : "title"; break;
+        case PauseMenuMode::Preferences: name = "preferences"; break;
+        case PauseMenuMode::SaveSlots: name = "save"; break;
+        case PauseMenuMode::LoadSlots: name = "load"; break;
+        case PauseMenuMode::Backlog: name = "history"; break;
+        case PauseMenuMode::Extras: name = "extras_root"; break;
+        case PauseMenuMode::Gallery: name = "gallery"; break;
+        case PauseMenuMode::MusicRoom: name = "music"; break;
+        case PauseMenuMode::Achievements: name = "achievements"; break;
+    }
+    int index = uiScreenIndex(name);
+    // The confirmation page keeps the rows of the page it was armed on unless the theme
+    // gives "confirm" a layout of its own.
+    const int confirm = uiScreenIndex("confirm");
+    if (index == confirm && !m_menuLayouts.declared[static_cast<size_t>(confirm)]) {
+        index = uiScreenIndex(m_pauseMode == PauseMenuMode::Title ? "title" : "pause");
+    }
+    return index;
+}
+
+MenuLayout Engine::menuLayoutFor(int screenIndex) const {
+    const size_t i = static_cast<size_t>(std::clamp(screenIndex, 0, static_cast<int>(Rowl::State::kUiScreenCount) - 1));
+    const bool slotPage = i == static_cast<size_t>(Rowl::State::uiScreenIndex("save")) ||
+                          i == static_cast<size_t>(Rowl::State::uiScreenIndex("load"));
+    return menuLayoutForTextScale(m_menuLayouts.pages[i], textScale(), slotPage);
+}
+
+MenuLayout Engine::activeMenuLayout() const { return menuLayoutFor(activeMenuScreenIndex()); }
+
 PauseMenuView Engine::getPauseMenuView() const {
+    PauseMenuView view = getPauseMenuViewBase();
+    if (view.open) {
+        view.layout = activeMenuLayout();
+        if (m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) {
+            fillSlotPageView(view, view.layout);
+        }
+    }
+    return view;
+}
+
+PauseMenuView Engine::getPauseMenuViewBase() const {
     PauseMenuView view;
     view.open = m_paused;
     if (!m_paused) return view;
@@ -321,16 +385,16 @@ PauseMenuView Engine::getPauseMenuView() const {
         const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
         view.page = saving ? "save" : "load";
         view.title = T(saving ? UiText::SaveSlotTitle : UiText::LoadSlotTitle);
-        // A2b: occupancy is memoized (see m_pauseSlotCacheValid) — a slot
-        // page holds 10 rows and this view rebuilds per UI refresh.
-        static_assert(kPauseMenuQuickSlotMax - kPauseMenuQuickSlotMin + 1 ==
-                      10, "pause slot cache assumes the 0..9 quick-slot window");
+        // A2b: occupancy is memoized (see m_pauseSlotCacheValid) - the page lists the visible slots
+        // only (T2b: save_slot_count slots in pages of the layout's size).
         ensureSlotCache();
-        for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
-            const PauseSlotInfo& info =
-                m_pauseSlotInfo[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)];
+        const int rowsOnPage = slotRowsOnPage();
+        view.selected = std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1));  // the page may have shrunk (text size)
+        for (int pageRow = 0; pageRow < rowsOnPage; ++pageRow) {
+            const int32_t slot = slotAtRow(pageRow);
+            const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slot)];
             PauseMenuRow row;
-            row.label = T(UiText::SlotLabel) + " " + std::to_string(slot);
+            row.label = T(UiText::SlotLabel) + " " + slotNumberText(slot);
             row.value = T(info.state == PauseSlotInfo::State::Valid ? UiText::SlotFull
                         : info.state == PauseSlotInfo::State::Corrupt ? UiText::SlotCorrupt
                         : UiText::SlotEmpty);
@@ -339,16 +403,16 @@ PauseMenuView Engine::getPauseMenuView() const {
                           : info.state == PauseSlotInfo::State::Corrupt ? 3 : 1;  // T2
             view.rows.push_back(row);
         }
-        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(
-            std::clamp(m_pauseSelected, 0, kPauseMenuQuickSlotMax))];
+        const int selectedSlot = slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1)));
+        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(std::max(0, selectedSlot))];
         if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.thumbnailPng &&
             !selectedInfo.thumbnailPng->empty()) {
             view.thumbnailPng = selectedInfo.thumbnailPng;
-            view.thumbnailKey = std::to_string(m_pauseSelected) + "|" + selectedInfo.savedAt;
+            view.thumbnailKey = std::to_string(selectedSlot) + "|" + selectedInfo.savedAt;
         }
         view.hint = (m_titleActive && m_titleHint != UiText::None)
             ? T(m_titleHint)
-            : T(UiText::HintSlots);
+            : T(slotPageCount() > 1 ? UiText::HintSlotsPaged : UiText::HintSlots);
     }
     view.continueSlot = m_pauseSlotCacheValid ? m_continueSlot : -1;
     return view;
@@ -418,6 +482,49 @@ std::string Engine::getPauseMenuJson() const {
     out += confirmTitle ? "true" : "false";
     out += ",\"selected_has_thumbnail\":";
     out += view.thumbnailPng ? "true" : "false";
+    if (view.open) {
+        // T2b: where the page puts its parts (virtual 1920x1080) - the geometry clicks are hit-tested with.
+        const auto num = [](float v) {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.6g", static_cast<double>(v));
+            return std::string(buf);
+        };
+        const MenuLayout& lay = view.layout;
+        out += ",\"layout\":{\"panel\":{\"x\":" + num(lay.panelX) + ",\"y\":" + num(lay.panelY) +
+               ",\"w\":" + num(lay.panelW) + ",\"h\":" + num(lay.panelH) + "},\"row_x\":" + num(lay.rowX) +
+               ",\"row_w\":" + num(lay.rowW) + ",\"rows\":[";
+        const int count = static_cast<int>(view.rows.size());
+        const bool listRows = !view.backlog.active && !view.extras.active && view.cards.empty();
+        if (listRows) {
+            for (int i = 0; i < count; ++i) {
+                if (i > 0) out.push_back(',');
+                out += "{\"y\":" + num(lay.rowTop(i, count)) + ",\"h\":" + num(lay.rowHOf(count)) + "}";
+            }
+        }
+        out += "]}";
+        if (!view.cards.empty()) {
+            out += ",\"cards\":[";
+            for (size_t i = 0; i < view.cards.size(); ++i) {
+                const auto& card = view.cards[i];
+                if (i > 0) out.push_back(',');
+                out += "{\"slot\":" + std::to_string(card.slot) + ",\"x\":" + num(card.x) + ",\"y\":" + num(card.y) +
+                       ",\"w\":" + num(card.w) + ",\"h\":" + num(card.h) + "}";
+            }
+            out += "]";
+        }
+        if (view.page == "save" || view.page == "load") {
+            out += ",\"slot_page\":{\"page\":" + std::to_string(view.pager.active ? view.pager.page : m_slotPage) +
+                   ",\"page_count\":" + std::to_string(slotPageCount()) +
+                   ",\"slot_count\":" + std::to_string(m_saveSlotCount) +
+                   ",\"first_slot\":" + std::to_string(std::max(0, slotAtRow(0))) +
+                   ",\"cards\":" + (lay.cards ? "true" : "false");
+            if (view.pager.active) {
+                out += ",\"pager\":{\"x\":" + num(view.pager.x) + ",\"y\":" + num(view.pager.y) +
+                       ",\"w\":" + num(view.pager.w) + ",\"h\":" + num(view.pager.h) + "}";
+            }
+            out += "}";
+        }
+    }
     if (view.backlog.active) {
         // D03-2: only the visible window rides along (history can hold 500
         // rows of up to 64 KiB); `total`/`scroll`/`selected` index the full history.

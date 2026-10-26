@@ -322,6 +322,7 @@ set(ROWL_ENGINE_SOURCES
     src/core/engine_choice_focus.cpp  # D-K3: secim menusunde klavye / fare odagi + sigdirilmis dugme yerlesimi
     src/core/engine_extras_menu.cpp  # D07-2: Ekstralar sayfalari (galeri / muzik odasi / basarimlar) + basarim bildirimi
     src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
+    src/core/menu_layout.cpp  # T2b: ui_theme screens.<page>.layout -> kontrol edilmis MenuLayout
     src/core/engine_ui_theme.cpp  # T1: oyuncu arayuzu temasi (ui_theme.json) + diyalog/secim varsayilanlari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)

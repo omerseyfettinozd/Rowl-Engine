@@ -163,7 +163,8 @@ optional fields and ignore unknown fields unless stated otherwise.
 ## 4. Project manifest (`project.rowlproj`) — informational, unversioned
 
 - Written by `ProjectFactory` (`name`, `version`, `engineVersion`,
-  `createdAt`/`savedAt`, `nodeCount`, `startNodeId`, `save_slot_count`,
+  `createdAt`/`savedAt`, `nodeCount`, `startNodeId`, `save_slot_count`
+  (read by the player since T2b: slots listed on the Save / Load pages, 1-100),
   `default_bgm_transition*`); older files may carry `virtualResolution`
   instead. There is no schema-version gate.
 - Role: presence marks a project root (registry/discovery, Save-As,
@@ -384,6 +385,8 @@ missing key = the built-in look, pixel for pixel. A bad value keeps its default 
 32 diagnostics); a whole bad file (over 256 KiB, not an object, wrong `format`) is ignored. Unknown keys are
 ignored, so older engines read newer files. T2 added skins (images, 9-slice frames, title background / logo /
 music, cursor, slider, continue mark; all additive keys, `"format": 1` unchanged) and the optional
-`extras.json` achievement `icon`; layout and label texts are a later slice. Full field table:
+`extras.json` achievement `icon`; T2b added `screens.<page>.layout` (place / size / arrangement of every menu page),
+`slots.layout` (`list` / `cards`) and `slots.number_base`, and the player now reads `save_slot_count` from
+`project.rowlproj` (1-100, default 10) for the Save / Load pages; label texts are a later slice. Full field table:
 `docs/PLAYER_UI_THEME.md`. C API: `RowlEngine_GetUiThemeJson` / `ReloadUiTheme` / `SetUiThemeJson`
 (`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 272 symbols (F1 adds `RowlEngine_RewindNodes`)).

@@ -184,7 +184,8 @@ std::string Window::fitOverlayText(const std::string& text, float px, float maxW
 }
 
 void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics) {
-    using LM = Rowl::Core::PauseMenuLayout;
+    using PL = Rowl::Core::PauseMenuLayout;  // fixed design sizes
+    const Rowl::Core::MenuLayout& LM = view.layout;  // T2b: the page layout shared with the hit-tests
     const auto& extras = view.extras;
     m_galleryThumbDecodesThisFrame = 0;
     if (!extras.active || extras.viewing) return;
@@ -197,8 +198,8 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
         SDL_SetRenderDrawBlendMode(m_sdlRenderer, SDL_BLENDMODE_BLEND);
         for (const auto& item : extras.items) {
             float px = 0.0f, py = 0.0f;
-            AspectGuardian::virtualToPhysical(Rowl::Core::PauseMenuLayout::kRowX, item.y, metrics, px, py);
-            const SDL_FRect plate{px, py, Rowl::Core::PauseMenuLayout::kRowW * s, item.h * s};
+            AspectGuardian::virtualToPhysical(LM.rowX, item.y, metrics, px, py);
+            const SDL_FRect plate{px, py, LM.rowW * s, item.h * s};
             // T2: the plate's skin (normal / locked / selected); without one the legacy fill + bar.
             const auto state = item.selected ? Rowl::State::UiSkinState::Selected
                              : (!item.unlocked ? Rowl::State::UiSkinState::Locked : Rowl::State::UiSkinState::Normal);
@@ -224,7 +225,7 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
             else if (!item.unlocked) iconSkin = ex.lockedIcon;
             if (!iconSkin.image.empty()) {
                 const float iconPx = ex.iconSize * s;
-                const float padX = (base.padding ? (*base.padding)[0] : Rowl::Core::PauseMenuLayout::kAchPadX) * s;
+                const float padX = (base.padding ? (*base.padding)[0] : PL::kAchPadX) * s;
                 const SDL_FRect iconRect{px + padX, py + (item.h * s - iconPx) * 0.5f, iconPx, iconPx};
                 paintSkinImageOnly(iconRect, iconSkin, s);
             }
@@ -236,7 +237,7 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
     for (const auto& cell : extras.cells) {
         float px = 0.0f, py = 0.0f;
         AspectGuardian::virtualToPhysical(cell.x, cell.y, metrics, px, py);
-        const SDL_FRect thumb{px, py, cell.w * s, LM::kGalleryThumbH * s};
+        const SDL_FRect thumb{px, py, cell.w * s, LM.galleryThumbH * s};
         if (cell.selected) {
             // Highlight plate behind the whole cell (thumbnail + caption), like a menu row.
             const float pad = 4.0f * s;
@@ -284,7 +285,8 @@ void Window::drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const Vie
 }
 
 void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics) {
-    using LM = Rowl::Core::PauseMenuLayout;
+    using PL = Rowl::Core::PauseMenuLayout;  // fixed design sizes
+    const Rowl::Core::MenuLayout& LM = view.layout;  // T2b: the page layout shared with the hit-tests
     const auto& extras = view.extras;
     FontRenderer* const menuFont = getMenuFontRenderer();
     if (!extras.active || extras.page == "root" || !menuFont || !menuFont->isLoaded()) return;
@@ -295,27 +297,27 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
     const SDL_Color kDimText = sdl(ex.dimText);
     const float accessScale = std::max(1.0f, menuFont->textScale());
     float cx = 0.0f, cy = 0.0f;
-    AspectGuardian::virtualToPhysical(LM::kRowX + LM::kRowW - 150.0f, 178.0f, metrics, cx, cy);
+    AspectGuardian::virtualToPhysical(LM.counterX, LM.counterY, metrics, cx, cy);
     // T2: the counter's colour / size can be set for the page (screens.<page>.counter_*).
     const int screenIndex = Rowl::State::uiScreenIndex(view.page);
     const Rowl::State::UiScreenTheme* screen =
         screenIndex >= 0 ? &uiTheme().screens[static_cast<size_t>(screenIndex)] : nullptr;
     drawOverlayText(extras.counter, cx, cy, (screen && screen->counterPx ? *screen->counterPx : 24.0f) * s / accessScale,
-                    sdl(screen && screen->counterColor ? *screen->counterColor : uiTheme().menu.dimText), 150.0f * s,
+                    sdl(screen && screen->counterColor ? *screen->counterColor : uiTheme().menu.dimText), LM.counterW * s,
                     40.0f * s, "Left");
     if (extras.page == "achievements") {
-        const float rowW = LM::kRowW * s;
+        const float rowW = LM.rowW * s;
         for (const auto& item : extras.items) {
             float px = 0.0f, py = 0.0f;
-            AspectGuardian::virtualToPhysical(LM::kRowX, item.y, metrics, px, py);
+            AspectGuardian::virtualToPhysical(LM.rowX, item.y, metrics, px, py);
             // T2: the plate skin's padding is the text inset; an icon pushes the text right of it.
             const Rowl::State::UiSkin& plateSkin = ex.plateSkin.normal;
-            float padX = (plateSkin.padding ? (*plateSkin.padding)[0] : LM::kAchPadX) * s;
+            float padX = (plateSkin.padding ? (*plateSkin.padding)[0] : PL::kAchPadX) * s;
             const std::string& iconPath = item.unlocked ? item.icon : ex.lockedIcon.image;
             if (!iconPath.empty() && loadTexture(iconPath) != nullptr) padX += (ex.iconSize + 12.0f) * s;
-            const float titlePx = LM::kAchTitlePx * s / accessScale;
-            const float descPx = LM::kAchDescPx * s / accessScale;
-            const float datePx = LM::kAchDatePx * s / accessScale;
+            const float titlePx = PL::kAchTitlePx * s / accessScale;
+            const float descPx = PL::kAchDescPx * s / accessScale;
+            const float datePx = PL::kAchDatePx * s / accessScale;
             // The date sits at the right edge on the title line; the title gets
             // the width it leaves.
             float dateW = 0.0f;
@@ -323,17 +325,17 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
             const float titleMaxW = rowW - 2.0f * padX - (dateW > 0.0f ? dateW + 16.0f * s : 0.0f);
             const SDL_Color titleColour = item.selected ? kAccent : (item.unlocked ? kLightText : kDimText);
             drawOverlayText(fitOverlayText(item.title, titlePx, titleMaxW), px + padX,
-                            py + LM::kAchTitleTop * s, titlePx, titleColour, titleMaxW + 4.0f * s,
-                            LM::kAchTitlePx * 1.6f * s, "Left");
+                            py + PL::kAchTitleTop * s, titlePx, titleColour, titleMaxW + 4.0f * s,
+                            PL::kAchTitlePx * 1.6f * s, "Left");
             if (dateW > 0.0f) {
                 drawOverlayText(item.at, px + rowW - padX - dateW,
-                                py + (LM::kAchTitleTop + 3.0f) * s, datePx, kDimText, dateW + 8.0f * s,
-                                LM::kAchDatePx * 1.6f * s, "Left");
+                                py + (PL::kAchTitleTop + 3.0f) * s, datePx, kDimText, dateW + 8.0f * s,
+                                PL::kAchDatePx * 1.6f * s, "Left");
             }
             const float descMaxW = rowW - 2.0f * padX;
             drawOverlayText(fitOverlayText(item.detail, descPx, descMaxW), px + padX,
-                            py + LM::kAchDescTop * s, descPx, item.unlocked ? sdl(ex.description) : kDimText,
-                            descMaxW + 4.0f * s, LM::kAchDescPx * 1.6f * s, "Left");
+                            py + PL::kAchDescTop * s, descPx, item.unlocked ? sdl(ex.description) : kDimText,
+                            descMaxW + 4.0f * s, PL::kAchDescPx * 1.6f * s, "Left");
         }
         return;
     }
@@ -348,15 +350,15 @@ void Window::drawExtrasText(const Rowl::Core::PauseMenuView& view, const Viewpor
         const bool lockedPicture = !ex.lockedImage.image.empty() && loadTexture(ex.lockedImage.image) != nullptr;
         if (!cell.unlocked && !lockedPicture) {
             const float markPx = ex.markPx * s / accessScale;
-            const float boxH = LM::kGalleryThumbH * s;
+            const float boxH = LM.galleryThumbH * s;
             drawOverlayText("?", px, py + boxH * 0.5f - markPx * 0.69f * accessScale, markPx, kDimText,
                             cell.w * s, boxH, "Center");
         }
         const float captionPx = ex.captionPx * s / accessScale;
         const std::string caption = fitOverlayText(cell.title, captionPx, cell.w * s - 4.0f * s);
-        drawOverlayText(caption, px + 2.0f * s, py + (LM::kGalleryThumbH + 7.0f) * s, captionPx,
+        drawOverlayText(caption, px + 2.0f * s, py + (LM.galleryThumbH + 7.0f) * s, captionPx,
                         cell.selected ? kLightText : (cell.unlocked ? kLightText : kDimText),
-                        cell.w * s, LM::kGalleryCaptionH * s, "Left");
+                        cell.w * s, LM.galleryCaptionH * s, "Left");
     }
 }
 

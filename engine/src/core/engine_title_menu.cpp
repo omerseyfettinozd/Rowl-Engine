@@ -108,13 +108,13 @@ std::string pauseSlotDateText(const std::string& savedAt) {
     return utcIsoToLocalText(savedAt, false);
 }
 
-std::string pauseSlotDetail(const PauseSlotInfo& info) {
-    if (info.state != PauseSlotInfo::State::Valid) return "";
-    std::string detail = pauseSlotDateText(info.savedAt);
-    auto append = [&detail](const std::string& part) {
+// "<chapter>  <summary ~48 bytes>" of a valid slot (the part of the detail after the date).
+static std::string pauseSlotSummary(const PauseSlotInfo& info) {
+    std::string out;
+    auto append = [&out](const std::string& part) {
         if (part.empty()) return;
-        if (!detail.empty()) detail += "  ";
-        detail += part;
+        if (!out.empty()) out += "  ";
+        out += part;
     };
     append(info.chapterTitle);
     std::string summary = info.summary;
@@ -127,7 +127,62 @@ std::string pauseSlotDetail(const PauseSlotInfo& info) {
         summary = summary.substr(0, cut) + "...";
     }
     append(summary);
+    return out;
+}
+
+std::string pauseSlotDetail(const PauseSlotInfo& info) {
+    if (info.state != PauseSlotInfo::State::Valid) return "";
+    std::string detail = pauseSlotDateText(info.savedAt);
+    const std::string rest = pauseSlotSummary(info);
+    if (!rest.empty()) {
+        if (!detail.empty()) detail += "  ";
+        detail += rest;
+    }
     return detail;
+}
+
+// T2b: the pager strip and (card layout) the cards of the visible slot page.
+void Engine::fillSlotPageView(PauseMenuView& view, const MenuLayout& layout) const {
+    const int pages = slotPageCount();
+    const UiLang lang = getUiLanguage();
+    if (pages > 1) {
+        view.pager.active = true;
+        view.pager.page = m_slotPage;
+        view.pager.pageCount = pages;
+        view.pager.label = std::string("< ") + uiText(UiText::SlotPage, lang) + " " +
+                           std::to_string(m_slotPage + 1) + " / " + std::to_string(pages) + " >";
+        view.pager.x = layout.pagerX;
+        view.pager.y = layout.pagerY;
+        view.pager.w = layout.pagerW;
+        view.pager.h = layout.pagerH;
+    }
+    if (!layout.cards) return;
+    for (int row = 0; row < static_cast<int>(view.rows.size()); ++row) {
+        const int slot = slotAtRow(row);
+        if (slot < 0) break;
+        const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slot)];
+        const PauseMenuRow& source = view.rows[static_cast<size_t>(row)];
+        PauseSlotCardView card;
+        card.row = row;
+        card.slot = slot;
+        card.x = layout.cardX(row);
+        card.y = layout.cardY(row);
+        card.w = layout.cardW();
+        card.h = layout.cardH;
+        card.slotState = source.slotState;
+        card.selected = row == view.selected;
+        card.label = source.label;
+        card.value = source.value;
+        if (info.state == PauseSlotInfo::State::Valid) {
+            card.date = pauseSlotDateText(info.savedAt);
+            card.summary = pauseSlotSummary(info);
+            if (info.thumbnailPng && !info.thumbnailPng->empty()) {
+                card.thumbnailPng = info.thumbnailPng;
+                card.thumbnailKey = std::to_string(slot) + "|" + info.savedAt;
+            }
+        }
+        view.cards.push_back(std::move(card));
+    }
 }
 
 void Engine::ensureSlotCache() const {
@@ -172,11 +227,84 @@ void Engine::ensureSlotCache() const {
                 continueWriteTime = writeTime;
             }
         }
-        if (slot <= kPauseMenuQuickSlotMax) {
-            m_pauseSlotInfo[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)] = std::move(info);
+        if (slot < m_saveSlotCount) {  // T2b: the pages list project save_slot_count slots (1..100)
+            m_pauseSlotInfo[static_cast<size_t>(slot)] = std::move(info);
         }
     }
     m_pauseSlotCacheValid = true;
+}
+
+// ── T2b: slot pages (save_slot_count slots, paged) ───────────────────────────
+
+void Engine::setSaveSlotCount(int count) {
+    m_saveSlotCount = std::clamp(count, 1, 100);
+    m_pauseSlotCacheValid = false;
+    m_slotPage = 0;
+}
+
+namespace {
+int slotCapacity(const MenuLayout& layout) {
+    return std::max(1, layout.cards ? layout.cardColumns * layout.cardVisibleRows() : layout.slotsPerPage);
+}
+}  // namespace
+
+int Engine::slotPageCount() const {
+    const int per = slotCapacity(activeMenuLayout());
+    return std::max(1, (m_saveSlotCount + per - 1) / per);
+}
+
+int Engine::slotRowsOnPage() const {
+    const int per = slotCapacity(activeMenuLayout());
+    const int pages = std::max(1, (m_saveSlotCount + per - 1) / per);
+    m_slotPage = std::clamp(m_slotPage, 0, pages - 1);
+    return std::min(per, m_saveSlotCount - m_slotPage * per);
+}
+
+int Engine::slotAtRow(int row) const {
+    const int per = slotCapacity(activeMenuLayout());
+    const int rows = slotRowsOnPage();
+    if (row < 0 || row >= rows) return -1;
+    return m_slotPage * per + row;
+}
+
+void Engine::slotSetPage(int page) {
+    const int pages = slotPageCount();
+    const int target = std::clamp(page, 0, pages - 1);
+    if (target == m_slotPage) return;
+    m_slotPage = target;
+    m_pauseSelected = std::clamp(m_pauseSelected, 0, std::max(0, slotRowsOnPage() - 1));
+    m_pauseConfirmQuit = false;
+    m_titleHint = UiText::None;
+}
+
+void Engine::slotPageMove(int direction) {
+    slotSetPage(m_slotPage + (direction > 0 ? 1 : -1));
+}
+
+// Card grid: a step along a row (dx) or across rows (dy); stepping off the page edge turns
+// the page (the same column / the neighbouring card) and never wraps around the end.
+void Engine::slotCardsMove(int dx, int dy) {
+    const MenuLayout layout = activeMenuLayout();
+    const int per = slotCapacity(layout);
+    const int columns = std::max(1, layout.cardColumns);
+    const int rows = slotRowsOnPage();
+    int absolute = m_slotPage * per + std::clamp(m_pauseSelected, 0, std::max(0, rows - 1));
+    int target = absolute + dx + dy * columns;
+    if (dy != 0) {
+        // A shorter last line: land on the final card instead of dropping the move.
+        if (target >= m_saveSlotCount && absolute / columns < (m_saveSlotCount - 1) / columns) {
+            target = m_saveSlotCount - 1;
+        }
+    }
+    target = std::clamp(target, 0, m_saveSlotCount - 1);
+    m_slotPage = target / per;
+    m_pauseSelected = target % per;
+    m_pauseConfirmQuit = false;
+    m_titleHint = UiText::None;
+}
+
+std::string Engine::slotNumberText(int slot) const {
+    return std::to_string(slot + (m_uiTheme.slots.numberBase >= 0.5f ? 1 : 0));
 }
 
 int Engine::titleRowCount() const {
@@ -269,8 +397,7 @@ void Engine::titleStartNewGame() {
 
 bool Engine::titleLoadSlot(int32_t slotIndex) {
     ensureSlotCache();
-    const PauseSlotInfo& info =
-        m_pauseSlotInfo[static_cast<size_t>(slotIndex - kPauseMenuQuickSlotMin)];
+    const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(std::clamp(slotIndex, 0, 99))];
     if (info.state == PauseSlotInfo::State::Empty) {
         m_titleHint = UiText::HintEmptySlot;
         return false;
@@ -330,6 +457,7 @@ void Engine::titleActivateSelected() {
             } else if (m_pauseSelected == 2) {
                 m_pauseMode = PauseMenuMode::LoadSlots;
                 m_pauseSelected = 0;
+                m_slotPage = 0;
             } else if (m_pauseSelected == extrasRow) {
                 m_pauseMode = PauseMenuMode::Extras;
                 m_pauseSelected = 0;
@@ -362,7 +490,7 @@ void Engine::titleActivateSelected() {
             }
             break;
         case PauseMenuMode::LoadSlots:
-            menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
+            menuChooseSlot(slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, slotRowsOnPage() - 1))));
             break;
         default: break;
     }
@@ -483,7 +611,7 @@ PauseMenuView Engine::getTitleMenuView() const {
     PauseMenuRow cont;
     cont.label = T(UiText::Continue);
     if (m_continueSlot >= 0) {
-        cont.value = T(UiText::SlotLabel) + " " + std::to_string(m_continueSlot) + "  " +
+        cont.value = T(UiText::SlotLabel) + " " + slotNumberText(m_continueSlot) + "  " +
                      pauseSlotDateText(m_continueSavedAt);
     } else {
         cont.value = T(UiText::NoSaveValue);

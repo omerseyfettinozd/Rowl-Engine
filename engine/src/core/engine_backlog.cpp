@@ -76,6 +76,7 @@ std::vector<std::string> fallbackWrap(const std::string& plain) {
 }  // namespace
 
 Engine::BacklogCell Engine::backlogCell(size_t index) const {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the same layout the window draws with
     BacklogCell cell;
     const auto& history = getDialogueHistory();
     if (index >= history.size()) return cell;
@@ -91,7 +92,7 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
     const std::string text = entry.choice ? kChoiceMark + entry.dialogue : entry.dialogue;
 
     // An entry never outgrows the list area (large text scale / long line).
-    const float areaH = LM::kBacklogY1 - LM::kBacklogY0;
+    const float areaH = lm.backlogY1 - lm.backlogY0;
     const int fit = std::max(1, static_cast<int>((areaH - 2.0f * LM::kBacklogPadY - speakerH) / lineH));
 
     const bool selected =
@@ -108,7 +109,7 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
             cache.haveFont != haveFont) {
             const std::string input = utf8Prefix(text, kBacklogSelectedInputBytes);
             cache.lines = haveFont
-                ? fonts->wrapText(input, LM::kBacklogFontPx, LM::kBacklogTextW)
+                ? fonts->wrapText(input, LM::kBacklogFontPx, lm.backlogTextW())
                 : fallbackWrap(Rowl::Text::stripMarkup(input));
             if (cache.lines.empty()) cache.lines.emplace_back();
             cache.identity = identity;
@@ -132,7 +133,7 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
     } else {
         const std::string input = utf8Prefix(text, kBacklogWrapInputBytes);
         cell.lines = haveFont
-            ? fonts->wrapText(input, LM::kBacklogFontPx, LM::kBacklogTextW)
+            ? fonts->wrapText(input, LM::kBacklogFontPx, lm.backlogTextW())
             : fallbackWrap(Rowl::Text::stripMarkup(input));
         if (cell.lines.empty()) cell.lines.emplace_back();
         cell.totalLines = cell.lines.size();
@@ -149,6 +150,7 @@ Engine::BacklogCell Engine::backlogCell(size_t index) const {
 }
 
 void Engine::backlogEnsureVisible() const {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the same layout the window draws with
     const int total = static_cast<int>(getDialogueHistory().size());
     if (total <= 0) {
         m_backlogTop = 0;
@@ -157,19 +159,20 @@ void Engine::backlogEnsureVisible() const {
     const int sel = std::clamp(m_pauseSelected, 0, total - 1);
     // Lowest first-visible index that still shows the selection: grow upwards
     // from it until the list area is full (bounded by the visible count).
-    const float areaH = LM::kBacklogY1 - LM::kBacklogY0;
+    const float areaH = lm.backlogY1 - lm.backlogY0;
     int lowest = sel;
     float used = backlogCell(static_cast<size_t>(sel)).height;
     while (lowest > 0) {
         const float h = backlogCell(static_cast<size_t>(lowest - 1)).height;
-        if (used + LM::kBacklogGap + h > areaH) break;
-        used += LM::kBacklogGap + h;
+        if (used + lm.backlogGap + h > areaH) break;
+        used += lm.backlogGap + h;
         --lowest;
     }
     m_backlogTop = std::max(std::clamp(m_backlogTop, 0, sel), lowest);
 }
 
 PauseBacklogView Engine::buildBacklogView() const {
+    const MenuLayout lm = activeMenuLayout();  // T2b: the same layout the window draws with
     PauseBacklogView view;
     view.active = true;
     view.voiceMark = uiText(UiText::VoiceMark, getUiLanguage());
@@ -187,10 +190,10 @@ PauseBacklogView Engine::buildBacklogView() const {
     view.scroll = m_backlogTop;
     view.counter = std::to_string(sel + 1) + " / " + std::to_string(total);
 
-    float y = LM::kBacklogY0;
+    float y = lm.backlogY0;
     for (int i = m_backlogTop; i < total; ++i) {
         BacklogCell cell = backlogCell(static_cast<size_t>(i));
-        if (!view.entries.empty() && y + cell.height > LM::kBacklogY1) break;
+        if (!view.entries.empty() && y + cell.height > lm.backlogY1) break;
         PauseBacklogEntryView entry;
         entry.index = i;
         entry.y = y;
@@ -201,7 +204,7 @@ PauseBacklogView Engine::buildBacklogView() const {
         entry.hasVoice = !history[static_cast<size_t>(i)].voice.empty();
         entry.choice = history[static_cast<size_t>(i)].choice;
         entry.selected = (i == sel);
-        y += entry.h + LM::kBacklogGap;
+        y += entry.h + lm.backlogGap;
         view.entries.push_back(std::move(entry));
     }
     return view;
@@ -305,7 +308,8 @@ void Engine::backlogClose() {
 }
 
 bool Engine::backlogClick(float virtualX, float virtualY) {
-    if (virtualX < LM::kRowX || virtualX > LM::kRowX + LM::kRowW) return false;
+    const MenuLayout lm = activeMenuLayout();  // T2b: the same layout the window draws with
+    if (virtualX < lm.rowX || virtualX > lm.rowX + lm.rowW) return false;
     const PauseBacklogView view = buildBacklogView();
     for (const auto& entry : view.entries) {
         if (virtualY >= entry.y && virtualY <= entry.y + entry.h) {

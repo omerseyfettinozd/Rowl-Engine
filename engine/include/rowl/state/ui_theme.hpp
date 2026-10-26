@@ -102,6 +102,36 @@ enum class UiScreen : uint8_t {
 /// Index of a page name ("title", "save", ...), or -1.
 int uiScreenIndex(std::string_view name);
 
+/// T2b: where a page puts its parts (`screens.<page>.layout`, virtual 1920x1080
+/// canvas). Every key is optional; what is not named keeps the built-in place (and
+/// follows a moved panel / row block: title, hint, counter, thumbnail and the list
+/// areas are placed relative to them unless named). The checks (off the canvas, zero
+/// size, rows that do not fit) run when the engine installs the theme - see
+/// core/menu_layout.hpp. Alignment strings are "left" | "center" | "right" or "" (unset).
+struct UiScreenLayout {
+    std::optional<float> panelX, panelY, panelW, panelH;
+    std::optional<float> titleX, titleY, titleW;
+    std::string titleAlign;
+    std::optional<float> rowX, rowY, rowW, rowH, rowGap;
+    std::optional<float> compactY, compactH, compactGap, comfortRows;
+    std::string labelAlign, valueAlign;
+    std::optional<float> labelWidth, valueX, valueWidth, rowPadX;
+    std::optional<float> hintX, hintY, hintW;
+    std::string hintAlign;
+    std::optional<float> counterX, counterY, counterW;
+    std::optional<float> thumbX, thumbY, thumbW, thumbH;
+    bool thumbHidden = false;          ///< no thumbnail box on this slot page
+    std::optional<float> sliderStart, sliderEndInset, sliderValueInset;
+    std::optional<float> galleryColumns, galleryCellW, galleryThumbH, galleryGapX, galleryGapY, galleryY,
+        galleryBottom, galleryCaptionH;
+    std::optional<float> achY, achBottom, achRowH, achGap;
+    std::optional<float> historyY, historyBottom, historyPadX, historyGap;
+    std::optional<float> cardColumns, cardH, cardGapX, cardGapY, cardY, cardBottom;
+    std::optional<float> slotsPerPage;
+    std::optional<float> pagerX, pagerY, pagerW, pagerH;
+    bool operator==(const UiScreenLayout&) const = default;
+};
+
 /// Per-page overrides of the menu look. Whatever a page does not name follows
 /// the `menu` defaults.
 struct UiScreenTheme {
@@ -114,6 +144,7 @@ struct UiScreenTheme {
     bool hintHidden = false;
     std::optional<UiColor> counterColor;  ///< "3 / 10" counter of History / Ekstralar
     std::optional<float> counterPx;
+    UiScreenLayout layout;                ///< T2b: where the page puts its parts
     bool operator==(const UiScreenTheme&) const = default;
 };
 
@@ -296,6 +327,8 @@ struct UiStoryTheme {
 
 /// T2: save / load pages.
 struct UiSlotsTheme {
+    std::string layout = "list";                 ///< T2b: "list" (rows) | "cards" (grid of cards with thumbnail)
+    float numberBase = 0.0f;                        ///< T2b: 0 | 1 - the number shown in "Slot 0" labels (files unchanged)
     UiSkinSet rowSkin;                           ///< normal = filled slot; selected; empty; corrupt
     UiSkinSet thumbFrameSkin;                    ///< frame around the thumbnail box
     UiSkin thumbPlaceholder = makeSkinWithMode(UiSkinMode::Fit);  ///< shown where the slot has no thumbnail

@@ -207,7 +207,13 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
         case Type::SelectSlot:
             if (m_paused) {
                 if (m_pauseMode == PauseMenuMode::SaveSlots ||
-                    m_pauseMode == PauseMenuMode::LoadSlots) menuChooseSlot(event.slot);
+                    m_pauseMode == PauseMenuMode::LoadSlots) {
+                    // T2b: a digit picks the n-th row of the visible page (with slots.number_base 1
+                    // the labels count from 1: key 1 = first row, key 0 = tenth).
+                    const int base = m_uiTheme.slots.numberBase >= 0.5f ? 1 : 0;
+                    const int row = base == 1 ? (event.slot == 0 ? 9 : event.slot - 1) : event.slot;
+                    menuChooseSlot(slotAtRow(row));
+                }
             } else if (!selectChoiceByNumber(event.slot)) {
                 // D-K3: a digit picks the n-th option while a choice menu is up;
                 // otherwise it keeps its quick-save-slot meaning.
@@ -263,6 +269,10 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (event.y == 0.0f || !std::isfinite(event.y)) break;
             if (isBacklogOpen()) backlogScroll(event.y);
             else if (isExtrasOpen()) extrasScroll(event.y);  // D07-2
+            else if (m_paused && (m_pauseMode == PauseMenuMode::SaveSlots ||
+                                  m_pauseMode == PauseMenuMode::LoadSlots)) {
+                slotPageMove(event.y > 0.0f ? -1 : +1);  // T2b: wheel turns the slot page
+            }
             else if (!m_paused && event.y > 0.0f) openBacklog();
             break;
         case Type::ToggleAuto:

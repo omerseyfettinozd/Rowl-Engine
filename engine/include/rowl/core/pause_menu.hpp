@@ -2,6 +2,7 @@
 
 #include "rowl/core/player_ui_strings.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -169,29 +170,6 @@ struct PauseExtrasView {
     // Music room / achievements
     std::string playingId;    // music room: id of the playing track, "" none
     std::vector<PauseExtrasItemView> items;
-};
-
-struct PauseMenuView {
-    bool open = false;
-    /// T2: which page this is - "title" | "pause" | "save" | "load" | "preferences" |
-    /// "history" | "extras_root" | "gallery" | "music" | "achievements" | "confirm"
-    /// (a page with an armed "are you sure" row). The theme dresses pages by this name.
-    std::string page;
-    std::string title;
-    std::vector<PauseMenuRow> rows;
-    int selected = 0;
-    std::string hint;
-    /// D02: title screen active / newest valid slot for Continue (-1 none).
-    bool titleActive = false;
-    int continueSlot = -1;
-    /// D02: thumbnail of the selected slot on a slot page (null = none);
-    /// `thumbnailKey` ("slot|saved_at") identifies it for texture caching.
-    std::shared_ptr<const std::string> thumbnailPng;
-    std::string thumbnailKey;
-    /// D03-2: backlog page content (active only in PauseMenuMode::Backlog).
-    PauseBacklogView backlog;
-    /// D07-2: Ekstralar pages (active only in an Extras* mode).
-    PauseExtrasView extras;
 };
 
 /// D07-2: the `extras` object of the pause-menu JSON (engine_extras_menu.cpp).
@@ -406,6 +384,266 @@ struct PauseMenuLayout {
         if (vx > kPlusX0) return +1;
         return 0;
     }
+};
+
+/// T2b: horizontal alignment of a layout text box.
+enum class MenuAlign : uint8_t { Left = 0, Center = 1, Right = 2 };
+inline const char* menuAlignName(MenuAlign align) {
+    return align == MenuAlign::Center ? "Center" : align == MenuAlign::Right ? "Right" : "Left";
+}
+
+/// T2b: the RUNTIME layout of one menu page (virtual 1920x1080 canvas). Every
+/// field defaults to the matching PauseMenuLayout constant, so a project without
+/// `screens.<page>.layout` in its ui_theme.json lays the page out exactly as
+/// before. The engine resolves one per page (theme + validation, see
+/// resolveMenuLayout), hit-tests clicks / wheel / drags with it and hands the
+/// same copy to the window in PauseMenuView::layout, so what is drawn and what is
+/// hit share ONE source. The PauseMenuLayout statics stay as the built-in
+/// defaults and as the row-count / row-index contract.
+struct MenuLayout {
+    // Panel behind the page.
+    float panelX = PauseMenuLayout::kPanelX;
+    float panelY = PauseMenuLayout::kPanelY;
+    float panelW = PauseMenuLayout::kPanelW;
+    float panelH = PauseMenuLayout::kPanelH;
+    // Page title text box.
+    float titleX = PauseMenuLayout::kRowX;
+    float titleY = 170.0f;
+    float titleW = PauseMenuLayout::kRowW;
+    float titleH = 60.0f;
+    MenuAlign titleAlign = MenuAlign::Left;
+    // Rows: comfortable pitch up to comfortRows rows, the compact one beyond.
+    float rowX = PauseMenuLayout::kRowX;
+    float rowW = PauseMenuLayout::kRowW;
+    float rowY0 = PauseMenuLayout::kRowY0;
+    float rowH = PauseMenuLayout::kRowH;
+    float rowGap = PauseMenuLayout::kRowGap;
+    int comfortRows = PauseMenuLayout::kComfortRows;
+    float compactRowY0 = PauseMenuLayout::kCompactRowY0;
+    float compactRowH = PauseMenuLayout::kCompactRowH;
+    float compactRowGap = PauseMenuLayout::kCompactRowGap;
+    /// Row text: the label column and the value column (fractions of rowW) with their alignment.
+    MenuAlign labelAlign = MenuAlign::Left;
+    MenuAlign valueAlign = MenuAlign::Left;
+    float labelWidth = 0.55f;
+    float valueX = 0.55f;
+    float valueWidth = 0.4f;
+    float rowPadX = 18.0f;  ///< label inset when the row skin gives no padding
+    /// Value rows: px from rowX of the end of the minus zone / start of the plus zone.
+    float adjustMinusW = PauseMenuLayout::kMinusX1 - PauseMenuLayout::kRowX;
+    float adjustPlusX = PauseMenuLayout::kPlusX0 - PauseMenuLayout::kRowX;
+    // Hint line, "3 / 10" counter, slot thumbnail box.
+    float hintX = PauseMenuLayout::kRowX;
+    float hintY = PauseMenuLayout::kPanelY + PauseMenuLayout::kPanelH - 44.0f;
+    float hintW = PauseMenuLayout::kRowW;
+    MenuAlign hintAlign = MenuAlign::Left;
+    float counterX = PauseMenuLayout::kRowX + PauseMenuLayout::kRowW - 150.0f;
+    float counterY = 178.0f;
+    float counterW = 150.0f;
+    float thumbX = PauseMenuLayout::kThumbX;
+    float thumbY = PauseMenuLayout::kThumbY;
+    float thumbW = PauseMenuLayout::kThumbW;
+    float thumbH = PauseMenuLayout::kThumbH;
+    bool thumbHidden = false;
+    // Preferences slider.
+    float sliderStart = 0.52f;      ///< track start, fraction of rowW
+    float sliderEndInset = 120.0f;  ///< track end, px left of the row's right edge
+    float sliderValueInset = 104.0f;  ///< the "55%" text, px left of the row's right edge
+    float sliderHitSlack = PauseMenuLayout::kSliderHitSlack;
+    // History list area.
+    float backlogY0 = PauseMenuLayout::kBacklogY0;
+    float backlogY1 = PauseMenuLayout::kBacklogY1;
+    float backlogPadX = PauseMenuLayout::kBacklogPadX;
+    float backlogGap = PauseMenuLayout::kBacklogGap;
+    // Gallery grid.
+    int galleryColumns = PauseMenuLayout::kGalleryColumns;
+    float galleryY0 = PauseMenuLayout::kGalleryY0;
+    float galleryY1 = PauseMenuLayout::kGalleryY1;
+    float galleryGapX = PauseMenuLayout::kGalleryGapX;
+    float galleryGapY = PauseMenuLayout::kGalleryGapY;
+    float galleryCellW = PauseMenuLayout::kGalleryCellW;
+    float galleryThumbH = PauseMenuLayout::kGalleryThumbH;
+    float galleryCaptionH = PauseMenuLayout::kGalleryCaptionH;
+    // Achievements list.
+    float achY0 = PauseMenuLayout::kAchY0;
+    float achY1 = PauseMenuLayout::kAchY1;
+    float achRowH = PauseMenuLayout::kAchRowH;
+    float achRowGap = PauseMenuLayout::kAchRowGap;
+    // Slot pages: how many slots a page shows, the "< Page 1 / 3 >" strip and the card grid.
+    int slotsPerPage = PauseMenuLayout::kSlotRows;
+    float pagerX = PauseMenuLayout::kRowX;
+    float pagerY = PauseMenuLayout::kPanelY + PauseMenuLayout::kPanelH - 44.0f - 52.0f;
+    float pagerW = PauseMenuLayout::kRowW;
+    float pagerH = 44.0f;
+    bool cards = false;  ///< slot pages as a card grid (theme `slots.layout`: "cards")
+    int cardColumns = 2;
+    float cardH = 140.0f;
+    float cardGapX = 16.0f;
+    float cardGapY = 14.0f;
+    float cardY0 = 250.0f;
+    float cardY1 = 866.0f;
+    /// Accessibility text scale the row heights were adapted to (1 = design size).
+    float textScale = 1.0f;
+
+    // ── rows ──
+    float rowY0Of(int rowCount) const { return rowCount > comfortRows ? compactRowY0 : rowY0; }
+    float rowHOf(int rowCount) const { return rowCount > comfortRows ? compactRowH : rowH; }
+    float rowStride(int rowCount) const {
+        return rowHOf(rowCount) + (rowCount > comfortRows ? compactRowGap : rowGap);
+    }
+    float rowTop(int index, int rowCount) const {
+        return rowY0Of(rowCount) + static_cast<float>(index) * rowStride(rowCount);
+    }
+    /// Row index under a virtual point, or -1 for gaps/outside.
+    int rowAt(float vx, float vy, int rowCount) const {
+        const float y0 = rowY0Of(rowCount);
+        if (vx < rowX || vx > rowX + rowW || vy < y0) return -1;
+        const float stride = rowStride(rowCount);
+        const int index = static_cast<int>((vy - y0) / stride);
+        if (index < 0 || index >= rowCount) return -1;
+        return (vy <= y0 + index * stride + rowHOf(rowCount)) ? index : -1;
+    }
+    // ── value rows / slider ──
+    float sliderX0() const { return rowX + rowW * sliderStart; }
+    float sliderX1() const { return rowX + rowW - sliderEndInset; }
+    float sliderValuePos() const { return rowX + rowW - sliderValueInset; }
+    bool inSliderZone(float vx) const {
+        return vx >= sliderX0() - sliderHitSlack && vx <= sliderX1() + sliderHitSlack;
+    }
+    float sliderFractionAt(float vx) const {
+        const float f = (vx - sliderX0()) / (sliderX1() - sliderX0());
+        return f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f);
+    }
+    /// -1 = minus zone, +1 = plus zone, 0 = middle (select only).
+    int adjustDirection(float vx) const {
+        if (vx < rowX + adjustMinusW) return -1;
+        if (vx > rowX + adjustPlusX) return +1;
+        return 0;
+    }
+    // ── history ──
+    float backlogTextW() const { return rowW - 2.0f * backlogPadX - 60.0f; }
+    // ── gallery ──
+    float galleryCellH() const { return galleryThumbH + galleryCaptionH; }
+    float galleryPitchY() const { return galleryCellH() + galleryGapY; }
+    int galleryVisibleRows() const {
+        return std::max(1, static_cast<int>((galleryY1 - galleryY0 + galleryGapY) / galleryPitchY()));
+    }
+    float galleryCellX(int column) const {
+        return rowX + static_cast<float>(column) * (galleryCellW + galleryGapX);
+    }
+    float galleryCellY(int visibleRow) const {
+        return galleryY0 + static_cast<float>(visibleRow) * galleryPitchY();
+    }
+    bool galleryCellAt(float vx, float vy, int& column, int& visibleRow) const {
+        if (vx < rowX || vy < galleryY0) return false;
+        const float fx = vx - rowX;
+        column = static_cast<int>(fx / (galleryCellW + galleryGapX));
+        visibleRow = static_cast<int>((vy - galleryY0) / galleryPitchY());
+        if (column < 0 || column >= galleryColumns || visibleRow < 0 ||
+            visibleRow >= galleryVisibleRows()) return false;
+        if (fx - column * (galleryCellW + galleryGapX) > galleryCellW) return false;
+        return (vy - galleryY0) - visibleRow * galleryPitchY() <= galleryCellH();
+    }
+    // ── achievements ──
+    float achPitch() const { return achRowH + achRowGap; }
+    int achVisibleRows() const {
+        return std::max(1, static_cast<int>((achY1 - achY0 + achRowGap) / achPitch()));
+    }
+    float achRowTop(int visibleIndex) const { return achY0 + static_cast<float>(visibleIndex) * achPitch(); }
+    int achRowAt(float vx, float vy, int visibleCount) const {
+        if (vx < rowX || vx > rowX + rowW || vy < achY0) return -1;
+        const int index = static_cast<int>((vy - achY0) / achPitch());
+        if (index < 0 || index >= visibleCount || index >= achVisibleRows()) return -1;
+        return (vy - achY0) - static_cast<float>(index) * achPitch() <= achRowH ? index : -1;
+    }
+    // ── slot pages: card grid and pager ──
+    float cardW() const {
+        return (rowW - static_cast<float>(cardColumns - 1) * cardGapX) / static_cast<float>(cardColumns);
+    }
+    int cardVisibleRows() const {
+        return std::max(1, static_cast<int>((cardY1 - cardY0 + cardGapY) / (cardH + cardGapY)));
+    }
+    float cardX(int row) const { return rowX + static_cast<float>(row % cardColumns) * (cardW() + cardGapX); }
+    float cardY(int row) const {
+        return cardY0 + static_cast<float>(row / cardColumns) * (cardH + cardGapY);
+    }
+    /// Card (page row index) under a virtual point among `count` cards, or -1.
+    int cardAt(float vx, float vy, int count) const {
+        if (vx < rowX || vy < cardY0) return -1;
+        const float fx = vx - rowX;
+        const int column = static_cast<int>(fx / (cardW() + cardGapX));
+        const int line = static_cast<int>((vy - cardY0) / (cardH + cardGapY));
+        if (column < 0 || column >= cardColumns || line < 0 || line >= cardVisibleRows()) return -1;
+        if (fx - static_cast<float>(column) * (cardW() + cardGapX) > cardW()) return -1;
+        if ((vy - cardY0) - static_cast<float>(line) * (cardH + cardGapY) > cardH) return -1;
+        const int index = line * cardColumns + column;
+        return index < count ? index : -1;
+    }
+    /// -1 = previous page, +1 = next page, 0 = miss, for a click on the pager strip.
+    int pagerDirectionAt(float vx, float vy) const {
+        if (vx < pagerX || vx > pagerX + pagerW || vy < pagerY || vy > pagerY + pagerH) return 0;
+        if (vx < pagerX + pagerW * 0.33f) return -1;
+        if (vx > pagerX + pagerW * 0.67f) return +1;
+        return 0;
+    }
+};
+
+/// One slot card of the card layout (virtual canvas pixels).
+struct PauseSlotCardView {
+    int row = 0;            ///< index on the page
+    int slot = 0;           ///< absolute slot number
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    int slotState = 0;      ///< 1 empty, 2 filled, 3 corrupt
+    bool selected = false;
+    std::string label;      ///< "Yuva 3"
+    std::string value;      ///< "Dolu" / "Bos" / "Bozuk"
+    std::string date;       ///< local "YYYY-MM-DD HH:MM" (filled slots)
+    std::string summary;    ///< chapter + summary, one line
+    std::shared_ptr<const std::string> thumbnailPng;
+    std::string thumbnailKey;
+};
+
+/// "< Sayfa 2 / 3 >" strip of a slot page with more than one page.
+struct PauseSlotPagerView {
+    bool active = false;
+    int page = 0;           ///< 0-based
+    int pageCount = 1;
+    std::string label;
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+};
+
+struct PauseMenuView {
+    bool open = false;
+    /// T2: which page this is - "title" | "pause" | "save" | "load" | "preferences" |
+    /// "history" | "extras_root" | "gallery" | "music" | "achievements" | "confirm"
+    /// (a page with an armed "are you sure" row). The theme dresses pages by this name.
+    std::string page;
+    std::string title;
+    std::vector<PauseMenuRow> rows;
+    int selected = 0;
+    std::string hint;
+    /// D02: title screen active / newest valid slot for Continue (-1 none).
+    bool titleActive = false;
+    int continueSlot = -1;
+    /// D02: thumbnail of the selected slot on a slot page (null = none);
+    /// `thumbnailKey` ("slot|saved_at") identifies it for texture caching.
+    std::shared_ptr<const std::string> thumbnailPng;
+    std::string thumbnailKey;
+    /// D03-2: backlog page content (active only in PauseMenuMode::Backlog).
+    PauseBacklogView backlog;
+    /// D07-2: Ekstralar pages (active only in an Extras* mode).
+    PauseExtrasView extras;
+    /// T2b: the page's layout (theme + defaults), the one the engine hit-tests with.
+    MenuLayout layout;
+    /// T2b: slot pages - card grid (empty = list rows) and the pager strip.
+    std::vector<PauseSlotCardView> cards;
+    PauseSlotPagerView pager;
 };
 
 } // namespace Rowl::Core
