@@ -510,20 +510,21 @@ void singleSourceTests() {
         Rig rig(Options{themeWith("preferences", layout)});
         rig.openPreferences();
         const json m = rig.menu();
-        req(m["layout"]["row_x"] == 260 && m["layout"]["row_w"] == 980 && m["layout"]["rows"].size() == 12,
+        // F2 (B-13): single-language game has 11 preference rows (Dil hidden).
+        req(m["layout"]["row_x"] == 260 && m["layout"]["row_w"] == 980 && m["layout"]["rows"].size() == 11,
             "the page reports its layout: " + m["layout"].dump());
         const MenuLayout expected = Rowl::Core::resolveMenuLayouts(parseUiTheme(themeWith("preferences", layout)).theme)
                                         .pages[static_cast<size_t>(uiScreenIndex("preferences"))];
-        for (int i = 0; i < 12; ++i) {
-            req(std::fabs(m["layout"]["rows"][i]["y"].get<float>() - expected.rowTop(i, 12)) < 0.01f,
+        for (int i = 0; i < 11; ++i) {
+            req(std::fabs(m["layout"]["rows"][i]["y"].get<float>() - expected.rowTop(i, 11)) < 0.01f,
                 "row " + std::to_string(i) + " y in JSON == resolver");
         }
         // Drawn == hit: select row i by pointer in its middle band, see the highlight at that very place.
         const std::string reference = rig.frame();
         const Rgb panelInk = atV(reference, 300.0f, 1000.0f);
-        for (int i = 0; i < 11; ++i) {
-            const float top = expected.rowTop(i, 12);
-            const float centre = top + expected.rowHOf(12) * 0.5f;
+        for (int i = 0; i < 10; ++i) {
+            const float top = expected.rowTop(i, 11);
+            const float centre = top + expected.rowHOf(11) * 0.5f;
             rig.click(260.0f + 980.0f * 0.5f, centre);
             req(rig.selected() == i, "click on the centre of row " + std::to_string(i) + " selects it, got " + std::to_string(rig.selected()));
             const std::string frame = rig.frame();
@@ -532,13 +533,13 @@ void singleSourceTests() {
             req(!near(atV(frame, 260.0f + 490.0f, top - 3.0f), kSelectedFill), "nothing is drawn in the gap above row " + std::to_string(i));
         }
         // The hint line sits at the moved panel's bottom, the page title at the layout's title place.
-        rig.cmd(ROWL_PAUSE_MENU_UP, 11);
+        rig.cmd(ROWL_PAUSE_MENU_UP, 10);
         const std::string frame = rig.frame();
         req(inkIn(frame, 260.0f, 40.0f + 1000.0f - 44.0f, 1240.0f, 40.0f + 1000.0f - 14.0f, panelInk) > 20,
             "the hint is drawn at the moved panel's bottom");
         req(inkIn(frame, 260.0f, 40.0f + 60.0f, 700.0f, 40.0f + 120.0f, panelInk) > 20, "the page title is drawn at the moved panel's top");
         // The last row (Geri) is hit at its moved place and leaves the page.
-        rig.click(750.0f, expected.rowTop(11, 12) + expected.rowHOf(12) * 0.5f);
+        rig.click(750.0f, expected.rowTop(10, 11) + expected.rowHOf(11) * 0.5f);
         req(rig.mode() == 0, "a click on the moved Geri row leaves the Preferences page");
     }
     // Title screen: a vertical list bottom-left, no panel; clicks follow.
@@ -616,7 +617,8 @@ void singleSourceTests() {
         Rig rig(Options{doc.dump()});
         rig.openPreferences();
         const float x0 = 580.0f + 760.0f * 0.2f, x1 = 580.0f + 760.0f - 80.0f;
-        const float cy = PL::rowTop(0, 12) + PL::rowH(12) * 0.5f;
+        const int prefRows = static_cast<int>(rig.menu()["rows"].size());
+        const float cy = PL::rowTop(0, prefRows) + PL::rowH(prefRows) * 0.5f;
         rig.click(x0 + (x1 - x0) * 0.5f, cy);
         req(rig.menu()["rows"][0]["value"] == "50%", "a press mid-track sets 50%: " + rig.menu()["rows"][0].dump());
         rig.click(x0 + (x1 - x0) * 0.25f, cy);
@@ -830,8 +832,8 @@ void slotPageTests() {
         rig.cmd(ROWL_PAUSE_MENU_UP);
         req(rig.menu()["slot_page"]["page"] == 0 && rig.selected() == 6, "Up off the first line goes to the previous page's last line");
         // Load page of the card layout: a filled slot's card has its date / summary line in the view.
-        rig.cmd(ROWL_PAUSE_MENU_BACK);
-        rig.cmd(ROWL_PAUSE_MENU_DOWN, 2);
+        rig.cmd(ROWL_PAUSE_MENU_BACK);  // F2 (D-D2): Back from Save lands on row 1 (Oyunu Kaydet)
+        rig.cmd(ROWL_PAUSE_MENU_DOWN, 1);
         rig.cmd(ROWL_PAUSE_MENU_CONFIRM);
         req(rig.mode() == 2, "Load page open");
     }

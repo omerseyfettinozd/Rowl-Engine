@@ -73,13 +73,21 @@ struct PauseMenuRow {
 
 /// D02: per-slot metadata memo shared by the slot pages and the title screen.
 struct PauseSlotInfo {
-    enum class State : uint8_t { Empty = 0, Valid = 1, Corrupt = 2 };
+    /// F2: Incompatible = a well-formed save this build cannot apply (newer format
+    /// version, a graph it was not recorded from, a node the graph lacks): shown as
+    /// "uyumsuz" instead of "bozuk", so an author who changed the story is not told
+    /// the player's saves are broken.
+    enum class State : uint8_t { Empty = 0, Valid = 1, Corrupt = 2, Incompatible = 3 };
     State state = State::Empty;
     std::string savedAt;       // ISO-8601 UTC ("saved_at")
     std::string chapterTitle;
     std::string summary;
     double playtimeSeconds = 0.0;
-    std::shared_ptr<const std::string> thumbnailPng;
+    /// F2 (B-2): the list keeps metadata only; the PNG is read lazily for the selected
+    /// row (Engine::slotThumbnail). `thumbnailStamp` = saved_at + file size + mtime:
+    /// two saves inside one second still get different textures.
+    bool hasThumbnail = false;
+    std::string thumbnailStamp;
 };
 
 /// D07-2: row builder that names every field (aggregate init of the older rows

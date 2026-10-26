@@ -274,7 +274,8 @@ void test_native_player_profile() {
                                             "text_scale":2,"sfx_pool_depth":0.9,"ui_volume":-1})") == ProfileMutation::Ok,
                 "clamped merge failed");
         const auto& q = store.preferences();
-        profReq(q.masterVolume == 1.0f && q.textSpeedMultiplier == 0.25f && q.autoAdvanceDelay == 60.0f &&
+        // F2 (B-15): auto_advance_delay unified across profile and player menu to [0, 10] seconds.
+        profReq(q.masterVolume == 1.0f && q.textSpeedMultiplier == 0.25f && q.autoAdvanceDelay == 10.0f &&
                     q.textScale == 1.5f && q.sfxPoolDepth == 1 && q.uiVolume == 0.0f,
                 "merge did not clamp");
         profReq(store.setPreferencesJson(R"({"skip_mode":"READ-ONLY"})") == ProfileMutation::Ok &&

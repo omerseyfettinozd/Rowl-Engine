@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -71,6 +72,12 @@ struct StoryGraphDocument {
     std::vector<GraphGroup> groups;
     std::vector<GraphSubgraph> subgraphs;
     std::vector<GraphChapter> chapters;
+    /// F2 (B-7): project-level variable declarations - the graph root's
+    /// `"variables": {"name": initial_value}` object, in file order. A New Game starts
+    /// with these set, BEFORE the first node's conditions run, so a condition may read a
+    /// variable that no earlier node assigned (an undeclared name is nil in Lua). Values
+    /// are stored as text, like every saved variable; no declarations = the old behaviour.
+    std::vector<std::pair<std::string, std::string>> variables;
 };
 
 /// Max serialized graph-identity bytes accepted from save files (D4/G #70).

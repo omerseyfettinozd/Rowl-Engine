@@ -15,19 +15,78 @@
 #include "rowl/core/engine.hpp"
 
 #include "rowl/render/window.hpp"
+#include "rowl/scripting/lua_sandbox.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <vector>
 
 namespace Rowl::Core {
 
+const Engine::ChoiceLayoutCache& Engine::choiceLayout() const {
+    // Key = the buttons (identity, text, geometry, condition, font), the Lua revision (a
+    // condition can only change when a variable / script did) and the window-side layout inputs.
+    uint64_t key = 1469598103934665603ull;
+    const auto mix = [&key](uint64_t value) {
+        key ^= value;
+        key *= 1099511628211ull;
+    };
+    const auto mixText = [&](const std::string& text) {
+        for (const unsigned char c : text) mix(c);
+        mix(0xFF);
+    };
+    const auto mixFloat = [&](float value) {
+        uint32_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(value));
+        std::memcpy(&bits, &value, sizeof(bits));
+        mix(bits);
+    };
+    for (const auto& button : m_activeChoiceButtons) {
+        mixText(button.optionId);
+        mixText(button.text);
+        mixText(button.condition);
+        mixText(button.fontFamily);
+        mixText(button.textColor);
+        mixText(button.backgroundColor);
+        mixText(button.hoverColor);
+        mixText(button.borderColor);
+        mixText(button.textAlignment);
+        mixText(button.backgroundImage);
+        mixFloat(button.x);
+        mixFloat(button.y);
+        mixFloat(button.width);
+        mixFloat(button.height);
+        mixFloat(button.fontSize);
+        mixFloat(button.opacity);
+        mixFloat(button.borderThickness);
+        mixFloat(button.cornerRadius);
+        mix(button.authorEnabled ? 1u : 0u);
+    }
+    mix(m_luaSandbox ? m_luaSandbox->revision() : 0u);
+    mix(m_window ? m_window->choiceLayoutKey() : 0u);
+    if (m_choiceLayout.valid && m_choiceLayout.key == key) return m_choiceLayout;
+
+    m_choiceLayout.key = key;
+    m_choiceLayout.laidOut = m_activeChoiceButtons;
+    for (auto& button : m_choiceLayout.laidOut) {
+        // Live: what is drawn, focusable and clickable is the same fact.
+        button.enabled = button.authorEnabled && choiceConditionHolds(button.condition);
+    }
+    if (m_window) m_window->fitChoiceButtons(m_choiceLayout.laidOut);
+    m_choiceLayout.valid = true;
+    ++m_choiceLayout.builds;
+    return m_choiceLayout;
+}
+
 std::vector<std::size_t> Engine::selectableChoiceIndices() const {
     std::vector<std::size_t> indices;
-    for (std::size_t i = 0; i < m_activeChoiceButtons.size(); ++i) {
-        const auto& button = m_activeChoiceButtons[i];
-        // Cizilmeyen (enabled=false) dugme odaga girmez: gorunmez odak olmaz.
-        if (button.enabled && choiceButtonSelectable(button)) indices.push_back(i);
+    if (m_activeChoiceButtons.empty()) return indices;
+    const auto& laidOut = choiceLayout().laidOut;
+    for (std::size_t i = 0; i < laidOut.size(); ++i) {
+        // A button that is not selectable right now (disabled by the author, or its condition
+        // does not hold) is neither drawn nor focusable.
+        if (laidOut[i].enabled) indices.push_back(i);
     }
     return indices;
 }
@@ -103,10 +162,10 @@ void Engine::focusChoiceAt(float physicalX, float physicalY) {
     float x = 0.0f, y = 0.0f;
     bool bezelTap = false;
     if (!m_window->mapPhysicalToVirtual(physicalX, physicalY, 1920, 1080, x, y, bezelTap) || bezelTap) return;
-    const auto laidOut = getLaidOutChoiceButtons();
+    const auto& laidOut = choiceLayout().laidOut;
     for (std::size_t i = laidOut.size(); i-- > 0;) {
         const auto& button = laidOut[i];
-        if (!button.enabled || !choiceButtonSelectable(button)) continue;
+        if (!button.enabled) continue;
         if (x >= button.x && x <= button.x + button.width &&
             y >= button.y && y <= button.y + button.height) {
             m_choiceFocusId = button.optionId;
@@ -116,9 +175,8 @@ void Engine::focusChoiceAt(float physicalX, float physicalY) {
 }
 
 std::vector<Rowl::Render::ChoiceButtonRenderData> Engine::getLaidOutChoiceButtons() const {
-    auto buttons = m_activeChoiceButtons;
-    if (buttons.empty()) return buttons;
-    if (m_window) m_window->fitChoiceButtons(buttons);
+    if (m_activeChoiceButtons.empty()) return {};
+    auto buttons = choiceLayout().laidOut;
     if (!m_paused) {
         const int focus = focusedChoiceIndex();
         if (focus >= 0) buttons[static_cast<std::size_t>(focus)].focused = true;

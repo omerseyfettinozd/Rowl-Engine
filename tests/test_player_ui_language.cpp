@@ -237,8 +237,15 @@ void checkTable() {
             std::string(uiText(UiText::Continue, UiLang::English)) == "Continue",
         "English Resume vs Continue differ");
     // Language choice.
-    req(uiLangForLocale("en", false) == UiLang::Turkish, "no locale declaration keeps Turkish");
-    req(uiLangForLocale("", false) == UiLang::Turkish, "no locale declaration, empty locale");
+    // F2 (B-13/B-14) changes the former "no locale declaration keeps Turkish" lock on purpose: a
+    // project that declares no locales (an English sample with no manifest keys) got Turkish
+    // menus on every machine. It now follows the SYSTEM language (Turkish on a Turkish system,
+    // English elsewhere); a project that declares its locales is unchanged.
+    req(uiLangForLocale("en", false, UiLang::Turkish) == UiLang::Turkish, "undeclared + Turkish system = Turkish");
+    req(uiLangForLocale("en", false, UiLang::English) == UiLang::English, "undeclared + English system = English");
+    req(uiLangForLocale("", false, UiLang::English) == UiLang::English, "undeclared, empty locale, English system");
+    req(uiLangForLocale("en", true, UiLang::Turkish) == UiLang::English, "declared 'en' ignores the system language");
+    req(uiLangForLocale("tr", true, UiLang::English) == UiLang::Turkish, "declared 'tr' ignores the system language");
     req(uiLangForLocale("tr", true) == UiLang::Turkish && uiLangForLocale("tr-TR", true) == UiLang::Turkish &&
             uiLangForLocale("tr_TR", true) == UiLang::Turkish,
         "tr* is Turkish");

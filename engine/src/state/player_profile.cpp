@@ -354,6 +354,7 @@ void PlayerProfileStore::open(const fs::path& profileDir, const std::string& gam
     m_dir = profileDir;
     m_path = profileDir / kPlayerProfileFileName;
     m_gameId = gameId;
+    m_flushFailures = 0;
     try {
         loadFromDisk();
     } catch (const std::exception& error) {
@@ -559,7 +560,7 @@ void PlayerProfileStore::loadFromDisk() {
         prefs.textSpeedMultiplier = clampFloat(number, 0.25f, 4.0f);
     }
     if (readFloat(root, "auto_advance_delay", number)) {
-        prefs.autoAdvanceDelay = clampFloat(number, 0.0f, 60.0f);
+        prefs.autoAdvanceDelay = clampFloat(number, 0.0f, kPlayerProfileMaxAutoAdvanceDelay);
     }
     if (readFloat(root, "text_scale", number)) prefs.textScale = snapTextScale(number);
     if (readBool(root, "high_contrast", flag)) prefs.highContrast = flag;
@@ -810,7 +811,7 @@ ProfileMutation PlayerProfileStore::setPreferencesJson(std::string_view json, st
         else if (key == "ambience_volume") ok = number(next.ambienceVolume, 0.0f, 1.0f);
         else if (key == "ui_volume") ok = number(next.uiVolume, 0.0f, 1.0f);
         else if (key == "text_speed_multiplier") ok = number(next.textSpeedMultiplier, 0.25f, 4.0f);
-        else if (key == "auto_advance_delay") ok = number(next.autoAdvanceDelay, 0.0f, 60.0f);
+        else if (key == "auto_advance_delay") ok = number(next.autoAdvanceDelay, 0.0f, kPlayerProfileMaxAutoAdvanceDelay);
         else if (key == "text_scale") {
             float raw = 1.0f;
             ok = number(raw, -std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
@@ -946,6 +947,7 @@ bool PlayerProfileStore::flush(std::string* errorOut) {
     }
     m_dirtyAge = 0.0f;
     m_retryDelay = kAutosaveRetryDelaySeconds;
+    ++m_flushFailures;
     if (errorOut) *errorOut = std::move(error);
     return false;
 }

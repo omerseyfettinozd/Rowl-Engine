@@ -39,8 +39,14 @@ void Engine::setPaused(bool paused) {
     }
     // D02: a host closing the menu also closes the title screen; the hint
     // of the previous session never leaks into a fresh menu.
-    if (!paused) m_titleActive = false;
+    if (!paused) {
+        m_titleActive = false;
+        // F2 (B-1): the menu-free story frame belongs to one pause; the next pause takes its own.
+        if (m_window) m_window->clearStoryFrame();
+        m_slotSaveFailed.reset();  // a failed save is reported on that visit only
+    }
     m_titleHint = UiText::None;
+    m_hintSlot = -1;
     // Opening always lands on a predictable main page; closing resumes.
     // Pausing never quits — exit requires the two-step menu confirmation.
     m_pauseMode = PauseMenuMode::Main;
@@ -66,7 +72,8 @@ int Engine::pauseMenuRowCount() const {
         case PauseMenuMode::Gallery:
         case PauseMenuMode::MusicRoom:
         case PauseMenuMode::Achievements: return extrasItemCount();
-        case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
+        case PauseMenuMode::Preferences:
+            return PauseMenuLayout::kPreferenceRows - (preferenceLanguageRowShown() ? 0 : 1);  // F2 (B-13)
         case PauseMenuMode::Backlog: return static_cast<int>(getDialogueHistory().size());
         default: return slotRowsOnPage();  // T2b: the visible page of the Save / Load slots
     }
@@ -102,15 +109,46 @@ void Engine::menuChooseSlot(int32_t slotIndex) {
         return;
     }
     if (m_pauseMode == PauseMenuMode::SaveSlots) {
+        // F2 (B-3): the result is shown (hint line), a failed save is not hidden behind the
+        // older file the row still describes.
         if (saveGameSlot(slotIndex)) {
+            m_slotSaveFailed.reset(static_cast<size_t>(slotIndex));
+            setMenuHint(UiText::HintSaved, slotIndex);
             ROWL_LOG_INFO("[Player] Saved to slot #" + std::to_string(slotIndex) + " from pause menu.");
+        } else {
+            m_slotSaveFailed.set(static_cast<size_t>(slotIndex));
+            setMenuHint(UiText::HintSaveFailed, slotIndex);
         }
-    } else {
-        if (loadGameSlot(slotIndex)) {
-            ROWL_LOG_INFO("[Player] Loaded slot #" + std::to_string(slotIndex) + " from pause menu.");
-        }
+        return;
     }
-    // Stay paused on the slot page so occupancy refreshes visibly.
+    ensureSlotCache();
+    const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slotIndex - kPauseMenuQuickSlotMin)];
+    if (info.state == PauseSlotInfo::State::Empty) {
+        setMenuHint(UiText::HintEmptySlot, slotIndex);
+        return;
+    }
+    if (info.state == PauseSlotInfo::State::Corrupt) {
+        setMenuHint(UiText::HintCorruptSave, slotIndex);
+        return;
+    }
+    if (info.state == PauseSlotInfo::State::Incompatible) {
+        setMenuHint(UiText::HintIncompatibleSave, slotIndex);
+        return;
+    }
+    if (loadGameSlot(slotIndex)) {
+        ROWL_LOG_INFO("[Player] Loaded slot #" + std::to_string(slotIndex) + " from pause menu.");
+        // F2 (B-3 product decision): a successful load closes the menu and the story goes on
+        // from the loaded place; the capsule says what happened.
+        setPaused(false);
+        postNotice(UiText::NoticeLoaded, slotIndex);
+        return;
+    }
+    if (m_lastLoadFailure != LoadFailure::Incompatible) m_slotLoadFailed.set(static_cast<size_t>(slotIndex));
+    m_pauseSlotCacheValid = false;
+    ensureSlotCache();
+    setMenuHint(m_lastLoadFailure == LoadFailure::Incompatible ? UiText::HintIncompatibleSave
+                                                               : UiText::HintLoadFailed,
+                slotIndex);
 }
 
 void Engine::menuActivateSelected() {
@@ -130,8 +168,14 @@ void Engine::menuActivateSelected() {
     }
     switch (m_pauseSelected) {
         case 0: setPaused(false); break;
-        case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false; break;
-        case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false; break;
+        case 1:
+            m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false;
+            m_titleHint = UiText::None;  // F2: a page opens without the last visit's result line
+            break;
+        case 2:
+            m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false;
+            m_titleHint = UiText::None;
+            break;
         case PauseMenuLayout::kMainPrefsRow:
             // D05-2: the shared Preferences page opens over the pause menu and
             // Back / Esc return to this row.
@@ -195,8 +239,12 @@ void Engine::menuBack() {
         return;
     }
     if (m_pauseMode != PauseMenuMode::Main) {
+        // F2 (D-D2): Back from the Save / Load pages lands on the row that opened them (like
+        // Tercihler and the title do), not on "Devam Et".
+        m_pauseSelected = m_pauseMode == PauseMenuMode::SaveSlots ? 1
+                        : m_pauseMode == PauseMenuMode::LoadSlots ? 2 : 0;
         m_pauseMode = PauseMenuMode::Main;
-        m_pauseSelected = 0;
+        m_titleHint = UiText::None;
         return;
     }
     setPaused(false);
@@ -395,23 +443,28 @@ PauseMenuView Engine::getPauseMenuViewBase() const {
             const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slot)];
             PauseMenuRow row;
             row.label = T(UiText::SlotLabel) + " " + slotNumberText(slot);
-            row.value = T(info.state == PauseSlotInfo::State::Valid ? UiText::SlotFull
+            row.value = T(m_slotSaveFailed.test(static_cast<size_t>(slot)) ? UiText::SlotSaveFailed
+                        : info.state == PauseSlotInfo::State::Valid ? UiText::SlotFull
                         : info.state == PauseSlotInfo::State::Corrupt ? UiText::SlotCorrupt
+                        : info.state == PauseSlotInfo::State::Incompatible ? UiText::SlotIncompatible
                         : UiText::SlotEmpty);
             row.detail = pauseSlotDetail(info);
             row.slotState = info.state == PauseSlotInfo::State::Valid ? 2
                           : info.state == PauseSlotInfo::State::Corrupt ? 3 : 1;  // T2
             view.rows.push_back(row);
         }
-        const int selectedSlot = slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1)));
-        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(std::max(0, selectedSlot))];
-        if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.thumbnailPng &&
-            !selectedInfo.thumbnailPng->empty()) {
-            view.thumbnailPng = selectedInfo.thumbnailPng;
-            view.thumbnailKey = std::to_string(selectedSlot) + "|" + selectedInfo.savedAt;
+        const int selectedSlot = std::max(0, slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1))));
+        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(selectedSlot)];
+        if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.hasThumbnail) {
+            // F2 (B-2): read lazily for the selected row only; the key carries file size and
+            // write time so a second save in the same second gets a fresh texture.
+            if (auto png = slotThumbnail(selectedSlot, selectedInfo); png && !png->empty()) {
+                view.thumbnailPng = std::move(png);
+                view.thumbnailKey = std::to_string(selectedSlot) + "|" + selectedInfo.thumbnailStamp;
+            }
         }
-        view.hint = (m_titleActive && m_titleHint != UiText::None)
-            ? T(m_titleHint)
+        view.hint = m_titleHint != UiText::None
+            ? menuHintText(lang)
             : T(slotPageCount() > 1 ? UiText::HintSlotsPaged : UiText::HintSlots);
     }
     view.continueSlot = m_pauseSlotCacheValid ? m_continueSlot : -1;

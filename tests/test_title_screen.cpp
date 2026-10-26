@@ -333,11 +333,13 @@ void test_title_screen() {
     expectTitle(h, 4, "preferences page");
     {
         const json m = menu(h);
-        req(m["rows"].size() == 12 && m["rows"][4]["label"] == "Metin Hızı" &&
+        // F2 (B-13): this game declares no locales, so there is no "Dil" row to switch; the rows
+        // below it moved up by one (Metin Boyutu is row 7, Geri row 10).
+        req(m["rows"].size() == 11 && m["rows"][4]["label"] == "Metin Hızı" &&
                 m["rows"][5]["label"] == "Otomatik Hızı" && m["rows"][6]["label"] == "Atlama" &&
-                m["rows"][7]["label"] == "Dil" && m["rows"][8]["label"] == "Metin Boyutu" &&
-                m["rows"][9]["label"] == "Yüksek Kontrast" && m["rows"][10]["label"] == "Hareketi Azalt" &&
-                m["rows"][11]["label"] == "Geri",
+                m["rows"][7]["label"] == "Metin Boyutu" &&
+                m["rows"][8]["label"] == "Yüksek Kontrast" && m["rows"][9]["label"] == "Hareketi Azalt" &&
+                m["rows"][10]["label"] == "Geri",
             "preferences rows");
     }
     selectRow(h, 4);
@@ -356,8 +358,8 @@ void test_title_screen() {
     expectTitle(h, 3, "back from preferences");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
-    selectRow(h, 11);
-    cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri
+    selectRow(h, 10);
+    cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri (row 10 now that this game has no Dil row, F2)
     expectTitle(h, 3, "Geri row");
     TEST_PASS("Title preferences persist volume/text speed; Back and Geri return to the title");
 

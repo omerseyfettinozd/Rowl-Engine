@@ -23,7 +23,7 @@ constexpr float kSkipStepIntervalSeconds = 0.05f;
 constexpr float kAutoWaitMin = 0.8f;
 constexpr float kAutoWaitMax = 30.0f;
 constexpr float kAutoSecondsPerChar = 0.04f;
-constexpr float kAutoDelayMax = 10.0f;
+constexpr float kAutoDelayMax = Rowl::State::kPlayerProfileMaxAutoAdvanceDelay;  // one range (F2 B-15)
 
 const char* skipPolicyName(SkipPolicy policy) {
     switch (policy) {

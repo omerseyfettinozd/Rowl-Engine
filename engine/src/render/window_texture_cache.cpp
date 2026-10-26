@@ -10,6 +10,7 @@
 #include "thirdparty/stb_image.h"
 #include "rowl/render/window.hpp"
 #include "rowl/core/logger.hpp"
+#include "rowl/vfs/asset_candidates.hpp"
 #include "rowl/vfs/vfs.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -186,26 +187,14 @@ SDL_Texture* Window::loadTexture(const std::string& filename) {
 
     // normPath is a UTF-8 virtual path, not a native filesystem path. Keep it
     // byte-preserving on Windows instead of round-tripping through its code page.
-    const size_t lastSlash = normPath.find_last_of('/');
-    std::string bareName = lastSlash == std::string::npos
-        ? normPath
-        : normPath.substr(lastSlash + 1);
-
     // Asset paths are resolved only through the selected project's VFS.
     // This prevents CWD, parent-directory, or arbitrary absolute paths from
     // silently becoming runtime assets after a project switch.
-    std::vector<std::string> vfsCandidates = {
-        normPath,
-        bareName,
-        "images/" + bareName,
-        "images/" + normPath,
-        "Assets/images/" + bareName,
-        "Assets/images/" + normPath,
-        "Assets/" + bareName,
-        "Assets/" + normPath
-    };
+    // F2 (B-8): the candidate order is shared with the prefetch (rowl/vfs/asset_candidates.hpp).
+    const std::vector<std::string> vfsCandidates = Rowl::VFS::imageAssetCandidates(normPath);
 
     for (const auto& candidate : vfsCandidates) {
+        if (!vfs().exists(candidate)) continue;  // no "File not found" warning per absent spelling
         auto bytes = vfs().readBytes(candidate);
         if (!bytes.empty()) {
             data = loadTextureMemorySafely(bytes.data(), static_cast<int>(bytes.size()), &width, &height, &channels);

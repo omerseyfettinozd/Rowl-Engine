@@ -92,6 +92,14 @@ int main(int argc, char* argv[]) {
     // pointer at the hanging section.
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
+    // F2 (B-13/B-14): a project that declares no locales gets its menu language from the SYSTEM.
+    // The suite's expectations are Turkish; pin the system language so a run does not depend on
+    // the machine's locale (the tests that cover the system language set their own value).
+#ifdef _WIN32
+    _putenv_s("ROWL_SYSTEM_LOCALE", "tr");
+#else
+    ::setenv("ROWL_SYSTEM_LOCALE", "tr", 1);
+#endif
     std::string benchmarkJsonPath;
     std::string goldenJsonPath;
     // TSan/ASan bütçesi: RC Soak tek başına ~1200 s sürebilir. ctest onu ayrı
@@ -150,6 +158,7 @@ int main(int argc, char* argv[]) {
     test_gpu_truetype_text();
     test_pause_overlay_visible_window();
     test_ui_skin_visible_window();
+    test_f2_visible_window();
     test_game_state();
     test_audio_engine();
     test_audio_device_recovery();
@@ -220,6 +229,7 @@ int main(int argc, char* argv[]) {
     test_backlog_replay();
     test_backlog_screen();
     test_f1_audit_fixes();
+    test_f2_audit_fixes();
     test_auto_skip();
     test_auto_skip_ui();
     test_condition_component();

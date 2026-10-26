@@ -1029,8 +1029,9 @@ void sliderTests() {
     RowlEngine_OpenTitleScreen(rig.h);
     openRow(rig, 3);  // Tercihler (no extras)
     req(rig.menu()["page"] == "preferences", "preferences");
-    // Row 0 (master volume) on the compact pitch: top 250 virtual, 50 high.
-    const int rowY = 125 + 12;
+    // Row 0 (master volume): single-language game has 11 rows (F2 B-13 hides Dil).
+    const int prefRows = static_cast<int>(rig.menu()["rows"].size());
+    const int rowY = static_cast<int>((LM::rowTop(0, prefRows) + LM::rowH(prefRows) * 0.5f) * 0.5f);
     const float x0 = LM::kSliderX0 * 0.5f, x1 = LM::kSliderX1 * 0.5f;
     std::string f = rig.frame(4);
     // The slider replaces the "100%" text beside the label: the value moves to the right edge.
@@ -1052,7 +1053,7 @@ void sliderTests() {
     rig.command(ROWL_PAUSE_MENU_RIGHT);
     req(rig.menu()["rows"][0]["value"] == "30%", "keys still work with the slider style");
     // Row 4 (text speed 0.25..4x): click the right end = 4.00x.
-    const int row4Y = static_cast<int>(LM::rowTop(4, 12) * 0.5f) + 12;
+    const int row4Y = static_cast<int>((LM::rowTop(4, prefRows) + LM::rowH(prefRows) * 0.5f) * 0.5f);
     rig.pointer(InType::PointerDown, x1 + 2.0f, static_cast<float>(row4Y));
     rig.pointer(InType::PointerUp, x1 + 2.0f, static_cast<float>(row4Y));
     req(rig.menu()["rows"][4]["value"] == "4.00x", "text speed row: right end = 4.00x: " + rig.menu()["rows"][4].dump());

@@ -285,16 +285,17 @@ void test_auto_skip_ui() {
             const json m = rig.menu();
             req(m["mode"].get<int>() == 4, "Tercihler is mode 4");
             const json& rows = m["rows"];
-            req(rows.size() == 12 && LM::kPreferenceRows == 12, "12 preference rows: " + m.dump());
+            // F2 (B-13): this game declares no locales, so the Dil row is hidden (11 rows; Geri is row 10).
+            req(rows.size() == 11 && LM::kPreferenceRows == 12, "11 preference rows (single-language game): " + m.dump());
             const char* labels[] = {"Ana Ses", "Müzik", "SFX", "Seslendirme", "Metin Hızı",
-                                    "Otomatik Hızı", "Atlama", "Dil", "Metin Boyutu",
+                                    "Otomatik Hızı", "Atlama", "Metin Boyutu",
                                     "Yüksek Kontrast", "Hareketi Azalt", "Geri"};
-            for (int i = 0; i < 12; ++i) {
+            for (int i = 0; i < 11; ++i) {
                 req(rows[i]["label"] == labels[i], std::string("row ") + std::to_string(i) + " label");
             }
             req(delayText(m) == "2.0 sn", "default delay row: " + delayText(m));
             req(skipText(m) == "Okunan", "default skip row: " + skipText(m));
-            req(rows[11]["value"] == "" && rows[0]["value"] == "100%", "Geri has no value; mixer rows unchanged");
+            req(rows[10]["value"] == "" && rows[0]["value"] == "100%", "Geri has no value; mixer rows unchanged");
         }
         TEST_PASS("Preferences lists 12 rows: seven old ones in place, then Dil, Metin Boyutu, Yuksek Kontrast, Hareketi Azalt, Geri");
 
@@ -387,14 +388,14 @@ void test_auto_skip_ui() {
         req(skipText(rig.menu()) == "Hepsi" && rig.profile()["skip_mode"] == "all", "plus-zone click cycles the skip row");
         rig.click(6, 700.0f);
         req(skipText(rig.menu()) == "Okunan", "minus-zone click cycles back");
-        rig.click(11, 960.0f);  // Geri
+        rig.click(10, 960.0f);  // Geri (row 10 on single-language game, F2 B-13)
         {
             const json m = rig.menu();
             req(m["mode"].get<int>() == 3 && m["title_active"].get<bool>() && m["selected"].get<int>() == 3,
                 "clicking Geri returns to the title on Tercihler: " + m.dump());
         }
         rig.cmd(ROWL_PAUSE_MENU_CONFIRM);
-        rig.selectRow(11);
+        rig.selectRow(10);
         rig.cmd(ROWL_PAUSE_MENU_CONFIRM);
         req(rig.menu()["mode"].get<int>() == 3, "Enter on Geri returns to the title");
         TEST_PASS("Mouse: zones step the new rows, middle band selects, Geri clicks back to the title");

@@ -24,6 +24,12 @@ enum class UiText : unsigned char {
     SaveSlotTitle, LoadSlotTitle, SlotLabel, SlotFull, SlotEmpty, SlotCorrupt,
     HintSlots,
     SlotPage, HintSlotsPaged,  // T2b: "Sayfa" and the hint of a slot page with several pages
+    // F2: save / load feedback (B-3). Notice* heads end in ": " (the toast capsule
+    // colours the head); Hint* are the slot-page / title hint line.
+    SlotIncompatible, SlotSaveFailed, HintIncompatibleSave, HintSaved, HintSaveFailed,
+    NoticeSaved, NoticeSaveFailed, NoticeLoaded, NoticeLoadFailed, NoticeNoSave,
+    ReasonCorrupt, ReasonIncompatible, ReasonEmpty, ReasonUnreadable,
+    NoticeProfileUnwritable,
 
     // Backlog
     HistoryEmpty, HintBacklog, HintBacklogVoiced, VoiceMark,
@@ -57,9 +63,19 @@ const char* uiText(UiText id, UiLang lang);
 /// UI language for an active locale tag: a tag starting with "tr" (alone or as
 /// "tr-..." / "tr_...") is Turkish, any other tag English. `localeDeclared`
 /// false means the project declares no locales at all (no manifest keys): the
-/// engine keeps its historical Turkish menus then, whatever the "en" fallback
-/// locale says.
+/// menus then follow the SYSTEM language (F2 B-13/B-14: Turkish on a Turkish
+/// system, English anywhere else) instead of the historical always-Turkish
+/// menus, whatever the "en" fallback locale says. A project that declares its
+/// locales is untouched.
 UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared);
+/// Same decision with the system language given (tests / hosts that know it).
+UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared, UiLang systemLanguage);
+
+/// The player's system language as a menu language: Turkish when the first preferred locale
+/// (or, failing that, LC_ALL / LC_MESSAGES / LANG) starts with "tr", English otherwise.
+/// `ROWL_SYSTEM_LOCALE` (e.g. "tr", "en_US") overrides the query - the test suite pins it so
+/// results do not depend on the machine it runs on.
+UiLang systemUiLanguage();
 
 /// D05-2: player-facing name of a locale tag for the Language row: "Türkçe" /
 /// "English" / "Deutsch" for "tr" / "en" / "de" (any case), the tag itself for

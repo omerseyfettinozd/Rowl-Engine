@@ -679,6 +679,11 @@ void Window::triggerScreenFlash(uint8_t r, uint8_t g, uint8_t b, float durationS
         m_screenFx.flashElapsed = 0.0f;
         return;
     }
+    // F2 (B-5): Hareketi Azalt is enforced HERE, the one door every flash goes through
+    // (story transition component, C API, script): sudden full-screen flashes are the
+    // photosensitivity hazard the option exists for. The C API wrappers used to be the only
+    // guard, so a story's own flash_enabled component still flashed.
+    if (m_camera && m_camera->reducedMotion()) return;
     // D6-#147-artık: sürmekte olan flaşı erken yeniden tetikleme
     // birleştirilir; flash baştan başlamaz (transition coalesce emsali,
     // %90 eşiği). Durdurma isteği (süre<=0) yukarıda zaten ele alındı.
@@ -1189,7 +1194,7 @@ void Window::renderVisualNovelFrame(
         }
 
         // Speaker Name Tag Badge (if speaker name provided)
-        if (!dlg.speaker.empty()) {
+        if (speakerHasVisibleText(dlg.speaker)) {  // F2 (D-D6): blank names draw no badge
             float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
             // D-K3: etiket genisligi, kisaltma ve cizilen sekil ayni olcumden
             // (yazi boyutu dahil); ad sarilmaz, kutuyu asarsa "…" ile kisalir.
@@ -1467,7 +1472,7 @@ void Window::renderVisualNovelFrame(
             AspectGuardian::virtualToPhysical(dlg.x, dlg.y, metrics, physBoxX, physBoxY);
 
             // 4a. Speaker Name Text
-            if (!dlg.speaker.empty()) {
+            if (speakerHasVisibleText(dlg.speaker)) {  // F2 (D-D6)
                 float speakerFontPx = dlg.speakerFontSize * metrics.scaleFactor;
                 // D-K3: GPU koluyla ayni tek yerlesim (genislik + kisaltma + sekil).
                 const SpeakerTagLayout speakerLayout =
@@ -1484,9 +1489,12 @@ void Window::renderVisualNovelFrame(
                 float textDrawY = tagY + (tagH - speakerDrawPx) / 2.0f - (2.0f * metrics.scaleFactor);
 
                 // D-K3: hazir tek-satir sekil (renderText yeniden sarar; ad kesilirdi).
-                speakerFont->renderShapedText(
+                // F2 (D-O6): the build without text shaping returns no glyphs here - then the
+                // plain name is drawn (the GPU branch always did; this one drew nothing).
+                speakerFont->renderShapedOrPlainText(
                     m_offscreenSurface,
                     *speakerLayout.shaped,
+                    speakerLayout.text,
                     tagX + (16.0f * metrics.scaleFactor),
                     textDrawY,
                     speakerFontPx,
@@ -1555,6 +1563,13 @@ void Window::renderVisualNovelFrame(
                         auto renderer = std::make_unique<FontRenderer>();
                         auto bytes = vfs().readBytes(choice.fontFamily);
                         if (!bytes.empty() && renderer->loadFontFromMemory(bytes.data(), bytes.size())) {
+                            // F2 B-6: a renderer created later has to wear the player's
+                            // accessibility state too (setTextScale/setHighContrast only reach
+                            // the renderers that existed when the player changed them).
+                            if (m_fontRenderer) {
+                                renderer->setTextScale(m_fontRenderer->textScale());
+                                renderer->setHighContrast(m_fontRenderer->highContrast());
+                            }
                             found = m_buttonFontCache.emplace(choice.fontFamily, std::move(renderer)).first;
                         } else {
                             // A3-tur6 (hygiene): yuklenemeyen ad negatif-kumeye

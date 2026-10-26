@@ -207,6 +207,14 @@ void test_end_of_story_title() {
         req(rig.title() && RowlEngine_IsPaused(rig.h) == 1,
             "form " + std::to_string(form) + ": the finished last node did not open the title");
         req(rig.unlocked(), "the achievement is still there on the title");
+        // F2 (D-O1): the title that the finished story opened ignores confirm input for
+        // ~0.6 s, so mashing the advance key on the last line cannot start a new game
+        // by accident; afterwards Enter confirms New Game as before.
+        rig.key(SDLK_RETURN);
+        rig.key(SDLK_SPACE);
+        rig.input(InType::PointerDown, 960.0f, 540.0f);
+        req(rig.title() && rig.node() == 2, "form " + std::to_string(form) + ": input during the lock confirmed a row");
+        rig.settle(3, 0.25f);
         // New Game starts over; the unlock stays.
         rig.key(SDLK_RETURN);
         req(!rig.title() && rig.node() == 1, "New Game after the end");
@@ -226,6 +234,8 @@ void test_end_of_story_title() {
         req(!rig.title() && rig.node() == 2, "the first press only completes the typing line");
         rig.key(SDLK_RETURN);
         req(rig.title(), "the second press opens the title");
+        rig.key(SDLK_RETURN);  // F2: ...and the very next press (the mashing player) is ignored
+        req(rig.title(), "a third press inside the input lock must not confirm New Game");
     }
     TEST_PASS("A typing last line is completed first, then the title opens");
 

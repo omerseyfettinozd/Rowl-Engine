@@ -20,6 +20,9 @@ rewind or migration.
 - `thumbnail_png_base64`: current framebuffer downscaled to 320 px wide
   (box average) and PNG-encoded dependency-free (stored deflate blocks),
   then base64. Empty when no pixels were available — never a failure.
+  F2: the source is the story frame WITHOUT the pause menu / overlay
+  (`Window::captureStoryFrame`, taken when the menu opens or just before an F5
+  save on a visible window); see `docs/DATA_FORMATS_AND_MIGRATION.md` section 2.
 
 Decode is tolerant: every key optional (legacy → defaults), finite
 non-negative playtime, text caps (1 KiB ids/titles, 4 KiB summary),
@@ -56,7 +59,9 @@ Default map (pinned by tests, remappable via `PlayerInputBindings`):
 | QuickLoad | F9 | – | Back | – |
 
 Native parity notes: native Esc/P = pause, Space/Enter = advance,
-F5/F9 = quick save/load (same); native Backspace/Z = rewind stays a
+F5/F9 = quick save/load (same; F2: native key repeat is ignored for every key
+but the four arrows, numpad digits count as digits, F5/F9 show a result capsule);
+native Backspace/Z = rewind stays a
 native-only event (no managed command in this slice). No
 MainWindowViewModel wiring: the player shell binds these later.
 

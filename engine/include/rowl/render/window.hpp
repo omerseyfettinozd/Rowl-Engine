@@ -213,6 +213,16 @@ public:
      */
     const uint8_t* getPixelBuffer() const;
     size_t getPixelBufferLength() const;
+    /// F2 (B-1): menu-free copy of the story frame for save thumbnails. captureStoryFrame()
+    /// must run after the story / scene are drawn and before the pause overlay and
+    /// endFrame (the visible window's renderer is only readable then). The copy is tightly
+    /// packed RGBA32 (pitch = width * 4) and stays until clearStoryFrame().
+    bool captureStoryFrame();
+    void clearStoryFrame();
+    bool hasStoryFrame() const { return !m_storyFrame.empty(); }
+    const uint8_t* storyFramePixels() const { return m_storyFrame.empty() ? nullptr : m_storyFrame.data(); }
+    uint32_t storyFrameWidth() const { return m_storyFrameWidth; }
+    uint32_t storyFrameHeight() const { return m_storyFrameHeight; }
 
     /**
      * Returns the offscreen surface row pitch in bytes (bytes per scanline).
@@ -262,6 +272,9 @@ public:
     /// kardesler yukari itilir (ui_text_fit.hpp). Cizim, tiklama ve gozlem bu
     /// yerlesimi kullanir. Yazi/pencere yoksa ya da sigmayan yoksa girdi aynen kalir.
     void fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) const;
+    /// F2 (D-O3): a hash of every input of fitChoiceButtons except the buttons themselves
+    /// (window size, font text scales); the engine caches the laid-out menu per key.
+    uint64_t choiceLayoutKey() const;
 
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
@@ -281,6 +294,9 @@ public:
     /// Returns false for unmapped keys. Public and static so headless tests
     /// can pin the Esc/P/digit/arrow contract without a visible window.
     static bool mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputEvent& outEvent);
+    /// F2: whether an OS key-repeat of a key mapped to `type` is delivered (the four arrows
+    /// only; every other key counts once per physical press).
+    static bool keyRepeats(Rowl::Platform::RuntimeInputEvent::Type type);
 
     /// A3 (K2 kilidi): identical-frame skip kararının paketlenmiş-içerik
     /// çekirdeği — yalnız parametre + FNV, üye durumu okumaz. Public ve
@@ -518,6 +534,9 @@ private:
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
+    std::vector<uint8_t> m_storyFrame;  // F2: see captureStoryFrame
+    uint32_t m_storyFrameWidth = 0;
+    uint32_t m_storyFrameHeight = 0;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
     // D02: pause/title slot thumbnail, one texture keyed "slot|saved_at".
     SDL_Texture* m_pauseThumbTexture = nullptr;

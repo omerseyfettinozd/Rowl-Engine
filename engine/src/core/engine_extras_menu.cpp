@@ -552,6 +552,14 @@ void Engine::updateUnlockToast(float deltaTime) {
     // The toast belongs to a running, unpaused story: any menu freezes the clock
     // and hides it (a queued notice simply waits), Auto / Skip do not matter.
     if (!m_isPlaying || m_paused) return;
+    // F2: a result notice (F5 / F9 / menu load) shows first and holds the achievement
+    // toast back until it is gone - the capsule is one slot.
+    if (m_noticeRemaining > 0.0f) {
+        if (std::isfinite(deltaTime) && deltaTime > 0.0f) m_noticeRemaining -= deltaTime;
+        if (m_noticeRemaining > 0.0f) return;
+        m_noticeRemaining = 0.0f;
+        m_notice = {};
+    }
     if (m_toastActive) {
         if (std::isfinite(deltaTime) && deltaTime > 0.0f) m_toastRemaining -= deltaTime;
         if (m_toastRemaining > 0.0f) return;
@@ -570,7 +578,25 @@ void Engine::updateUnlockToast(float deltaTime) {
     }
 }
 
+void Engine::postNotice(UiText head, int32_t slot, UiText reason) {
+    m_notice = {head, slot, reason};
+    m_noticeRemaining = kNoticeSeconds;
+}
+
+std::string Engine::noticeText() const {
+    if (m_noticeRemaining <= 0.0f || m_notice.head == UiText::None || !m_isPlaying || m_paused) {
+        return std::string();
+    }
+    const UiLang lang = getUiLanguage();
+    std::string text = std::string(uiText(m_notice.head, lang));
+    if (m_notice.slot >= 0) text += std::string(uiText(UiText::SlotLabel, lang)) + " " + std::to_string(m_notice.slot);
+    if (m_notice.reason != UiText::None) text += " (" + std::string(uiText(m_notice.reason, lang)) + ")";
+    return text;
+}
+
 std::string Engine::unlockToastText() const {
+    // F2: the result notice is the same capsule ("Kaydedildi: Yuva 2"); it wins while it lasts.
+    if (const std::string notice = noticeText(); !notice.empty()) return notice;
     if (!m_toastActive || !m_isPlaying || m_paused) return std::string();
     const auto* item = m_extrasCatalog.findAchievement(m_toastNotice.id);
     if (item == nullptr) return std::string();

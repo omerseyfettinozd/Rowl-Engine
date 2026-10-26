@@ -13,6 +13,7 @@
 #include "rowl/audio/audio_engine.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
+#include "rowl/state/save_slot_preview.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -81,9 +82,13 @@ bool utcIsoToLocal(const std::string& iso, std::tm& local) {
     const std::time_t t = timegm(&utc);
 #endif
     if (t == static_cast<std::time_t>(-1)) return false;
+    // F2: localtime_r does not promise to notice a TZ change made while the process runs
+    // (travelling players, a desktop that switches zone); re-read the zone before converting.
 #if defined(_WIN32)
+    _tzset();
     return localtime_s(&local, &t) == 0;
 #else
+    tzset();
     return localtime_r(&t, &local) != nullptr;
 #endif
 }
@@ -176,9 +181,11 @@ void Engine::fillSlotPageView(PauseMenuView& view, const MenuLayout& layout) con
         if (info.state == PauseSlotInfo::State::Valid) {
             card.date = pauseSlotDateText(info.savedAt);
             card.summary = pauseSlotSummary(info);
-            if (info.thumbnailPng && !info.thumbnailPng->empty()) {
-                card.thumbnailPng = info.thumbnailPng;
-                card.thumbnailKey = std::to_string(slot) + "|" + info.savedAt;
+            if (info.hasThumbnail) {
+                if (auto png = slotThumbnail(slot, info); png && !png->empty()) {
+                    card.thumbnailPng = std::move(png);
+                    card.thumbnailKey = std::to_string(slot) + "|" + info.thumbnailStamp;
+                }
             }
         }
         view.cards.push_back(std::move(card));
@@ -189,37 +196,55 @@ void Engine::ensureSlotCache() const {
     if (m_pauseSlotCacheValid) return;
     // Rebuilt only when invalidated (menu open, save/delete, folder change):
     // the view is rebuilt every frame and must never parse save files then.
-    const std::string saveDirectory = Rowl::Platform::pathToUtf8(getSaveDirectoryPath());
+    // F2 (B-2): each file is only PREVIEWED (top-level metadata through a SAX walk): the
+    // thumbnail, the undo chain and the dialogue history are never built here. The selected
+    // row's thumbnail is read lazily (slotThumbnail).
+    const std::filesystem::path saveDirectory = getSaveDirectoryPath();
     m_pauseSlotInfo = {};
     m_continueSlot = -1;
     m_continueSavedAt.clear();
     // saved_at has one-second resolution; two saves within the same second
     // are ordered by the slot file's write time (newest wins).
     std::filesystem::file_time_type continueWriteTime{};
-    auto slotWriteTime = [this](int32_t slot) {
-        std::error_code ec;
-        const auto time = std::filesystem::last_write_time(
-            getSaveDirectoryPath() / ("save_slot_" + std::to_string(slot) + ".json"), ec);
-        return ec ? std::filesystem::file_time_type{} : time;
-    };
+    // A save that is well formed but belongs to another story (a changed graph, a node
+    // the graph no longer has) is "incompatible", not "corrupt".
+    const auto& graph = getStoryGraphDocument();
+    const bool graphKnown = !graph.nodes.empty();
+    const std::string graphIdentity = graphKnown ? Rowl::Core::computeGraphIdentity(graph) : std::string();
     for (int32_t slot = 0; slot <= 99; ++slot) {
         if (!hasSaveSlot(slot)) continue;
+        const std::filesystem::path file = saveDirectory / ("save_slot_" + std::to_string(slot) + ".json");
+        std::error_code ec;
+        const auto writeTime = std::filesystem::last_write_time(file, ec);
+        const auto fileSize = ec ? std::uintmax_t{0} : std::filesystem::file_size(file, ec);
+        const auto preview = Rowl::State::readSaveSlotPreview(file);
         PauseSlotInfo info;
-        const auto state = Rowl::State::GameState::loadFromSlot(slot, saveDirectory);
-        if (!state || m_slotLoadFailed.test(static_cast<size_t>(slot))) {
+        if (preview.status == Rowl::State::SlotPreviewStatus::Corrupt ||
+            (preview.status == Rowl::State::SlotPreviewStatus::Valid &&
+             m_slotLoadFailed.test(static_cast<size_t>(slot)))) {
             info.state = PauseSlotInfo::State::Corrupt;
+            // One line per bad file, not one per menu opening (the cache is rebuilt often).
+            const std::string key = std::to_string(slot) + "|" + std::to_string(fileSize) + "|" +
+                                    std::to_string(writeTime.time_since_epoch().count());
+            if (m_reportedBadSlots.insert(key).second) {
+                ROWL_LOG_WARN("[Player] Save slot #" + std::to_string(slot) +
+                              " is damaged (shown as 'bozuk'; reported once per file state).");
+            }
+        } else if (preview.status == Rowl::State::SlotPreviewStatus::Incompatible ||
+                   (graphKnown && (graph.nodes.find(preview.activeNodeId) == graph.nodes.end() ||
+                                   (!preview.graphIdentity.empty() && preview.graphIdentity != graphIdentity)))) {
+            info.state = PauseSlotInfo::State::Incompatible;
         } else {
             info.state = PauseSlotInfo::State::Valid;
-            info.savedAt = state->savedAt;
-            info.chapterTitle = state->chapterTitle;
-            info.summary = state->summary;
-            info.playtimeSeconds = state->playtimeSeconds;
-            if (!state->thumbnailPng.empty()) {
-                info.thumbnailPng = std::make_shared<const std::string>(state->thumbnailPng);
-            }
+            info.savedAt = preview.savedAt;
+            info.chapterTitle = preview.chapterTitle;
+            info.summary = preview.summary;
+            info.playtimeSeconds = preview.playtimeSeconds;
+            info.hasThumbnail = preview.hasThumbnail;
+            info.thumbnailStamp = preview.savedAt + "|" + std::to_string(fileSize) + "|" +
+                                  std::to_string(writeTime.time_since_epoch().count());
             // ISO-8601 UTC strings order lexicographically; equal stamps fall
             // back to the file write time, then keep the lower slot.
-            const auto writeTime = slotWriteTime(slot);
             if (m_continueSlot < 0 || info.savedAt > m_continueSavedAt ||
                 (info.savedAt == m_continueSavedAt && writeTime > continueWriteTime)) {
                 m_continueSlot = slot;
@@ -274,7 +299,7 @@ void Engine::slotSetPage(int page) {
     m_slotPage = target;
     m_pauseSelected = std::clamp(m_pauseSelected, 0, std::max(0, slotRowsOnPage() - 1));
     m_pauseConfirmQuit = false;
-    m_titleHint = UiText::None;
+    setMenuHint(UiText::None);
 }
 
 void Engine::slotPageMove(int direction) {
@@ -300,11 +325,32 @@ void Engine::slotCardsMove(int dx, int dy) {
     m_slotPage = target / per;
     m_pauseSelected = target % per;
     m_pauseConfirmQuit = false;
-    m_titleHint = UiText::None;
+    setMenuHint(UiText::None);
 }
 
 std::string Engine::slotNumberText(int slot) const {
     return std::to_string(slot + (m_uiTheme.slots.numberBase >= 0.5f ? 1 : 0));
+}
+
+std::shared_ptr<const std::string> Engine::slotThumbnail(int32_t slot, const PauseSlotInfo& info) const {
+    if (!info.hasThumbnail) return nullptr;
+    if (m_slotThumbnail.slot == slot && m_slotThumbnail.stamp == info.thumbnailStamp) {
+        return m_slotThumbnail.png;  // may be null: an unreadable thumbnail is not retried per frame
+    }
+    std::string png = Rowl::State::readSaveSlotThumbnail(
+        getSaveDirectoryPath() / ("save_slot_" + std::to_string(slot) + ".json"));
+    m_slotThumbnail.slot = slot;
+    m_slotThumbnail.stamp = info.thumbnailStamp;
+    m_slotThumbnail.png = png.empty() ? nullptr : std::make_shared<const std::string>(std::move(png));
+    return m_slotThumbnail.png;
+}
+
+std::string Engine::menuHintText(UiLang lang) const {
+    std::string text = std::string(uiText(m_titleHint, lang));
+    if (m_hintSlot >= 0) {
+        text = std::string(uiText(UiText::SlotLabel, lang)) + " " + slotNumberText(m_hintSlot) + ": " + text;
+    }
+    return text;
 }
 
 int Engine::titleRowCount() const {
@@ -327,6 +373,7 @@ bool Engine::openTitleScreen() {
     }
     m_paused = true;
     m_titleActive = true;
+    m_titleInputLock = 0.0f;  // the end-of-story path arms it after this returns (F2)
     m_titleSessionSeen = true;  // D-K3: this session returns to the title when the story ends
     m_skipActive = false;  // D04-1: the title ends Skip; Auto's credit starts over
     m_skipHold = false;
@@ -334,7 +381,7 @@ bool Engine::openTitleScreen() {
     m_pauseMode = PauseMenuMode::Title;
     m_prefsFromPause = false;  // D05-2
     m_pauseConfirmQuit = false;
-    m_titleHint = UiText::None;
+    setMenuHint(UiText::None);  // also clears the slot a pause-menu result named
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
     m_pauseSelected = m_continueSlot >= 0 ? 1 : 0;
@@ -399,11 +446,15 @@ bool Engine::titleLoadSlot(int32_t slotIndex) {
     ensureSlotCache();
     const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(std::clamp(slotIndex, 0, 99))];
     if (info.state == PauseSlotInfo::State::Empty) {
-        m_titleHint = UiText::HintEmptySlot;
+        setMenuHint(UiText::HintEmptySlot);
         return false;
     }
     if (info.state == PauseSlotInfo::State::Corrupt) {
-        m_titleHint = UiText::HintCorruptSave;
+        setMenuHint(UiText::HintCorruptSave);
+        return false;
+    }
+    if (info.state == PauseSlotInfo::State::Incompatible) {
+        setMenuHint(UiText::HintIncompatibleSave);
         return false;
     }
     if (loadGameSlot(slotIndex)) {
@@ -411,17 +462,18 @@ bool Engine::titleLoadSlot(int32_t slotIndex) {
         leaveTitleScreen();
         return true;
     }
-    m_slotLoadFailed.set(static_cast<size_t>(slotIndex));
+    if (m_lastLoadFailure != LoadFailure::Incompatible) m_slotLoadFailed.set(static_cast<size_t>(slotIndex));
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
-    m_titleHint = UiText::HintLoadFailed;
+    setMenuHint(m_lastLoadFailure == LoadFailure::Incompatible ? UiText::HintIncompatibleSave
+                                                               : UiText::HintLoadFailed);
     return false;
 }
 
 bool Engine::titleContinue() {
     ensureSlotCache();
     if (m_continueSlot < 0) {
-        m_titleHint = UiText::HintNoSaveToContinue;
+        setMenuHint(UiText::HintNoSaveToContinue);
         return false;
     }
     const int32_t slot = m_continueSlot;
@@ -431,10 +483,11 @@ bool Engine::titleContinue() {
         return true;
     }
     // The next Continue falls back to the next newest valid save.
-    m_slotLoadFailed.set(static_cast<size_t>(slot));
+    if (m_lastLoadFailure != LoadFailure::Incompatible) m_slotLoadFailed.set(static_cast<size_t>(slot));
     m_pauseSlotCacheValid = false;
     ensureSlotCache();
-    m_titleHint = UiText::HintLoadFailed;
+    setMenuHint(m_lastLoadFailure == LoadFailure::Incompatible ? UiText::HintIncompatibleSave
+                                                               : UiText::HintLoadFailed);
     return false;
 }
 
@@ -483,7 +536,7 @@ void Engine::titleActivateSelected() {
             extrasActivateSelected();  // D07-2
             break;
         case PauseMenuMode::Preferences:
-            if (m_pauseSelected == PauseMenuLayout::kPreferenceRows - 1) {
+            if (m_pauseSelected == pauseMenuRowCount() - 1) {
                 leavePreferencesPage();
             } else {
                 pauseMenuAdjustSelected(+1);  // keyboard Confirm steps like Right
@@ -535,8 +588,9 @@ int Engine::pauseMenuValueRow() const {
     // D05-2's 10 language, 11 text size, 12 high contrast, 13 reduced motion.
     // The last page row ("Geri") has no value.
     if (m_pauseMode == PauseMenuMode::Preferences) {
-        return (m_pauseSelected >= 0 && m_pauseSelected <= PauseMenuLayout::kPreferenceMotionRow)
-            ? m_pauseSelected + 3 : -1;
+        // F2 (B-13): a hidden Dil row shifts the rows below it up by one.
+        const int logical = logicalPreferenceRow(m_pauseSelected);
+        return (m_pauseSelected >= 0 && logical <= PauseMenuLayout::kPreferenceMotionRow) ? logical + 3 : -1;
     }
     return -1;
 }
@@ -566,7 +620,11 @@ void Engine::persistPauseMenuPreference(int row) {
         case 13: patch["reduced_motion"] = reducedMotion(); break;
         default: return;
     }
-    m_playerProfile.setPreferencesJson(patch.dump());
+    // F2 (B-15): a read-only profile (future format, another game's, unreadable file) refuses the
+    // write - the player is told once instead of finding the change gone next session.
+    if (m_playerProfile.setPreferencesJson(patch.dump()) == Rowl::State::ProfileMutation::ReadOnly) {
+        notifyProfileNotSaved();
+    }
 }
 
 PauseMenuView Engine::getTitleMenuView() const {
@@ -591,12 +649,15 @@ PauseMenuView Engine::getTitleMenuView() const {
             {T(UiText::Skip), T(m_skipPolicy == SkipPolicy::Off ? UiText::Off
                               : m_skipPolicy == SkipPolicy::All ? UiText::All : UiText::ReadOnly),
              true, "", true},
-            {T(UiText::Language), preferenceLanguageText(), true, "", true},
             {T(UiText::TextSize), pauseMenuPercent(textScale()), true, "", true},
             {T(UiText::HighContrast), T(highContrast() ? UiText::On : UiText::Off), true, "", true},
             {T(UiText::ReduceMotion), T(reducedMotion() ? UiText::On : UiText::Off), true, "", true},
             {T(UiText::Back), "", false, "", true},
         };
+        if (preferenceLanguageRowShown()) {  // F2 (B-13): hidden for a single-language game
+            view.rows.insert(view.rows.begin() + PauseMenuLayout::kPreferenceLanguageRow,
+                             {T(UiText::Language), preferenceLanguageText(), true, "", true});
+        }
         // T2: slider position of the numeric rows (volumes, text speed, auto delay).
         for (int row = 0; row < 6; ++row) {
             view.rows[static_cast<size_t>(row)].fraction = pauseMenuFraction(row + 3);
@@ -627,7 +688,7 @@ PauseMenuView Engine::getTitleMenuView() const {
     if (m_pauseConfirmQuit) {
         view.hint = T(UiText::HintTitleQuit);
     } else if (m_titleHint != UiText::None) {
-        view.hint = T(m_titleHint);
+        view.hint = menuHintText(lang);
     } else {
         view.hint = T(UiText::HintTitle);
     }

@@ -56,11 +56,23 @@ bool Engine::highContrast() const {
 
 void Engine::setReducedMotion(bool enabled) {
     if (auto* camera = getCamera()) camera->setReducedMotion(enabled);
+    // F2 (B-5): turning it on ends a flash that is already running (the camera shake stops
+    // inside Camera2D::setReducedMotion); a duration of 0 is the window's stop request.
+    if (enabled && m_window && m_window->isScreenFlashActive()) m_window->triggerScreenFlash(0, 0, 0, 0.0f, 0.0f);
 }
 
 bool Engine::reducedMotion() const {
     const auto* camera = getCamera();
     return camera && camera->reducedMotion();
+}
+
+bool Engine::preferenceLanguageRowShown() const {
+    return m_localization.isLocaleDeclared() && m_localization.getSupportedLocales().size() > 1;
+}
+
+int Engine::logicalPreferenceRow(int pageRow) const {
+    if (!preferenceLanguageRowShown() && pageRow >= PauseMenuLayout::kPreferenceLanguageRow) return pageRow + 1;
+    return pageRow;
 }
 
 std::string Engine::preferenceLanguageText() const {

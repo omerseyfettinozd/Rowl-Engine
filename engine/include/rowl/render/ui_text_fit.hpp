@@ -46,6 +46,20 @@ struct ChoiceBox {
 /// itilmez. Hicbir kutunun metni sigmiyorsa girdi bayt-birebir kalir.
 void fitChoiceBoxes(std::vector<ChoiceBox>& boxes);
 
+/// F2 (D-O2): fitChoiceBoxes, but the topmost visible box must stay at or below `safeTop`
+/// (virtual px). A big text scale with many options pushed the top options off the screen
+/// (y < 0: invisible AND unclickable). The aralik daraltilir (authored gap 100% -> 50% -> 25% ->
+/// kMinPushGap); returns false when even the tightest packing still starts above `safeTop`
+/// (the caller then shrinks the text and tries again). `boxes` holds the last attempt either way.
+bool fitChoiceBoxesWithin(std::vector<ChoiceBox>& boxes, float safeTop);
+
+/// Top margin choice boxes keep from the screen edge (virtual px).
+inline constexpr float kChoiceSafeTop = 16.0f;
+
+/// F2 (D-D6): whether a speaker name draws anything: markup is looked through and a name of
+/// only spaces / invisible characters has no badge at all (it used to draw an empty badge).
+bool speakerHasVisibleText(const std::string& speaker);
+
 /// Secenek metninin dugme icindeki ust kenari (fiziksel piksel). Tek satir ve
 /// %100 yazida eski formul (yazar boyutu ortada); buyuk yazida ya da cok satirda
 /// metin blogu dugmenin ortasina oturur.

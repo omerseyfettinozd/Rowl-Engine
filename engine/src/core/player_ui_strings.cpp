@@ -4,8 +4,11 @@
 
 #include "rowl/core/player_ui_strings.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <string>
 
 namespace Rowl::Core {
@@ -59,6 +62,23 @@ constexpr std::array<Entry, static_cast<std::size_t>(UiText::Count)> kTable = {{
     /* HintSlotsPaged */
     {"ENTER/tık: seç   0-9: doğrudan seç   SOL/SAĞ: sayfa   ESC: geri",
      "ENTER/click: choose   0-9: pick directly   LEFT/RIGHT: page   ESC: back"},
+    /* SlotIncompatible */ {"uyumsuz", "incompatible"},
+    /* SlotSaveFailed */ {"kaydedilemedi", "save failed"},
+    /* HintIncompatibleSave */ {"uyumsuz kayıt", "incompatible save"},
+    /* HintSaved */ {"kaydedildi", "saved"},
+    /* HintSaveFailed */
+    {"kaydedilemedi - eski kayıt korundu", "save failed - the old save is kept"},
+    /* NoticeSaved */ {"Kaydedildi: ", "Saved: "},
+    /* NoticeSaveFailed */ {"Kaydedilemedi: ", "Save failed: "},
+    /* NoticeLoaded */ {"Yüklendi: ", "Loaded: "},
+    /* NoticeLoadFailed */ {"Yüklenemedi: ", "Load failed: "},
+    /* NoticeNoSave */ {"Kayıt yok: ", "No save: "},
+    /* ReasonCorrupt */ {"kayıt bozuk", "save is corrupt"},
+    /* ReasonIncompatible */ {"kayıt uyumsuz", "save is incompatible"},
+    /* ReasonEmpty */ {"yuva boş", "slot is empty"},
+    /* ReasonUnreadable */ {"okunamadı", "could not be read"},
+    /* NoticeProfileUnwritable */
+    {"Tercihler kaydedilemedi: bu oturumda geçerli", "Preferences not saved: valid for this session only"},
 
     /* HistoryEmpty */ {"Geçmiş boş", "History is empty"},
     /* HintBacklog */ {"YUKARI/AŞAĞI: gez   ESC/B: kapat",
@@ -131,8 +151,45 @@ const char* uiText(UiText id, UiLang lang) {
     return lang == UiLang::English ? kTable[index].en : kTable[index].tr;
 }
 
+namespace {
+
+bool isTurkishTag(std::string_view tag) {
+    return tag.size() >= 2 && (tag[0] == 't' || tag[0] == 'T') && (tag[1] == 'r' || tag[1] == 'R') &&
+           (tag.size() == 2 || tag[2] == '-' || tag[2] == '_' || tag[2] == '.' || tag[2] == '@');
+}
+
+}  // namespace
+
+UiLang systemUiLanguage() {
+    if (const char* forced = std::getenv("ROWL_SYSTEM_LOCALE"); forced != nullptr && *forced != '\0') {
+        return isTurkishTag(forced) ? UiLang::Turkish : UiLang::English;
+    }
+    // The OS answer does not change while the process runs: ask once.
+    static const UiLang system = [] {
+        int count = 0;
+        if (SDL_Locale** locales = SDL_GetPreferredLocales(&count); locales != nullptr) {
+            const bool turkish = count > 0 && locales[0] != nullptr && locales[0]->language != nullptr &&
+                                 isTurkishTag(locales[0]->language);
+            const bool known = count > 0;
+            SDL_free(locales);
+            if (known) return turkish ? UiLang::Turkish : UiLang::English;
+        }
+        for (const char* name : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
+            if (const char* value = std::getenv(name); value != nullptr && *value != '\0') {
+                return isTurkishTag(value) ? UiLang::Turkish : UiLang::English;
+            }
+        }
+        return UiLang::English;
+    }();
+    return system;
+}
+
 UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared) {
-    if (!localeDeclared) return UiLang::Turkish;
+    return uiLangForLocale(activeLocale, localeDeclared, systemUiLanguage());
+}
+
+UiLang uiLangForLocale(std::string_view activeLocale, bool localeDeclared, UiLang systemLanguage) {
+    if (!localeDeclared) return systemLanguage;
     const bool turkish =
         activeLocale.size() >= 2 && (activeLocale[0] == 't' || activeLocale[0] == 'T') &&
         (activeLocale[1] == 'r' || activeLocale[1] == 'R') &&

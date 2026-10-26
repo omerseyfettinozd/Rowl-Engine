@@ -333,6 +333,7 @@ set(ROWL_ENGINE_SOURCES
     src/render/window_extras_overlay.cpp  # D07-2: galeri izgarasi / tam ekran gorunum / basarim bildirimi cizimi
     src/render/window_skin.cpp  # T2: skin cizimi (9-dilim, doku, ...), imlec, devam gostergesi
     src/render/window_pause_overlay.cpp  # W8-d(2): pause overlay (davranışsız taşıma)
+    src/render/window_story_frame.cpp  # F2 (B-1): menusuz hikaye karesi (kayit kucuk resmi)
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
@@ -352,6 +353,7 @@ set(ROWL_ENGINE_SOURCES
     src/state/game_state.cpp
     src/state/save_durability.cpp
     src/state/save_metadata.cpp
+    src/state/save_slot_preview.cpp
     src/state/session_persistence.cpp
     # Scripting
     src/scripting/lua_sandbox.cpp
