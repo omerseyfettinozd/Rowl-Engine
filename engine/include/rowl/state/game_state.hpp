@@ -186,6 +186,10 @@ struct GameState {
     std::string getVariable(const std::string& key, const std::string& defaultValue = "") const;
 
     static std::shared_ptr<const GameState> createInitialState(uint64_t startNodeId = 101);
+    /// F2 (B-7): the root step of a New Game with the project's declared variables already set
+    /// (reserved names dropped, as in every other write path).
+    static std::shared_ptr<const GameState> createInitialState(
+        uint64_t startNodeId, const std::vector<std::pair<std::string, std::string>>& declaredVariables);
     static std::shared_ptr<const GameState> createNextState(
         const std::shared_ptr<const GameState>& current,
         uint64_t nextNodeId,

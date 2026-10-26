@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "rowl/vfs/asset_candidates.hpp"
 #include "rowl/vfs/vfs.hpp"
 
 namespace Rowl::Core {
@@ -195,6 +196,12 @@ void AssetPrefetch::enqueue(std::vector<PrefetchAsset> assets, uint64_t budgetBy
 
 namespace {
 
+/// Pictures (backgrounds, sprites, button / box textures, character layers) resolve through
+/// the renderer's candidate list; sounds are looked up by their graph spelling.
+bool isImageKind(const std::string& kind) {
+    return kind == "image" || kind.rfind("character-", 0) == 0;
+}
+
 /// Seek probu: tam okuma yapmadan bayt buyuklugu. Desteklenmiyorsa nullopt.
 std::optional<uint64_t> probeSize(Rowl::VFS::VFSManager* vfs, const std::string& path) {
     try {
@@ -229,10 +236,19 @@ std::size_t AssetPrefetch::pump(Rowl::VFS::VFSManager* vfs, double maxMillisecon
                                std::to_string(m_queue.size()) + " assets queued";
             break;
         }
-        const PrefetchAsset current = m_queue.front();
+        PrefetchAsset current = m_queue.front();
 
         bool missing = false;
         uint64_t assetBytes = 0;
+        // F2 (B-8): a picture named "bogaz_gunduz.jpg" lives at images/... - resolve it the
+        // way the renderer will (same candidate list), or the prefetch warms nothing and
+        // calls every picture missing. `current.path` becomes the resolved VFS path;
+        // diagnostics keep the graph's spelling.
+        const std::string graphPath = current.path;
+        if (isImageKind(current.kind)) {
+            std::string resolved = Rowl::VFS::resolveImageAsset(*vfs, current.path);
+            if (!resolved.empty()) current.path = std::move(resolved);
+        }
         try {
             if (!vfs->exists(current.path)) {
                 missing = true;
@@ -274,9 +290,9 @@ std::size_t AssetPrefetch::pump(Rowl::VFS::VFSManager* vfs, double maxMillisecon
         m_queue.erase(m_queue.begin());
         if (missing) {
             ++m_missing;
-            if (m_missingPaths.size() < 64) m_missingPaths.push_back(current.path);
+            if (m_missingPaths.size() < 64) m_missingPaths.push_back(graphPath);
             m_lastDiagnostic =
-                "prefetch missing asset '" + current.path + "' (node " +
+                "prefetch missing asset '" + graphPath + "' (node " +
                 std::to_string(current.nodeId) + "); queue continues";
             continue; // Eksik asset prefetch'i durdurmaz.
         }

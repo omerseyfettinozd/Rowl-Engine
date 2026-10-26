@@ -336,6 +336,9 @@ public:
     /// `focused` set on the keyboard/hover focus. `getActiveChoiceButtons` stays
     /// the authored data.
     std::vector<Rowl::Render::ChoiceButtonRenderData> getLaidOutChoiceButtons() const;
+    /// F2 (D-O3): how many times the choice menu's live selectability + fitted geometry were
+    /// actually recomputed (test seam: a mouse move or a repeated query must not add to it).
+    uint64_t choiceLayoutBuildCount() const { return m_choiceLayout.builds; }
     uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
     std::string getCurrentChapterId() const { return m_storyRuntime.currentChapterId(); }
     const StoryGraphDocument& getStoryGraphDocument() const { return m_storyRuntime.document(); }
@@ -434,6 +437,14 @@ public:
     /// MS-6: quick save/load through the active slot (player F5/F9 path).
     bool quickSave();
     bool quickLoad();
+    /// F2 (B-3): why the last loadGameSlot failed (None after a success). Lets the
+    /// menus say "bozuk" (damaged) and "uyumsuz" (a well-formed save of another
+    /// graph / format) apart.
+    enum class LoadFailure : uint8_t { None = 0, Missing, Corrupt, Incompatible, Other };
+    LoadFailure lastLoadFailure() const { return m_lastLoadFailure; }
+    /// F2 (B-3): the transient result capsule ("Kaydedildi: Yuva 2") that F5 / F9 and a
+    /// successful pause-menu load raise; empty when none shows. Drawn like the toast.
+    std::string noticeText() const;
     // ── MS-6 Pause Menu ──────────────────────────────────────────────────
     /// Opens/closes the pause menu. Opening resets navigation to the main
     /// page; closing resumes the simulation. Never quits the game — quitting
@@ -678,6 +689,49 @@ private:
     bool m_toastActive = false;
     UnlockNotice m_toastNotice;
     float m_toastRemaining = 0.0f;
+    // F2 (B-3): result notice (F5 / F9 / menu load). Resolved per view from a key, a slot
+    // and a reason so a language change redraws it correctly; shown for kNoticeSeconds.
+    struct Notice {
+        UiText head = UiText::None;
+        int32_t slot = -1;
+        UiText reason = UiText::None;
+    };
+    Notice m_notice;
+    float m_noticeRemaining = 0.0f;
+    static constexpr float kNoticeSeconds = 2.4f;
+    void postNotice(UiText head, int32_t slot, UiText reason = UiText::None);
+    LoadFailure m_lastLoadFailure = LoadFailure::None;
+    /// F2: a slot page's hint line: a UiText plus the slot it talks about ("Yuva 2: kaydedildi").
+    int32_t m_hintSlot = -1;
+    void setMenuHint(UiText hint, int32_t slot = -1) { m_titleHint = hint; m_hintSlot = slot; }
+    std::string menuHintText(UiLang lang) const;
+    /// F2 (B-3): slots whose last save failed - their row says so instead of showing the
+    /// older (still valid) file as if the save had worked.
+    mutable std::bitset<100> m_slotSaveFailed;
+    /// F2 (B-2): the selected row's thumbnail, read lazily from its file.
+    struct SlotThumbnailCache {
+        int32_t slot = -1;
+        std::string stamp;
+        std::shared_ptr<const std::string> png;
+    };
+    mutable SlotThumbnailCache m_slotThumbnail;
+    std::shared_ptr<const std::string> slotThumbnail(int32_t slot, const PauseSlotInfo& info) const;
+    /// Corrupt slot files already reported (slot|size|mtime): one log line per bad file.
+    mutable std::unordered_set<std::string> m_reportedBadSlots;
+    /// F2 (B-1): F5 on a visible window saves after this frame's story is drawn (the
+    /// thumbnail is read from the renderer then), not in the middle of input handling.
+    bool m_pendingQuickSave = false;
+    void playerQuickSave();
+    /// F2 (B-15): a preference change that cannot be kept (read-only profile) or a profile
+    /// write that failed is told to the player ONCE per session.
+    void notifyProfileNotSaved();
+    bool m_profileNoticeShown = false;
+    uint32_t m_seenProfileFlushFailures = 0;
+    /// F2 (B-7): puts the project's declared variables into the Lua sandbox (those `present`
+    /// does not already hold) and builds the New Game root state carrying them.
+    void seedDeclaredVariables(const Rowl::State::VariableMap* present);
+    std::shared_ptr<const Rowl::State::GameState> createStartState() const;
+    void playerQuickLoad();
     // D06-1: the last advanceStory moved the cursor through a condition
     // redirect (advanceToChoice must still report the choice as taken).
     bool m_lastAdvanceRedirected = false;
@@ -780,6 +834,11 @@ private:
     /// story ends; editor previews and C API hosts that never open a title keep
     /// the old "stay on the last frame" behaviour.
     bool m_titleSessionSeen = false;
+    /// F2 (D-O1): seconds during which a title opened by the end of the story ignores
+    /// confirm input (a player mashing Enter/Space/click on the last line would otherwise
+    /// confirm New Game / Continue on the very title that has just appeared).
+    float m_titleInputLock = 0.0f;
+    static constexpr float kEndOfStoryTitleInputLock = 0.6f;
     UiText m_titleHint = UiText::None;  // D05-1: a key, resolved per view (locale-safe)
     bool m_windowAudioSuspended = false;
     // #160: stall-signal edge latch. Set on the first zero-dt step observed
@@ -853,9 +912,24 @@ private:
     /// but without the confirmation (the story is over). Auto / Skip never reach it.
     /// Returns true when it consumed the input.
     bool tryEndOfStoryTitle();
+    bool titleInputLocked() const { return m_titleActive && m_titleInputLock > 0.0f; }
     // D-K3 (engine_choice_focus.cpp): keyboard / hover navigation of a presented
     // choice menu. Indices point into m_activeChoiceButtons.
     std::vector<std::size_t> selectableChoiceIndices() const;
+    /// F2 (D-O3/D-D3): the menu's LIVE state in one place - per option "author-enabled and its
+    /// condition holds right now" and the geometry fitted to the text scale - computed once per
+    /// (buttons, Lua revision, window layout) and shared by drawing, keyboard focus, hover and
+    /// click. It used to be recomputed (Lua included) on every mouse-motion event, and the
+    /// drawn `enabled` was frozen when the scene was built while keyboard / click asked the
+    /// live condition (an option whose condition turned true later was clickable but invisible).
+    struct ChoiceLayoutCache {
+        bool valid = false;
+        uint64_t key = 0;
+        std::vector<Rowl::Render::ChoiceButtonRenderData> laidOut;  // enabled == selectable
+        uint64_t builds = 0;
+    };
+    mutable ChoiceLayoutCache m_choiceLayout;
+    const ChoiceLayoutCache& choiceLayout() const;
     /// Focused option (-1 = none: the menu just opened, or the remembered option
     /// stopped being selectable).
     int focusedChoiceIndex() const;
@@ -933,6 +1007,12 @@ private:
     /// RowlEngine_SetLocale incl. refreshActiveDialogueLocalization); no-op on a
     /// game with fewer than two switchable locales.
     void cyclePreferenceLanguage(int direction);
+    /// F2 (B-13): the Tercihler "Dil" row exists only when the player can actually change the
+    /// language (the project declares locales and more than one is supported). A single-language
+    /// game's row was a dead control.
+    bool preferenceLanguageRowShown() const;
+    /// Page row (as listed) -> the logical preference row it stands for (skips the hidden Dil row).
+    int logicalPreferenceRow(int pageRow) const;
     std::string preferenceLanguageText() const;
     PauseMenuView getTitleMenuView() const;
     float pauseMenuVolume(int row) const;

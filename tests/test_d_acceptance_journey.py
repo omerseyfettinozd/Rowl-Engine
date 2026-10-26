@@ -750,8 +750,10 @@ def load_from_slot(eng, slot):
     eng.press("enter")
     check(eng.menu()["mode"] == 2, "the load page opens (slot list)")
     eng.press(str(slot))
-    check(eng.menu()["open"] and eng.menu()["mode"] == 2,
-          f"choosing slot {slot} loads it; the pause menu stays on the slot page (by design)")
+    # F2 (B-3 product decision, replaces "the pause menu stays on the slot page"): a successful load
+    # closes the menu and the story plays on from the loaded place; a result capsule says so.
+    check(not eng.menu()["open"],
+          f"choosing slot {slot} loads it and closes the pause menu (the story plays on from the load)")
     close_menus(eng)
 
 
@@ -880,7 +882,10 @@ def phase_resume(ctx, model, eng):
     eng.press("enter")
     check(eng.menu()["mode"] == 4, "Tercihler opens from the title")
     labels = [r["label"] for r in eng.menu()["rows"]]
-    speed_row, size_row, lang_row = labels.index("Metin Hızı"), labels.index("Metin Boyutu"), labels.index("Dil")
+    speed_row, size_row = labels.index("Metin Hızı"), labels.index("Metin Boyutu")
+    # F2 (B-13): a single-language game (kayip_tablo declares only "tr") lists no Dil row at all - there
+    # is nothing to switch, so the control is not offered.
+    check("Dil" not in labels, "Dil: a single-language game has no language row to offer", str(labels))
     eng.select_row(speed_row)
     eng.press("right")
     eng.press("right")
@@ -889,11 +894,7 @@ def phase_resume(ctx, model, eng):
     eng.press("right")
     eng.press("right")
     check(eng.menu_rows()[size_row][1] == "150%", "Metin Boyutu reads 150%", str(eng.menu_rows()[size_row]))
-    eng.select_row(lang_row)
-    language_before = eng.menu_rows()[lang_row]
-    eng.press("right")
-    check(eng.menu_rows()[lang_row] == language_before and eng.profile()["language"] == "",
-          "Dil: a single-language game offers nothing to switch to, the profile keeps the game's language")
+    check(eng.profile()["language"] == "", "the profile keeps the game's language (nothing was chosen)")
     eng.shot("preferences")
     prof = eng.profile()
     check(prof["text_speed_multiplier"] == 1.5 and prof["text_scale"] == 1.5,

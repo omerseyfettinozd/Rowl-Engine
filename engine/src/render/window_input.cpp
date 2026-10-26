@@ -17,6 +17,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace Rowl::Render {
@@ -28,6 +29,12 @@ float touchCoordinateToPhysical(float normalized, uint32_t extent) {
 }
 
 }  // namespace
+
+bool Window::keyRepeats(Rowl::Platform::RuntimeInputEvent::Type type) {
+    using Type = Rowl::Platform::RuntimeInputEvent::Type;
+    return type == Type::MenuUp || type == Type::MenuDown || type == Type::MenuLeft ||
+           type == Type::MenuRight;
+}
 
 bool Window::mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputEvent& outEvent) {
     using Type = Rowl::Platform::RuntimeInputEvent::Type;
@@ -96,6 +103,17 @@ bool Window::mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputE
         outEvent.slot = static_cast<int32_t>(sdlKey - SDLK_0);
         return true;
     }
+    // F2 (D-D5): the numpad digits pick slots / choice options like the top row.
+    if (sdlKey >= SDLK_KP_1 && sdlKey <= SDLK_KP_9) {
+        outEvent.type = Type::SelectSlot;
+        outEvent.slot = static_cast<int32_t>(sdlKey - SDLK_KP_1) + 1;
+        return true;
+    }
+    if (sdlKey == SDLK_KP_0) {
+        outEvent.type = Type::SelectSlot;
+        outEvent.slot = 0;
+        return true;
+    }
     return false;
 }
 
@@ -103,7 +121,24 @@ void Window::pollEvents(bool& outShouldQuit) {
     if (!m_initialized) return;
 
     if (m_eventWindowId == 0) return;
+    // F2 (D-O3): a mouse can report hundreds of positions per second and each one used to go
+    // through the whole choice-menu hover path (Lua conditions included). Only the last
+    // position of a run of motions is delivered; any other event flushes the pending one
+    // first, so the order a click sees (move, then press) is unchanged.
+    std::optional<SDL_Event> pendingMotion;
+    const auto flushMotion = [&] {
+        if (!pendingMotion) return;
+        if (m_inputHandler) m_inputHandler(Rowl::Platform::makeRuntimeInput(
+            Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, pendingMotion->motion.x,
+            pendingMotion->motion.y));
+        pendingMotion.reset();
+    };
     for (const SDL_Event& event : Rowl::Platform::SdlEventDispatcher::takeEvents(m_eventWindowId)) {
+        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            pendingMotion = event;
+            continue;
+        }
+        flushMotion();
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 outShouldQuit = true;
@@ -116,13 +151,13 @@ void Window::pollEvents(bool& outShouldQuit) {
                 Rowl::Platform::RuntimeInputEvent input =
                     Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance);
                 if (mapKeyToRuntimeInput(static_cast<uint32_t>(event.key.key), input)) {
-                    // D04-1: OS key repeat must not re-toggle Auto/Skip (the three
-                    // new keys only; Space/arrows keep their repeat behavior).
-                    using KeyType = Rowl::Platform::RuntimeInputEvent::Type;
-                    const bool driverKey = input.type == KeyType::ToggleAuto ||
-                                           input.type == KeyType::ToggleSkip ||
-                                           input.type == KeyType::SkipHold;
-                    if (driverKey && event.key.repeat) break;
+                    // F2 (D-O1/D-D4): OS key repeat is only for the arrows. A held
+                    // Enter/Space/digit/Esc/Backspace/F5/F9/A/S/Ctrl is ONE press: a
+                    // repeating Enter used to confirm the menu that the previous press
+                    // had just opened, a held digit picked the n-th option of every
+                    // following choice menu and a held Esc cycled through the pause
+                    // menu pages.
+                    if (event.key.repeat && !keyRepeats(input.type)) break;
                     if (m_inputHandler) m_inputHandler(input);
                 }
                 break;
@@ -160,10 +195,8 @@ void Window::pollEvents(bool& outShouldQuit) {
                 break;
             }
             case SDL_EVENT_MOUSE_MOTION:
-                // #16: motion never routed before the dispatcher fix; now it
-                // surfaces as hover position through the input channel.
-                if (m_inputHandler) m_inputHandler(Rowl::Platform::makeRuntimeInput(
-                    Rowl::Platform::RuntimeInputEvent::Type::PointerMotion, event.motion.x, event.motion.y));
+                // #16: motion surfaces as hover position through the input channel; F2: the
+                // delivery is coalesced above (pendingMotion), never reached from here.
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
                 // #16: wheel never routed before the dispatcher fix. x/y carry
@@ -267,6 +300,7 @@ void Window::pollEvents(bool& outShouldQuit) {
                 break;
         }
     }
+    flushMotion();
 }
 
 }  // namespace Rowl::Render

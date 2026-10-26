@@ -37,6 +37,9 @@ inline constexpr std::size_t kPlayerProfileMaxUnlocksPerKind = 1024;
 inline constexpr std::size_t kPlayerProfileMaxQuarantine = 3;
 /// Automatic flush debounce (seconds of engine time after the first change).
 inline constexpr float kPlayerProfileFlushDelaySeconds = 2.0f;
+/// F2 (B-15): the one auto-advance delay range - the engine, the Tercihler row and the profile
+/// all use 0..10 s (the profile used to accept 0..60 and the menu showed 10 for a stored 30).
+inline constexpr float kPlayerProfileMaxAutoAdvanceDelay = 10.0f;
 
 enum class PlayerProfileStatus {
     Unmounted,          ///< no project mounted yet; nothing loaded, nothing writable
@@ -61,7 +64,7 @@ struct PlayerPreferences {
     float ambienceVolume = 1.0f;
     float uiVolume = 1.0f;
     float textSpeedMultiplier = 1.0f;       ///< [0.25, 4]
-    float autoAdvanceDelay = 2.0f;          ///< [0, 60] seconds
+    float autoAdvanceDelay = 2.0f;          ///< [0, 10] seconds (kPlayerProfileMaxAutoAdvanceDelay)
     float textScale = 1.0f;                 ///< snapped to 1 / 1.25 / 1.5
     bool highContrast = false;
     bool reducedMotion = false;
@@ -122,6 +125,9 @@ public:
     void tick(float deltaSeconds);
 
     PlayerProfileStatus status() const { return m_status; }
+    /// F2 (B-15): how many autosave attempts failed since open() (the profile could not be
+    /// written: full disk, no permission). The engine tells the player once.
+    uint32_t flushFailureCount() const { return m_flushFailures; }
     const std::string& diagnostic() const { return m_diagnostic; }
     bool readOnly() const { return m_readOnly; }
     bool dirty() const { return m_dirty; }
@@ -182,6 +188,7 @@ private:
     bool m_dirty = false;
     float m_dirtyAge = 0.0f;
     float m_retryDelay = 0.0f;  ///< extra wait added after a failed autosave
+    uint32_t m_flushFailures = 0;
     PlayerPreferences m_preferences;
     std::unordered_set<std::string> m_readIds;
     std::size_t m_readLimit = kPlayerProfileMaxReadIds;

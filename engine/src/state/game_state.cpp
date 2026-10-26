@@ -507,6 +507,22 @@ std::shared_ptr<const GameState> GameState::createInitialState(uint64_t startNod
     return state;
 }
 
+std::shared_ptr<const GameState> GameState::createInitialState(
+    uint64_t startNodeId, const std::vector<std::pair<std::string, std::string>>& declaredVariables) {
+    auto state = std::make_shared<GameState>();
+    state->stepId = 1;
+    state->activeNodeId = startNodeId;
+    state->previousState = nullptr;
+    auto varMap = std::make_shared<VariableMap>();
+    for (const auto& [key, value] : declaredVariables) {
+        if (key.empty() || Rowl::Scripting::isReservedVariableName(key)) continue;
+        varMap->data[key] = value;
+    }
+    state->variables = std::move(varMap);
+    state->dialogueHistory = DialogueHistory{};
+    return state;
+}
+
 std::shared_ptr<const GameState> GameState::createNextState(
     const std::shared_ptr<const GameState>& current,
     uint64_t nextNodeId,

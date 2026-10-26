@@ -45,6 +45,7 @@ add_executable(rowl_tests
     test_backlog_replay.cpp
     test_backlog_screen.cpp
     test_f1_audit_fixes.cpp
+    test_f2_audit_fixes.cpp
     test_auto_skip.cpp
     test_auto_skip_ui.cpp
     test_condition_component.cpp

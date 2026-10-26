@@ -580,18 +580,18 @@ void test_native_c_api() {
             std::cerr << "MS-6: menu save must stay paused" << std::endl;
             exit(1);
         }
-        // Back -> main page, selection reset.
+        // Back -> main page. F2 (D-D2) replaces the MS-6 "selection reset" lock on purpose: the cursor
+        // lands on the row that opened the page (Oyunu Kaydet = 1), like Tercihler and the title.
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_BACK);
         menu = menuJson();
-        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 0) {
-            std::cerr << "MS-6: Back did not return to the main page" << std::endl;
+        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 1) {
+            std::cerr << "MS-6: Back did not return to the main page (on the Kaydet row)" << std::endl;
             exit(1);
         }
         // D05-2: the pause main page has no value rows any more. Down x3 ->
         // "Tercihler", Confirm -> the Preferences page, whose first row is the
         // master volume; Left/Right adjust in 0.05 steps.
         const float masterBefore = RowlEngine_GetMasterVolume(handle);
-        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
         menu = menuJson();

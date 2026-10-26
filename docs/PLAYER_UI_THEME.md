@@ -75,6 +75,11 @@ texts, which rows are listed, durations, sounds, and the editor window.
 `menu.title`), `rule` (`#38BDF8BE`, inherits `menu.title`), `rule_px` 2 (0-16, 0 = no rule), `px` 26,
 `height` 56, `margin_top` 28, `pad_x` 30, `max_text_width` 1300.
 
+F2: the same capsule (and so these `toast` fields) also shows the short result of saving and loading ("Kaydedildi: Yuva 2",
+"Kaydedilemedi: Yuva 2", "Yüklendi: Yuva 2", "Yüklenemedi: Yuva 2 (kayıt bozuk)") and the once-per-session "Tercihler kaydedilemedi"
+notice, for 2.4 s over the running story; its text is not themed yet (texts: a later slice). Over the pause menu the same results
+appear on the slot page's hint line instead.
+
 `badges` (AUTO / SKIP capsules): `auto_fill` (`#0F0F1AC8`, `menu.panel_fill`), `auto_text` (`menu.title`),
 `skip_fill` (`#0E7490D2`, `menu.selected_fill`), `skip_text` (`menu.text`), `px` 24, `width` 116, `height` 44,
 `gap` 12, `margin_right` 40, `margin_top` 28. The badge words are not themed here (texts: a later slice).

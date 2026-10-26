@@ -129,7 +129,12 @@ void test_pause_subpage_back() {
         rig.openRow(1);
         rig.expectPage(1, 0, "Kaydet page open");
         rig.key(SDLK_ESCAPE);
-        rig.expectPage(0, 0, "Esc on the save page returns to the main page (selection reset, like the menu Back)");
+        // F2 (D-D2) updates the MS-6 lock on purpose: Back from a Save / Load page lands on the row
+        // that opened it (Oyunu Kaydet = 1, Oyunu Yukle = 2), like Tercihler and the title do,
+        // instead of resetting to "Devam Et". Reason: after saving, the player's next key press
+        // (Enter) should not be one Up away from re-opening the page they just left, and a
+        // reflex Esc-Esc-Enter must not land on Resume.
+        rig.expectPage(0, 1, "Esc on the save page returns to the main page on the Kaydet row");
         rig.key(SDLK_ESCAPE);
         req(!rig.paused(), "Esc on the main page resumes");
         TEST_PASS("Esc on the save page goes back to the pause menu, a second Esc resumes");
@@ -137,7 +142,7 @@ void test_pause_subpage_back() {
         // P maps to the same toggle.
         rig.openRow(1);
         rig.key(SDLK_P);
-        rig.expectPage(0, 0, "P on the save page");
+        rig.expectPage(0, 1, "P on the save page");
         TEST_PASS("P behaves like Esc on the save page");
     }
     {
@@ -146,21 +151,35 @@ void test_pause_subpage_back() {
         rig.openRow(2);
         rig.expectPage(2, 0, "Yukle page open");
         rig.key(SDLK_ESCAPE);
-        rig.expectPage(0, 0, "Esc on the load page returns to the main page (selection reset, like the menu Back)");
+        rig.expectPage(0, 2, "Esc on the load page returns to the main page on the Yukle row (F2 D-D2)");
         TEST_PASS("Esc on the load page goes back to the pause menu");
     }
 
-    // 3. Main page: resume, also while the exit / title confirmation is armed.
+    // 3. Main page: resume - but while the exit / title confirmation is armed, Esc only
+    // cancels it. F2 (D-D1) changes the former lock ("Esc resumes even over an armed
+    // confirmation") on purpose: the footer reads "ESC: vazgec" (cancel) and the title screen
+    // already cancels the same way; dropping the player into the story from a half-answered
+    // "emin misin?" was the odd one out.
     {
         Rig rig;
         rig.open(graphPath);
         rig.openRow(LM::kMainTitleRow);  // arms the "emin misin?" confirmation
         req(rig.paused() && rig.menu()["confirm_title"].get<bool>(), "confirmation not armed: " + rig.menu().dump());
         rig.key(SDLK_ESCAPE);
-        req(!rig.paused(), "Esc with an armed confirmation (today's behaviour: resume)");
+        req(rig.paused() && rig.mode() == 0 && !rig.menu()["confirm_title"].get<bool>(),
+            "Esc over an armed confirmation cancels it and stays in the menu: " + rig.menu().dump());
+        req(rig.selected() == LM::kMainTitleRow, "the cursor stays on the row");
+        rig.key(SDLK_ESCAPE);
+        req(!rig.paused(), "a second Esc resumes");
         rig.key(SDLK_ESCAPE);
         req(rig.paused() && !rig.menu()["confirm_title"].get<bool>(), "reopened menu must not carry the confirmation");
-        TEST_PASS("Main page Esc still resumes, also over an armed confirmation");
+        // The exit confirmation behaves the same.
+        rig.key(SDLK_ESCAPE);  // resume
+        rig.openRow(LM::kMainExitRow);
+        req(rig.paused() && rig.menu()["confirm_quit"].get<bool>(), "exit confirmation armed");
+        rig.key(SDLK_ESCAPE);
+        req(rig.paused() && !rig.menu()["confirm_quit"].get<bool>(), "Esc cancels the exit confirmation too");
+        TEST_PASS("Main page: Esc cancels an armed confirmation, a plain Esc still resumes");
     }
 
     // 4. Preferences / backlog back paths are untouched.

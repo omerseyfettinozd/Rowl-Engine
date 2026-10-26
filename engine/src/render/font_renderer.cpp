@@ -1,4 +1,5 @@
 #include "rowl/render/font_renderer.hpp"
+#include "rowl/render/ui_text_fit.hpp"
 #include "rowl/core/logger.hpp"
 #include "rowl/text/utf8.hpp"
 #include <fstream>
@@ -54,6 +55,7 @@ void FontRenderer::setTextScale(float scale) {
     if (clamped != m_textScale) {
         m_textScale = clamped;
         m_shapeCache.clear();
+        m_ellipsisCache.clear();
     }
 }
 
@@ -344,7 +346,7 @@ std::shared_ptr<const Rowl::Text::ShapedText> FontRenderer::shapeTextShared(
     // A3-tur7: insert tahsisi patlarsa (OOM) cachesiz-devam — fail-open
     // performans, fail-closed doğruluk (kilit-test deseni tur2'den).
     try {
-        if (m_shapeCache.size() >= 16) m_shapeCache.erase(m_shapeCache.begin());
+        while (m_shapeCache.size() >= m_shapeCacheCapacity) m_shapeCache.erase(m_shapeCache.begin());
         m_shapeCache.push_back({markup, fontSize, maxWidth, m_textScale, language, layout});
     } catch (...) {
         // Bilinçli-yutma: önbellek lüks, layout zaten hazır — render sürer.
@@ -352,11 +354,44 @@ std::shared_ptr<const Rowl::Text::ShapedText> FontRenderer::shapeTextShared(
     return layout;
 }
 
+std::string FontRenderer::ellipsizedToWidth(const std::string& text, float fontSize, float maxWidth) {
+    const std::string key = text + '\x1f' + std::to_string(static_cast<long long>(fontSize * 8.0f)) + '\x1f' +
+                            std::to_string(static_cast<long long>(maxWidth * 8.0f)) + '\x1f' +
+                            std::to_string(static_cast<long long>(m_textScale * 100.0f));
+    if (const auto found = m_ellipsisCache.find(key); found != m_ellipsisCache.end()) return found->second;
+    std::string result = Rowl::Render::ellipsizeToWidth(
+        text, maxWidth, [&](const std::string& candidate) { return measureTextWidth(candidate, fontSize); });
+    try {
+        if (m_ellipsisCache.size() >= 64) m_ellipsisCache.clear();
+        m_ellipsisCache.emplace(key, result);
+    } catch (...) {
+        // A memo, not state: the result is right without it.
+    }
+    return result;
+}
+
+void FontRenderer::renderShapedOrPlainText(SDL_Surface* targetSurface, const Rowl::Text::ShapedText& shaped,
+                                           const std::string& text, float x, float y, float fontSize,
+                                           SDL_Color color, float maxWidth, float maxHeight,
+                                           const std::string& alignment) {
+    if (!shaped.glyphs.empty()) {
+        renderShapedText(targetSurface, shaped, x, y, fontSize, color, maxWidth, maxHeight, alignment);
+        return;
+    }
+    renderText(targetSurface, text, x, y, fontSize, color, maxWidth, maxHeight, alignment);
+}
+
+void FontRenderer::reserveShapeCache(std::size_t entries) const {
+    constexpr std::size_t kMaxShapeCacheEntries = 256;
+    m_shapeCacheCapacity = std::max(m_shapeCacheCapacity, std::min(entries, kMaxShapeCacheEntries));
+}
+
 void FontRenderer::invalidateShapeCache() {
     // std::bad_alloc güvenliği: clear() wg. shrink gerektirmez; istisna
     // atarsa önbellek eski halinde kalır — render yine doğru sürer.
     try {
         m_shapeCache.clear();
+        m_ellipsisCache.clear();
     } catch (...) {
     }
 }
@@ -377,6 +412,11 @@ void FontRenderer::renderShapedText(
         if (!SDL_LockSurface(targetSurface)) return;
         mustUnlock = true;
     }
+    // High contrast = two passes over the WHOLE text: every glyph's dark halo first,
+    // then every fill. Doing halo+fill per glyph pixel let the next pixel's halo bury the
+    // previous pixel's fill (all text came out black).
+    for (int pass = m_highContrast ? 0 : 1; pass < 2; ++pass) {
+    const bool haloPass = pass == 0;
     for (const auto& line : shaped.lines) {
         if (maxHeight > 0.0f && line.baseline > maxHeight) break;
         float lineX = startX;
@@ -426,20 +466,22 @@ void FontRenderer::renderShapedText(
                 for (int gx = 0; gx < glyph.width; ++gx) {
                     const uint8_t alpha = glyph.bitmap[gy * glyph.width + gx];
                     if (!alpha) continue;
-                    if (m_highContrast) {
-                        // Dark halo first: 8-neighbourhood outline.
+                    if (haloPass) {
+                        // 8-neighbourhood outline.
                         for (int oy = -1; oy <= 1; ++oy)
                             for (int ox = -1; ox <= 1; ++ox) {
                                 if (ox == 0 && oy == 0) continue;
                                 blendTexel(targetSurface, drawX + gx + ox,
                                            drawY + gy + oy, kContrastOutline, alpha);
                             }
+                    } else {
+                        blendTexel(targetSurface, drawX + gx, drawY + gy,
+                                   glyphColor, alpha);
                     }
-                    blendTexel(targetSurface, drawX + gx, drawY + gy,
-                               glyphColor, alpha);
                 }
             }
         }
+    }
     }
     if (mustUnlock) SDL_UnlockSurface(targetSurface);
 }
@@ -589,6 +631,9 @@ void FontRenderer::renderText(
     float lineHeight = static_cast<float>(ascent - descent + lineGap) * vScale * 1.15f;
 
     auto lines = wrapText(visibleText, fontSize, maxWidth);
+    // High contrast: halo pass over all text, then fill pass (see renderShapedText).
+    for (int pass = m_highContrast ? 0 : 1; pass < 2; ++pass) {
+    const bool haloPass = pass == 0;
     float currentY = startY;
     size_t codepointsDrawn = 0;
 
@@ -628,15 +673,16 @@ void FontRenderer::renderText(
                     for (int gx = 0; gx < g->width; ++gx) {
                         uint8_t alpha = g->bitmap[gy * g->width + gx];
                         if (alpha == 0) continue;
-                        if (m_highContrast) {
+                        if (haloPass) {
                             for (int oy = -1; oy <= 1; ++oy)
                                 for (int ox = -1; ox <= 1; ++ox) {
                                     if (ox == 0 && oy == 0) continue;
                                     blendTexel(targetSurface, drawX + gx + ox,
                                                drawY + gy + oy, kContrastOutline, alpha);
                                 }
+                        } else {
+                            blendTexel(targetSurface, drawX + gx, drawY + gy, color, alpha);
                         }
-                        blendTexel(targetSurface, drawX + gx, drawY + gy, color, alpha);
                     }
                 }
             }
@@ -645,6 +691,7 @@ void FontRenderer::renderText(
         }
 
         currentY += lineHeight;
+    }
     }
 
     if (mustUnlock) {

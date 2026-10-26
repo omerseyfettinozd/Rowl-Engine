@@ -22,6 +22,24 @@ optional fields and ignore unknown fields unless stated otherwise.
   `id`, `enabled`, `data`), plus `next_nodes[]` edges of
   `{ id, label, option_id }`. `option_id` is the stable branch identity
   consumed by `RowlEngine_SelectChoice`.
+- **Project variable declarations (F2, B-7):** the graph root may carry
+  `"variables": {"kaba": 0, "isim": "Eleni", "acik": true}` (string, number or
+  boolean values; stored as text like every saved variable; names are non-empty,
+  at most 256 bytes and not a reserved engine name; an invalid declaration
+  rejects the graph). A New Game (and a graph mount) sets them in the Lua
+  sandbox and in the root GameState BEFORE the start node's conditions run, so
+  a condition may read a variable that no earlier node assigned (an undeclared
+  name is `nil` in Lua: `zz < 1` is an error, i.e. false). Loading or rewinding to
+  a state that lacks a declared name (a save from before the declaration
+  existed) gives that name its declared default. No declarations = the old
+  behaviour. Declarations are not part of the graph identity (adding one does
+  not make existing saves "uyumsuz"). The editor does not write or list them
+  yet (follow-up F3/T4: a variables list and a lint for undeclared reads).
+- **Repeated `option_id`:** two options of one node with the same `option_id`
+  are kept apart by the native parser: the second and later copies become
+  `<id>#2`, `<id>#3` ... in the `choice` component and on the matching n-th
+  edge, with one WARN naming the node (focus, digits and clicks used to treat
+  them as one option). The editor should lint it.
 - **Editor loading** (`StoryGraphLoaderService.Load`) is structural, not
   version-gated, and migrates upward:
   | Present shape | Treated as | Migration |
@@ -60,6 +78,15 @@ optional fields and ignore unknown fields unless stated otherwise.
   `thumbnail_width/height` and `thumbnail_png_base64` (320 px PNG, `""`
   when no framebuffer). All optional on decode; no version bump —
   see `docs/SAVE_SLOTS_AND_SEMANTIC_INPUT.md`.
+  F2 (B-1): the thumbnail is the story frame WITHOUT any menu or overlay: the
+  window snapshots it when the pause menu opens (and just before an F5 save on a
+  visible window, whose renderer is only readable while a frame is drawn). An
+  offscreen runtime saved outside the menu uses its live surface; a host that
+  saves through the C API on a visible window outside a pause has no thumbnail.
+  F2 (B-2): the slot LIST reads only the top-level metadata of each file (a SAX
+  walk that never builds the history or decodes the picture) and fetches the
+  selected row's thumbnail lazily; its texture key is `slot|saved_at|size|mtime`,
+  so two saves inside one second do not show the older picture.
 - **`dialogue_history` entries** carry an optional `content_id` (Faz 2
   Dilim 2, UUID form, `""` for pre-migration lines). Decode defaults a
   missing key to `""` and rejects entries over 1024 bytes; no format
@@ -279,7 +306,7 @@ filters), linter (`ProjectValidationService`), and the packager
 - **Schema (`version = 1`):** `version`, `game_id` (per-game dirs only),
   `language` (`en`/`tr`, `tr-TR` → `tr`), `read_content_ids` (sorted array of
   canonical lowercase UUIDs), `master/bgm/voice/sfx/ambience/ui_volume`
-  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,60]),
+  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,10]),
   `text_scale` (snapped to 1 / 1.25 / 1.5), `high_contrast`, `reduced_motion`,
   `skip_mode` (`off`/`read_only`/`all`), `auto_enabled`, `mixer_fade_curve`
   (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and `unlocks` (D07-1:
@@ -370,6 +397,15 @@ folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
   node plays normally (an authoring error never locks the game).
 - **Evaluation error** (Lua syntax/runtime error, budget): same policy as a
   choice option, i.e. the condition counts as false (and one WARN names it).
+  F2 (B-10): every condition has its OWN instruction / wall-clock budget. A
+  condition that runs out of it is false and nothing more: the trip is not carried
+  into the session, so later conditions are judged normally (before, one runaway
+  condition poisoned the session and every later condition read false until
+  New Game / load). A catch-and-respin inside one run still escalates to a real
+  session poison, which only `clearVariables()` lifts. Script callbacks
+  (`on_enter`, `on_update`) keep the strict poison.
+- **Undeclared variables** are `nil`, not 0: declare them in the graph's
+  `variables` object (section 1) or assign them in an earlier node.
 - **Variables:** the Lua evaluator reads the Lua globals, so New Game
   (`RowlEngine_ResetToStartNode`, title New Game) clears the Lua story
   variables together with the fresh GameState, as load/rewind/mount already do.

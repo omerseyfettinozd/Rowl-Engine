@@ -537,24 +537,32 @@ void test_player_preferences_menu() {
         req(g.locale() == "en", "backwards skips it too: " + g.locale());
     }
     {
-        // One locale, no locale at all: the row shows a value and never changes.
+        // F2 (B-13) replaces the former "the row only shows its value" lock on purpose: a game with
+        // one language (or none declared) has nothing to switch, so the Dil row is not listed at
+        // all - a control that does nothing is worse than no control. The rows below move up by
+        // one and keep working (Metin Boyutu is now row 7).
         for (const fs::path& dir : {monoGame, noLocale}) {
             Game g;
             g.open(dir);
             const std::string before = g.locale();
             g.openPreferences();
+            const json m0 = g.menu();
+            req(m0["rows"].size() == 11, "no Dil row for a single-language game: " + m0.dump());
+            for (const auto& row : m0["rows"]) {
+                req(row["label"] != "Dil" && row["label"] != "Language", "the Dil row must not be listed");
+            }
+            req(m0["rows"][7]["label"] == "Metin Boyutu" && m0["rows"][10]["label"] == "Geri",
+                "rows below the hidden Dil row moved up: " + m0.dump());
             g.selectRow(7);
-            const std::string frameBefore = g.frame(2);
-            g.cmd(ROWL_PAUSE_MENU_RIGHT);
-            g.cmd(ROWL_PAUSE_MENU_LEFT);
-            g.cmd(ROWL_PAUSE_MENU_CONFIRM);
-            g.click(7, 1200.0f);
+            g.cmd(ROWL_PAUSE_MENU_RIGHT);  // now steps the text size, never the language
             const json m = g.menu();
-            req(g.locale() == before && m["rows"][7]["label"] == "Dil" && m["rows"][7]["value"] == "Türkçe" &&
-                    m["mode"].get<int>() == 4 && m["selected"].get<int>() == 7 && m["rows"].size() == 12,
-                "single-language / locale-free game: the row only shows its value: " + m.dump());
-            req(g.profile()["language"] == "", "nothing is stored for a no-op row: " + g.profile().dump());
-            req(g.frame(2) == frameBefore, "and the frame is unchanged");
+            req(g.locale() == before && m["rows"][7]["value"] == "125%" && m["selected"].get<int>() == 7,
+                "row 7 is the text size now: " + m.dump());
+            g.cmd(ROWL_PAUSE_MENU_LEFT);
+            req(g.profile()["language"] == "", "nothing language-related is stored: " + g.profile().dump());
+            g.selectRow(10);
+            g.cmd(ROWL_PAUSE_MENU_CONFIRM);  // Geri: the last row, wherever it sits
+            req(g.menu()["mode"].get<int>() != 4, "the last row still leaves the page");
         }
     }
     {
@@ -569,7 +577,7 @@ void test_player_preferences_menu() {
             "de is Deutsch (menus in English): " + g.menu().dump());
         req(g.profile()["language"] == "de", "profile: de");
     }
-    TEST_PASS("Dil: cycles the game's locales (menu, dialogue, profile follow), skips catalog-less ones, no-op for single / no locale");
+    TEST_PASS("Dil: cycles the game's locales (menu, dialogue, profile follow), skips catalog-less ones, row hidden for single / no locale (F2)");
 
     // ── 3. Metin Boyutu / Yuksek Kontrast / Hareketi Azalt ──────────────────
     {

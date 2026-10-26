@@ -299,10 +299,44 @@ void test_window_input_routing_release_motion_wheel_text() {
                 exit(1);
             }
         }
-        press(SDLK_SPACE, true);
-        if (!containsType(Type::Advance)) {
-            std::cerr << "D04-1: repeated Space must keep advancing (repeat filter is for A/S/Ctrl only)" << std::endl;
-            exit(1);
+        // F2 (D-O1/D-D4) updates the former "Space keeps its repeat" lock on purpose: a
+        // repeating Enter/Space/digit confirmed the menu the previous press had just opened
+        // (end of story -> title -> New Game) and a held digit picked the n-th option of every
+        // following choice menu. Only the four arrows repeat; every other key is one press.
+        struct Rep { SDL_Keycode key; Type type; const char* name; bool repeats; };
+        for (const Rep& r : {Rep{SDLK_SPACE, Type::Advance, "Space", false},
+                             Rep{SDLK_RETURN, Type::Advance, "Enter", false},
+                             Rep{SDLK_KP_ENTER, Type::Advance, "KP Enter", false},
+                             Rep{SDLK_1, Type::SelectSlot, "1", false},
+                             Rep{SDLK_KP_2, Type::SelectSlot, "KP 2", false},
+                             Rep{SDLK_ESCAPE, Type::PauseToggle, "Esc", false},
+                             Rep{SDLK_BACKSPACE, Type::Rewind, "Backspace", false},
+                             Rep{SDLK_F5, Type::QuickSave, "F5", false},
+                             Rep{SDLK_UP, Type::MenuUp, "Up", true},
+                             Rep{SDLK_DOWN, Type::MenuDown, "Down", true},
+                             Rep{SDLK_LEFT, Type::MenuLeft, "Left", true},
+                             Rep{SDLK_RIGHT, Type::MenuRight, "Right", true}}) {
+            press(r.key, false);
+            if (!containsType(r.type)) {
+                std::cerr << "F2: first press of " << r.name << " must reach the handler" << std::endl;
+                exit(1);
+            }
+            press(r.key, true);
+            if (containsType(r.type) != r.repeats) {
+                std::cerr << "F2: a repeated " << r.name
+                          << (r.repeats ? " must keep repeating" : " must not reach the handler") << std::endl;
+                exit(1);
+            }
+        }
+        // D-D5: the numpad digits map like the top row (KP_0 = 0 ... KP_9 = 9).
+        for (int digit = 0; digit <= 9; ++digit) {
+            Rowl::Platform::RuntimeInputEvent mapped{};
+            const SDL_Keycode key = digit == 0 ? SDLK_KP_0 : static_cast<SDL_Keycode>(SDLK_KP_1 + digit - 1);
+            if (!Rowl::Render::Window::mapKeyToRuntimeInput(static_cast<uint32_t>(key), mapped) ||
+                mapped.type != Type::SelectSlot || mapped.slot != digit) {
+                std::cerr << "F2: numpad digit " << digit << " is not mapped to SelectSlot " << digit << std::endl;
+                exit(1);
+            }
         }
     }
 
@@ -384,6 +418,49 @@ void test_window_input_routing_release_motion_wheel_text() {
         step();
         if (!contains(Type::PointerMotion, 30.0f, 40.0f, 0, "")) {
             std::cerr << "Synthetic MOUSE_MOTION was not consciously consumed" << std::endl;
+            exit(1);
+        }
+    }
+
+    // 4b. F2 (D-O3): a burst of motions in one poll reaches the handler as ONE motion (the last
+    // position), and a click right behind a motion still sees that motion first.
+    {
+        for (int i = 0; i < 6; ++i) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_MOUSE_MOTION;
+            event.motion.windowID = wid;
+            event.motion.x = 50.0f + static_cast<float>(i);
+            event.motion.y = 60.0f;
+            pushOrDie(event, "MOUSE_MOTION burst");
+        }
+        seen.clear();
+        step();
+        size_t motions = 0;
+        for (const auto& event : seen) {
+            if (event.type == Type::PointerMotion) ++motions;
+        }
+        if (motions != 1 || !contains(Type::PointerMotion, 55.0f, 60.0f, 0, "")) {
+            std::cerr << "F2: a motion burst must be delivered once, at its last position (" << motions
+                      << " delivered)" << std::endl;
+            exit(1);
+        }
+        SDL_Event move{};
+        move.type = SDL_EVENT_MOUSE_MOTION;
+        move.motion.windowID = wid;
+        move.motion.x = 70.0f;
+        move.motion.y = 80.0f;
+        pushOrDie(move, "MOUSE_MOTION before click");
+        SDL_Event press{};
+        press.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        press.button.button = SDL_BUTTON_LEFT;
+        press.button.windowID = wid;
+        press.button.x = 70.0f;
+        press.button.y = 80.0f;
+        pushOrDie(press, "BUTTON_DOWN after motion");
+        seen.clear();
+        step();
+        if (seen.size() < 2 || seen[0].type != Type::PointerMotion || seen[1].type != Type::PointerDown) {
+            std::cerr << "F2: the hover move must reach the handler before the click that follows it" << std::endl;
             exit(1);
         }
     }

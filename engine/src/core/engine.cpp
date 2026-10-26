@@ -159,7 +159,16 @@ std::filesystem::path Engine::getProfileDirectoryPath() const {
     return "profiles";
 }
 
+void Engine::notifyProfileNotSaved() {
+    if (m_profileNoticeShown) return;
+    m_profileNoticeShown = true;
+    ROWL_LOG_WARN("[Player] The player profile cannot be written: preference changes last for this session only.");
+    postNotice(UiText::NoticeProfileUnwritable, -1);
+}
+
 void Engine::openPlayerProfile() {
+    m_profileNoticeShown = false;
+    m_seenProfileFlushFailures = 0;
     // A per-game profile dir is bound to the game id (WrongGame guard); the
     // project-local fallback (derived id, unwritable user data) is not: a moved
     // derived-id project gets a new id but keeps its own profile.
@@ -182,8 +191,11 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // D-K3: so it is on every other pause sub-page (Save / Load slots,
             // Extras) - the footer says "ESC: geri", it must not drop the player
             // into the story. Only the main pause page resumes.
+            // F2 (D-D1): and an armed "emin misin?" confirmation (Ana Menu / Cikis) - the
+            // footer says "ESC: vazgec", so Esc cancels the confirmation and stays in the
+            // menu (the title screen always did); a second Esc then resumes.
             if (m_titleActive || isBacklogOpen() ||
-                (m_paused && m_pauseMode != PauseMenuMode::Main)) menuBack();
+                (m_paused && (m_pauseMode != PauseMenuMode::Main || m_pauseConfirmQuit))) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
@@ -205,6 +217,7 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Back);
             break;
         case Type::SelectSlot:
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) {
                 if (m_pauseMode == PauseMenuMode::SaveSlots ||
                     m_pauseMode == PauseMenuMode::LoadSlots) menuChooseSlot(event.slot);
@@ -219,6 +232,7 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             // advance the story otherwise — one key, pause-routed.
             // D04-1: a manual advance ends a running Skip.
             // D-K3: on a choice menu Enter/Space answer the focused option.
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) menuActivateSelected();
             else {
                 m_skipActive = false;
@@ -226,19 +240,27 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             }
             break;
         case Type::QuickSave:
-            if (!m_paused) quickSave();
+            // F2 (B-1): a visible window's renderer is only readable while a frame is being
+            // drawn, so its thumbnail needs the save to run after this frame's story is
+            // drawn (see step()); offscreen runtimes save right away.
+            if (!m_paused) {
+                if (m_window && !m_window->isOffscreen()) m_pendingQuickSave = true;
+                else playerQuickSave();
+            }
             break;
         case Type::QuickLoad:
-            if (!m_paused) quickLoad();
+            if (!m_paused) playerQuickLoad();
             break;
         case Type::Rewind:
             if (!m_paused) rewindNodes(1);  // F1: one press = one node back
             break;
         case Type::PointerDown:
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
             if (!handlePointerDown(event.x, event.y) && !tryEndOfStoryTitle()) advanceToNextNode();
             break;
         case Type::SwipeForward:
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) menuActivateSelected();
             else { m_skipActive = false; if (!tryEndOfStoryTitle()) advanceToNextNode(); }
             break;
@@ -551,10 +573,11 @@ void Engine::resetToStartNode() {
     // variables, so the Lua side starts clean too - exactly like load/rewind and
     // the graph mount do; only the story variables go, loaded script modules stay.
     if (m_luaSandbox) m_luaSandbox->clearVariables();
+    seedDeclaredVariables(nullptr);  // F2 (B-7): declared variables exist before any condition runs
     // A start node with a false condition hands over to its fail target
     // before the initial snapshot is taken (the target is the first step).
     resolveNodeEntryConditions();
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
+    m_gameState = createStartState();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
     m_skipActive = false;  // D04-1: a new game / reset starts with Auto and Skip idle
@@ -608,7 +631,8 @@ void Engine::endSession() {
     // boundary needs pristine markers, visuals stay as-is (the host pushes
     // right after the mount anyway).
     if (!m_storyRuntime.resetToStart()) return;
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    m_gameState = Rowl::State::GameState::createInitialState(
+        m_storyRuntime.startNodeId(), m_storyRuntime.document().variables);
     m_startPresentationStepId = getCurrentStepId();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
@@ -687,6 +711,19 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
     advanceStory(choiceIndex, false);
 }
 
+void Engine::seedDeclaredVariables(const Rowl::State::VariableMap* present) {
+    if (!m_luaSandbox) return;
+    for (const auto& [name, value] : m_storyRuntime.document().variables) {
+        if (present != nullptr && present->data.contains(name)) continue;
+        m_luaSandbox->setVariable(name, value);
+    }
+}
+
+std::shared_ptr<const Rowl::State::GameState> Engine::createStartState() const {
+    return Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId(),
+                                                      m_storyRuntime.document().variables);
+}
+
 bool Engine::tryEndOfStoryTitle() {
     if (!m_titleSessionSeen || m_paused || m_storyRuntime.empty()) return false;
     const StoryNode* node = m_storyRuntime.currentNode();
@@ -701,7 +738,9 @@ bool Engine::tryEndOfStoryTitle() {
     }
     ROWL_LOG_INFO("End of story on Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
                   ": returning to the title screen.");
-    return openTitleScreen();
+    if (!openTitleScreen()) return false;
+    m_titleInputLock = kEndOfStoryTitleInputLock;
+    return true;
 }
 
 bool Engine::choiceConditionHolds(const std::string& condition) const {
@@ -884,10 +923,10 @@ bool Engine::handlePointerDown(float physicalX, float physicalY) {
         return true;
     }
     // D-K3: hit-test the geometry that is drawn (fitted to the text scale).
-    const auto laidOut = getLaidOutChoiceButtons();
+    const auto& laidOut = choiceLayout().laidOut;
     for (auto it = laidOut.rbegin(); it != laidOut.rend(); ++it) {
         const auto& button = *it;
-        if (!choiceButtonSelectable(button)) continue;
+        if (!button.enabled) continue;  // F2 (D-D3): `enabled` is the live selectability here
         if (x >= button.x && x <= button.x + button.width &&
             y >= button.y && y <= button.y + button.height) {
             // Copy: a successful choice rebuilds m_activeChoiceButtons.
@@ -1838,8 +1877,9 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
     // against the freshly cleared variables, before the initial snapshot.
     m_conditionWarnedNodes.clear();
     m_unlockWarnedNodes.clear();
+    seedDeclaredVariables(nullptr);  // F2 (B-7)
     resolveNodeEntryConditions();
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
+    m_gameState = createStartState();
 
     const auto& startNode = *m_storyRuntime.currentNode();
     if (!startNode.components.empty()) {
@@ -2229,6 +2269,11 @@ void Engine::step(float deltaTime) {
     }
 
     m_playerProfile.tick(deltaTime);  // D01c-1: debounced profile autosave
+    if (const uint32_t failures = m_playerProfile.flushFailureCount(); failures != m_seenProfileFlushFailures) {
+        m_seenProfileFlushFailures = failures;
+        if (failures > 0) notifyProfileNotSaved();  // F2 (B-15)
+    }
+    if (m_titleInputLock > 0.0f) m_titleInputLock = std::max(0.0f, m_titleInputLock - deltaTime);
 
     const auto platformHost = getPlatformHost();
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Stopping) {
@@ -2530,6 +2575,20 @@ void Engine::step(float deltaTime) {
                 markScriptStatus(moduleId, {}, "failed", m_luaSandbox->getLastError());
             }
         }
+    }
+
+    // F2 (B-1): the story frame is complete here and the overlay is not drawn yet - the one
+    // moment a menu-free copy exists. Taken once when a pause begins (the story is frozen
+    // for the whole pause), or just before an F5 save on a visible window.
+    if (m_pendingQuickSave) {
+        m_pendingQuickSave = false;
+        if (!m_paused) {
+            m_window->captureStoryFrame();
+            playerQuickSave();
+            m_window->clearStoryFrame();
+        }
+    } else if (m_paused && !m_titleActive && !m_window->hasStoryFrame()) {
+        m_window->captureStoryFrame();
     }
 
     // MS-6: pause-menu overlay draws last so it sits above story + entities.
@@ -3213,9 +3272,23 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
         }
     }
     uint32_t width = 0, height = 0, pitch = 0;
-    const uint8_t* pixels = getPixelBuffer(&width, &height, &pitch);
+    const uint8_t* pixels = nullptr;
+    size_t bufferLength = 0;
+    if (m_window && m_window->hasStoryFrame()) {
+        // F2 (B-1): the menu-free story frame (taken when the pause menu opened, or just
+        // before an F5 save on a visible window) - never the pixels with the menu on top.
+        pixels = m_window->storyFramePixels();
+        width = m_window->storyFrameWidth();
+        height = m_window->storyFrameHeight();
+        pitch = width * 4u;
+        bufferLength = static_cast<size_t>(pitch) * height;
+    } else {
+        // Offscreen runtimes keep the live surface (the last full story frame); a visible
+        // window has no readable surface, so without a snapshot the save has no thumbnail.
+        pixels = getPixelBuffer(&width, &height, &pitch);
+        bufferLength = m_window ? m_window->getPixelBufferLength() : 0;
+    }
     if (pixels && width > 0 && height > 0) {
-        size_t bufferLength = m_window ? m_window->getPixelBufferLength() : 0;
         const auto thumbnail =
             Rowl::State::encodeThumbnailPng(pixels, bufferLength, width, height, pitch);
         metadata.thumbnailPng = std::move(thumbnail.png);
@@ -3280,6 +3353,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     // D1 (#108/#129/#130): init-öncesi load, oturumu sessizce uygulayıp
     // setSuccess bırakıyordu; sonraki init imha edip stale OK bırakıyordu.
     // Fail-closed: state'e dokunmadan StateError + false.
+    m_lastLoadFailure = LoadFailure::Other;  // F2: every early return below is a failure
     if (!m_initialized) {
         if (m_context) {
             m_context->setError(RuntimeErrorCode::StateError,
@@ -3301,6 +3375,10 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     if (!loadResult.succeeded()) {
         RuntimeErrorCode errorCode = RuntimeErrorCode::ParseError;
         std::string message = "Failed to parse or validate save slot #" + std::to_string(slotIndex);
+        m_lastLoadFailure = loadResult.status == Rowl::State::SessionLoadStatus::UnsupportedVersion
+            ? LoadFailure::Incompatible
+            : loadResult.status == Rowl::State::SessionLoadStatus::NotFound ? LoadFailure::Missing
+                                                                            : LoadFailure::Corrupt;
         switch (loadResult.status) {
             case Rowl::State::SessionLoadStatus::NotFound:
                 errorCode = RuntimeErrorCode::FileNotFound;
@@ -3335,6 +3413,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         const uint64_t savedNode = loadResult.state ? loadResult.state->activeNodeId : 0;
         const auto& doc = getStoryGraphDocument();
         if (!doc.nodes.empty() && doc.nodes.find(savedNode) == doc.nodes.end()) {
+            m_lastLoadFailure = LoadFailure::Incompatible;
             m_context->setError(RuntimeErrorCode::ValidationError,
                                 "Save slot #" + std::to_string(slotIndex) +
                                     " restores node #" + std::to_string(savedNode) +
@@ -3360,6 +3439,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         } else if (!doc.nodes.empty() &&
                    savedGraph !=
                        Rowl::Core::computeGraphIdentity(doc)) {
+            m_lastLoadFailure = LoadFailure::Incompatible;
             m_context->setError(RuntimeErrorCode::ValidationError,
                                 "Save slot #" + std::to_string(slotIndex) +
                                     " was recorded from a different story graph; " +
@@ -3411,6 +3491,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         for (const auto& [k, v] : m_gameState->variables->data) {
             m_luaSandbox->setVariable(k, v);
         }
+        // F2 (B-7): a save from before a declaration was added still gets that variable's default.
+        seedDeclaredVariables(m_gameState->variables.get());
     }
 
     // Synchronize scene to loaded node
@@ -3485,6 +3567,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     refreshReadSnapshot();
     m_skipActive = false;
     resetAutoWait();
+    m_lastLoadFailure = LoadFailure::None;
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     if (loadResult.migrated()) {
@@ -3522,6 +3605,30 @@ bool Engine::quickSave() {
 bool Engine::quickLoad() {
     ROWL_LOG_INFO("[Player] Quick Loading from Slot #" + std::to_string(m_activeQuickSlot) + "...");
     return loadGameSlot(m_activeQuickSlot);
+}
+
+void Engine::playerQuickSave() {
+    const int32_t slot = m_activeQuickSlot;
+    if (quickSave()) {
+        m_slotSaveFailed.reset(static_cast<size_t>(slot));
+        postNotice(UiText::NoticeSaved, slot);
+    } else {
+        m_slotSaveFailed.set(static_cast<size_t>(slot));
+        postNotice(UiText::NoticeSaveFailed, slot);
+    }
+}
+
+void Engine::playerQuickLoad() {
+    const int32_t slot = m_activeQuickSlot;
+    if (quickLoad()) {
+        postNotice(UiText::NoticeLoaded, slot);
+        return;
+    }
+    postNotice(UiText::NoticeLoadFailed, slot,
+               m_lastLoadFailure == LoadFailure::Missing ? UiText::ReasonEmpty
+               : m_lastLoadFailure == LoadFailure::Incompatible ? UiText::ReasonIncompatible
+               : m_lastLoadFailure == LoadFailure::Corrupt ? UiText::ReasonCorrupt
+                                                           : UiText::ReasonUnreadable);
 }
 
 bool Engine::hasSaveSlot(int32_t slotIndex) const {
@@ -3638,6 +3745,7 @@ bool Engine::applyRewoundState(std::shared_ptr<const Rowl::State::GameState> rew
         for (const auto& [k, v] : m_gameState->variables->data) {
             m_luaSandbox->setVariable(k, v);
         }
+        seedDeclaredVariables(m_gameState->variables.get());  // F2 (B-7)
     }
 
     const StoryNode* activeNode = m_storyRuntime.currentNode();
