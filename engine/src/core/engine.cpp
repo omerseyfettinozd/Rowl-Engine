@@ -104,6 +104,18 @@ void Engine::setBgmTransitionDefaults(std::string kind, float durationSeconds) {
         ? std::clamp(durationSeconds, 0.0f, 60.0f) : 1.0f;
 }
 
+void Engine::playBgmWithDefaultTransition(const std::string& track) {
+    // D07-2 (music room): the BGM channel with the project's own transition. Lives
+    // here because the default-transition members are census-pinned to this file
+    // (rowl_d06_154_refutation_tests).
+    if (!m_audio) return;
+    const std::string transition = m_defaultBgmTransition;  // a copy: the census pin counts '=' after the name
+    const auto kind = transition == "crossfade" ? Rowl::Audio::BgmTransitionKind::Crossfade
+                    : transition == "fade" ? Rowl::Audio::BgmTransitionKind::Fade
+                                           : Rowl::Audio::BgmTransitionKind::Instant;
+    m_audio->playBgm(track, kind, m_defaultBgmTransitionDurationSeconds);
+}
+
 Engine::Engine(std::shared_ptr<RuntimeContext> context)
     : m_context(context ? std::move(context) : std::make_shared<RuntimeContext>()) {}
 
@@ -147,7 +159,16 @@ std::filesystem::path Engine::getProfileDirectoryPath() const {
     return "profiles";
 }
 
+void Engine::notifyProfileNotSaved() {
+    if (m_profileNoticeShown) return;
+    m_profileNoticeShown = true;
+    ROWL_LOG_WARN("[Player] The player profile cannot be written: preference changes last for this session only.");
+    postNotice(UiText::NoticeProfileUnwritable, -1);
+}
+
 void Engine::openPlayerProfile() {
+    m_profileNoticeShown = false;
+    m_seenProfileFlushFailures = 0;
     // A per-game profile dir is bound to the game id (WrongGame guard); the
     // project-local fallback (derived id, unwritable user data) is not: a moved
     // derived-id project gets a new id but keeps its own profile.
@@ -165,14 +186,26 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
     switch (event.type) {
         case Type::PauseToggle:
             // D02: Esc/P on the title screen never starts the story.
-            if (m_titleActive) menuBack();
+            // D03-2: on the backlog page it is Back (to the pause menu or the story).
+            // D05-2: on the Preferences page it is Back too (to the pause menu).
+            // D-K3: so it is on every other pause sub-page (Save / Load slots,
+            // Extras) - the footer says "ESC: geri", it must not drop the player
+            // into the story. Only the main pause page resumes.
+            // F2 (D-D1): and an armed "emin misin?" confirmation (Ana Menu / Cikis) - the
+            // footer says "ESC: vazgec", so Esc cancels the confirmation and stays in the
+            // menu (the title screen always did); a second Esc then resumes.
+            if (m_titleActive || isBacklogOpen() ||
+                (m_paused && (m_pauseMode != PauseMenuMode::Main || m_pauseConfirmQuit))) menuBack();
             else togglePause();
             break;
         case Type::MenuUp:
+            // D-K3: with a choice menu on screen the arrows walk its options.
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Up);
+            else moveChoiceFocus(-1);
             break;
         case Type::MenuDown:
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Down);
+            else moveChoiceFocus(1);
             break;
         case Type::MenuLeft:
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Left);
@@ -184,47 +217,126 @@ void Engine::handleRuntimeInput(const Rowl::Platform::RuntimeInputEvent& event) 
             if (m_paused) pauseMenuCommand(PauseMenuCommand::Back);
             break;
         case Type::SelectSlot:
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) {
                 if (m_pauseMode == PauseMenuMode::SaveSlots ||
-                    m_pauseMode == PauseMenuMode::LoadSlots) menuChooseSlot(event.slot);
-            } else {
+                    m_pauseMode == PauseMenuMode::LoadSlots) {
+                    // T2b: a digit picks the n-th row of the visible page (with slots.number_base 1
+                    // the labels count from 1: key 1 = first row, key 0 = tenth).
+                    const int base = m_uiTheme.slots.numberBase >= 0.5f ? 1 : 0;
+                    const int row = base == 1 ? (event.slot == 0 ? 9 : event.slot - 1) : event.slot;
+                    menuChooseSlot(slotAtRow(row));
+                }
+            } else if (!selectChoiceByNumber(event.slot)) {
+                // D-K3: a digit picks the n-th option while a choice menu is up;
+                // otherwise it keeps its quick-save-slot meaning.
                 setQuickSaveSlot(event.slot);
             }
             break;
         case Type::Advance:
             // MS-6: Space/Enter confirm the menu selection while paused and
             // advance the story otherwise — one key, pause-routed.
+            // D04-1: a manual advance ends a running Skip.
+            // D-K3: on a choice menu Enter/Space answer the focused option.
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else {
+                m_skipActive = false;
+                if (!activateFocusedChoice() && !tryEndOfStoryTitle()) advanceToNextNode();
+            }
             break;
         case Type::QuickSave:
-            if (!m_paused) quickSave();
+            // F2 (B-1): a visible window's renderer is only readable while a frame is being
+            // drawn, so its thumbnail needs the save to run after this frame's story is
+            // drawn (see step()); offscreen runtimes save right away.
+            if (!m_paused) {
+                if (m_window && !m_window->isOffscreen()) m_pendingQuickSave = true;
+                else playerQuickSave();
+            }
             break;
         case Type::QuickLoad:
-            if (!m_paused) quickLoad();
+            if (!m_paused) playerQuickLoad();
             break;
         case Type::Rewind:
-            if (!m_paused) rewind(1);
+            if (!m_paused) rewindNodes(1);  // F1: one press = one node back
             break;
         case Type::PointerDown:
-            if (!handlePointerDown(event.x, event.y)) advanceToNextNode();
+            if (titleInputLocked()) break;  // F2 (D-O1)
+            if (!m_paused) m_skipActive = false;  // D04-1: a click ends Skip
+            if (!handlePointerDown(event.x, event.y) && !tryEndOfStoryTitle()) advanceToNextNode();
             break;
         case Type::SwipeForward:
+            if (titleInputLocked()) break;  // F2 (D-O1)
             if (m_paused) menuActivateSelected();
-            else advanceToNextNode();
+            else { m_skipActive = false; if (!tryEndOfStoryTitle()) advanceToNextNode(); }
             break;
         case Type::SwipeBack:
-            if (!m_paused) rewind(1);
+            if (!m_paused) rewindNodes(1);
+            break;
+        case Type::Backlog:
+            // D03-2: B opens the backlog from the story and closes it again;
+            // the pause menu and the title ignore it.
+            if (isBacklogOpen()) menuBack();
+            else if (!m_paused) openBacklog();
+            break;
+        case Type::SecondaryClick:
+            // D03-2: right click closes the backlog; elsewhere it carries no action.
+            // D07-2: on the Ekstralar pages it closes the full-screen viewer / goes up.
+            if (isBacklogOpen() || isExtrasOpen()) menuBack();
+            break;
+        case Type::Scroll:
+            // D03-2: wheel up (y > 0) opens the backlog from the story; on the
+            // backlog page the wheel moves the selection (down at the newest
+            // row closes it). Every other state still consumes it silently.
+            if (event.y == 0.0f || !std::isfinite(event.y)) break;
+            if (isBacklogOpen()) backlogScroll(event.y);
+            else if (isExtrasOpen()) extrasScroll(event.y);  // D07-2
+            else if (m_paused && (m_pauseMode == PauseMenuMode::SaveSlots ||
+                                  m_pauseMode == PauseMenuMode::LoadSlots)) {
+                slotPageMove(event.y > 0.0f ? -1 : +1);  // T2b: wheel turns the slot page
+            }
+            else if (!m_paused && event.y > 0.0f) openBacklog();
+            break;
+        case Type::ToggleAuto:
+            // D04-1: A flips Auto and remembers it in the profile; inert on the
+            // title / pause / backlog / preferences screens.
+            if (!m_paused) toggleAutoMode();
+            break;
+        case Type::ToggleSkip:
+            // D04-1: S starts/stops Skip for this session (inert under policy Off).
+            if (!m_paused) setSkipActive(!m_skipActive);
+            break;
+        case Type::SkipHold:
+            // D04-1: Ctrl held = Skip until released (inert under policy Off).
+            if (!m_paused && m_skipPolicy != SkipPolicy::Off) {
+                m_skipHold = true;
+                m_skipStepCredit = 0.05f;
+                resetAutoWait();
+            }
+            break;
+        case Type::FocusLost:
+            // F1 (A-9): the KeyUp of a held Ctrl never arrives once the window
+            // lost focus; the hold ends here (an S-started Skip keeps going).
+            m_skipHold = false;
+            break;
+        case Type::KeyUp:
+            // D04-1: releasing Ctrl ends the hold (an S-started Skip keeps going).
+            if (event.key == SDLK_LCTRL || event.key == SDLK_RCTRL) m_skipHold = false;
+            break;
+        case Type::PointerMotion:
+            // D-K3: hovering a choice option moves the focus there; it never
+            // advances anything (the story-silent contract of #16 stands).
+            if (!m_paused) focusChoiceAt(event.x, event.y);
+            else if (m_sliderDragRow >= 0) sliderDragTo(event.x);  // T2: slider drag
             break;
         case Type::PointerUp:
-        case Type::KeyUp:
-        case Type::PointerMotion:
-        case Type::Scroll:
+            m_sliderDragRow = -1;
+            break;
         case Type::TextInput:
         case Type::TextEditing:
             // #16: consciously consumed at the Window boundary (the input
             // handler fires observably) but carrying no story action:
-            // releases, hover/drag positions, scroll deltas, committed
+            // releases, hover/drag positions, committed
             // text and IME composition must never advance dialogue,
             // toggle pause, rewind, or touch save slots.
             break;
@@ -359,6 +471,8 @@ bool Engine::initialize(const EngineConfig& config) {
     m_window->setInputHandler([this](const Rowl::Platform::RuntimeInputEvent& event) {
         handleRuntimeInput(event);
     });
+    // T1: a theme loaded before the window existed is installed now.
+    m_window->setUiTheme(m_uiTheme, m_uiThemeHighContrast);
 
     // Initialize Entity-Component Scene Manager
     m_scene = std::make_unique<Rowl::Scene::Scene>();
@@ -435,6 +549,7 @@ void Engine::setPlayState(bool isPlaying) {
     const bool enteringPlay = isPlaying && !m_isPlaying;
     m_isPlaying = isPlaying;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1
     m_activeDialogueData.isPlaying = isPlaying;
     if (isPlaying) {
         m_activeDialogueData.elapsedTypewriterTime = 0.0f;
@@ -466,9 +581,20 @@ void Engine::setPlayState(bool isPlaying) {
 void Engine::resetToStartNode() {
     if (!m_storyRuntime.resetToStart()) return;
 
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    // D06-1: the Lua condition evaluator (choice options and node conditions)
+    // reads the Lua globals, not GameState. The fresh GameState below carries no
+    // variables, so the Lua side starts clean too - exactly like load/rewind and
+    // the graph mount do; only the story variables go, loaded script modules stay.
+    if (m_luaSandbox) m_luaSandbox->clearVariables();
+    seedDeclaredVariables(nullptr);  // F2 (B-7): declared variables exist before any condition runs
+    // A start node with a false condition hands over to its fail target
+    // before the initial snapshot is taken (the target is the first step).
+    resolveNodeEntryConditions();
+    m_gameState = createStartState();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
+    m_skipActive = false;  // D04-1: a new game / reset starts with Auto and Skip idle
+    resetAutoWait();
     if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
         const auto& startNode = *activeNode;
         if (!startNode.components.empty()) {
@@ -518,7 +644,8 @@ void Engine::endSession() {
     // boundary needs pristine markers, visuals stay as-is (the host pushes
     // right after the mount anyway).
     if (!m_storyRuntime.resetToStart()) return;
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.startNodeId());
+    m_gameState = Rowl::State::GameState::createInitialState(
+        m_storyRuntime.startNodeId(), m_storyRuntime.document().variables);
     m_startPresentationStepId = getCurrentStepId();
     m_lastRecordedDialogueNodeId = 0;
     m_lastSfxPlaybackNodeId = 0;
@@ -550,7 +677,7 @@ bool Engine::completeTypewriterIfTyping() {
     // is double, and a bare cast can land one ulp below the cursor, reading
     // back incomplete on the very next query.
     constexpr double kSnapMarginSeconds = 0.01;
-    const auto* fontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
+    const auto* fontRenderer = m_window ? m_window->getDialogueFontRenderer() : nullptr;
     bool anyTyping = false;
     for (auto& dlg : m_activeDialogues) {
         if (dlg.typewriterEnabled && dlg.textSpeed > 0) {
@@ -597,6 +724,38 @@ void Engine::advanceToNextNode(uint32_t choiceIndex) {
     advanceStory(choiceIndex, false);
 }
 
+void Engine::seedDeclaredVariables(const Rowl::State::VariableMap* present) {
+    if (!m_luaSandbox) return;
+    for (const auto& [name, value] : m_storyRuntime.document().variables) {
+        if (present != nullptr && present->data.contains(name)) continue;
+        m_luaSandbox->setVariable(name, value);
+    }
+}
+
+std::shared_ptr<const Rowl::State::GameState> Engine::createStartState() const {
+    return Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId(),
+                                                      m_storyRuntime.document().variables);
+}
+
+bool Engine::tryEndOfStoryTitle() {
+    if (!m_titleSessionSeen || m_paused || m_storyRuntime.empty()) return false;
+    const StoryNode* node = m_storyRuntime.currentNode();
+    // Only the last node: no outgoing edge, no open choice menu.
+    if (!node || !node->nextNodes.empty() || !m_activeChoiceButtons.empty()) return false;
+    // Its text must be finished first: a press on a still-typing line only
+    // completes it (the same click-to-complete rule as every other advance).
+    if (completeTypewriterIfTyping()) {
+        m_autoAdvanceElapsed = 0.0f;
+        resetAutoWait();
+        return true;
+    }
+    ROWL_LOG_INFO("End of story on Node #" + std::to_string(m_storyRuntime.currentNodeId()) +
+                  ": returning to the title screen.");
+    if (!openTitleScreen()) return false;
+    m_titleInputLock = kEndOfStoryTitleInputLock;
+    return true;
+}
+
 bool Engine::choiceConditionHolds(const std::string& condition) const {
     if (condition.empty() || condition == "true" || condition == "1") return true;
     return m_luaSandbox && m_luaSandbox->evaluateCondition(condition);
@@ -604,11 +763,20 @@ bool Engine::choiceConditionHolds(const std::string& condition) const {
 
 void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     if (m_storyRuntime.empty()) return;
+    // F1: a choice answer belongs to THIS advance only; whatever happens
+    // (typewriter completion, refusal, a node without components) it never
+    // leaks into a later, unrelated node.
+    struct PendingAnswerGuard {
+        std::string& answer;
+        ~PendingAnswerGuard() { answer.clear(); }
+    } pendingAnswerGuard{m_pendingChoiceAnswer};
     // MS-6: the pause menu is modal — story advance is suspended until resume.
     // (Paused Advance/Pointer inputs are rerouted to menu actions before
     // reaching here; this guard seals direct API calls too.)
     if (m_paused) return;
     m_autoAdvanceElapsed = 0.0f;
+    resetAutoWait();  // D04-1: any advance (manual, Auto, Skip) starts a fresh wait
+    m_lastAdvanceRedirected = false;
 
     // If typewriter is still typing out any line, the request reveals the
     // full text immediately instead of advancing (MS-6 unified contract).
@@ -643,9 +811,16 @@ void Engine::advanceStory(uint32_t choiceIndex, bool viaChoice) {
     }
     if (advanceResult != StoryRuntime::AdvanceResult::Advanced) return;
 
+    // D06-1: node conditions decide BEFORE the step is recorded and before
+    // any entry effect, so a skipped node leaves no state, history or
+    // rewind link - the snapshot below belongs to the node that really plays.
+    resolveNodeEntryConditions();
+
     if (m_gameState) {
+        // F1 (A-1): this link is the node ENTRY; the entry commits that follow
+        // (variables, script, audio) belong to the same visit for rewindNodes.
         m_gameState = Rowl::State::GameState::createNextState(
-            m_gameState, m_storyRuntime.currentNodeId());
+            m_gameState, m_storyRuntime.currentNodeId(), "", "", true);
     }
 
     if (const StoryNode* activeNode = m_storyRuntime.currentNode()) {
@@ -718,8 +893,18 @@ bool Engine::advanceToChoice(const std::string& optionId) {
         }
     }
 
+    // F1 (A ürün kararı 1): the picked option becomes a backlog row of the node
+    // it leads to (not of the choice node: rewinding to the choice must show
+    // the question unanswered).
+    m_pendingChoiceAnswer.clear();
+    for (const auto& candidate : m_activeChoiceButtons) {
+        if (candidate.optionId == optionId) {
+            m_pendingChoiceAnswer = candidate.text;
+            break;
+        }
+    }
     advanceStory(choice->index, true);
-    return m_storyRuntime.currentNodeId() == choice->targetNodeId;
+    return m_lastAdvanceRedirected || m_storyRuntime.currentNodeId() == choice->targetNodeId;
 }
 
 bool Engine::handlePointerDown(float physicalX, float physicalY) {
@@ -750,9 +935,11 @@ bool Engine::handlePointerDown(float physicalX, float physicalY) {
     if (bezelTap) {
         return true;
     }
-    for (auto it = m_activeChoiceButtons.rbegin(); it != m_activeChoiceButtons.rend(); ++it) {
+    // D-K3: hit-test the geometry that is drawn (fitted to the text scale).
+    const auto& laidOut = choiceLayout().laidOut;
+    for (auto it = laidOut.rbegin(); it != laidOut.rend(); ++it) {
         const auto& button = *it;
-        if (!choiceButtonSelectable(button)) continue;
+        if (!button.enabled) continue;  // F2 (D-D3): `enabled` is the live selectability here
         if (x >= button.x && x <= button.x + button.width &&
             y >= button.y && y <= button.y + button.height) {
             // Copy: a successful choice rebuilds m_activeChoiceButtons.
@@ -872,6 +1059,7 @@ void Engine::updateActiveScene(
     m_activeDialogueData.height = dlgH;
     m_activeDialogueData.typewriterEnabled = false;
 
+    applyUiThemeTo(m_activeDialogueData);  // T1: legacy payloads carry no component keys
     m_activeDialogues.clear();
     if (m_hasDialogueBox) {
         m_activeDialogues.push_back(m_activeDialogueData);
@@ -879,6 +1067,7 @@ void Engine::updateActiveScene(
 
     ROWL_LOG_INFO("Scene Updated (Legacy) → Speaker: '" + m_activeSpeaker + "', Dialogue: '" +
                   m_activeDialogue + "', BG: '" + m_activeBackground + "'");
+    m_activeNodeVoiceTrack.clear();  // D03-1: legacy payloads carry no components
     recordActiveDialogueHistory();
 }
 
@@ -906,6 +1095,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousCharacters = m_activeCharacters;
     const auto previousDialogues = m_activeDialogues;
     const auto previousChoices = m_activeChoiceButtons;
+    const auto previousChoiceFocusId = m_choiceFocusId;
     const auto previousSpeaker = m_activeSpeaker;
     const auto previousDialogue = m_activeDialogue;
     const auto previousBackground = m_activeBackground;
@@ -936,6 +1126,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
     const auto previousBackgroundOpacity = m_activeBackgroundOpacity;
     const auto previousLastSfxPlaybackNodeId = m_lastSfxPlaybackNodeId;
     const auto previousLastRecordedDialogueNodeId = m_lastRecordedDialogueNodeId;
+    const auto previousActiveNodeVoiceTrack = m_activeNodeVoiceTrack;
+    const auto previousVoiceClipNodeId = m_voiceClipNodeId;
     const auto previousLuaVariables = m_luaSandbox ? m_luaSandbox->getAllVariables() : std::unordered_map<std::string, std::string>{};
     // #86: camera + live-mixer snapshot. Component zinciri kamera/mikseri
     // TRY içinde mutasyona uğratır (camera bile replayEntryEffects=false iken;
@@ -973,6 +1165,7 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeCharacters = previousCharacters;
         m_activeDialogues = previousDialogues;
         m_activeChoiceButtons = previousChoices;
+        m_choiceFocusId = previousChoiceFocusId;
         m_activeSpeaker = previousSpeaker;
         m_activeDialogue = previousDialogue;
         m_activeBackground = previousBackground;
@@ -987,6 +1180,8 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeBackgroundOpacity = previousBackgroundOpacity;
         m_lastSfxPlaybackNodeId = previousLastSfxPlaybackNodeId;
         m_lastRecordedDialogueNodeId = previousLastRecordedDialogueNodeId;
+        m_activeNodeVoiceTrack = previousActiveNodeVoiceTrack;
+        m_voiceClipNodeId = previousVoiceClipNodeId;
         m_activeCharacterX = previousCharacterX;
         m_activeCharacterY = previousCharacterY;
         m_activeCharacterWidth = previousCharacterWidth;
@@ -1091,17 +1286,22 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_activeCharacters.clear();
         m_activeDialogues.clear();
         m_activeChoiceButtons.clear();
+        m_choiceFocusId.clear();  // D-K3: a new button set starts on its first option
         m_activeSpeaker.clear();
         m_activeDialogue.clear();
         m_activeBackground.clear();
         m_activeCharacter.clear();
         m_activeBackgroundRotation = 0.0f;
         m_activeCharacterRotation = 0.0f;
-        m_activeDialogueData = {};
+        m_activeDialogueData = themedDialogue();  // T1: theme defaults, not the bare built-ins
         m_hasBackground = false;
         m_hasDialogueBox = false;
         std::vector<nlohmann::json> pendingAudioComponents;
         std::vector<nlohmann::json> pendingScripts;
+        // D07-1: "unlock" components are applied after the whole update
+        // succeeded (a throw must not leave a profile write behind a rolled-back
+        // scene) and only on real entries.
+        std::vector<nlohmann::json> pendingUnlocks;
         // #20/#21: kamera + pencere-FX de ses gibi ertelenir — dongu ici
         // cihaz mutasyonu kalmaz, kotu-alanli bilesen sahneyi yarim
         // birakamaz. Script yikimi (status-clear + deactivate) ayni sebeple
@@ -1158,16 +1358,21 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 }
                 dlgData.autoAdvance = data.value("auto_advance", false);
                 dlgData.autoAdvanceDelay = std::clamp(data.value("auto_advance_delay", 2.0f), 0.0f, 60.0f);
-                dlgData.fontSize = data.value("font_size", 24.0f);
-                dlgData.speakerFontSize = data.value("speaker_font_size", 20.0f);
-                dlgData.textColor = data.value("text_color", "#F1F5F9");
-                dlgData.speakerColor = data.value("speaker_color", "#38BDF8");
-                dlgData.textAlignment = data.value("text_alignment", "Left");
-                dlgData.boxOpacity = data.value("box_opacity", 0.88f);
-                dlgData.boxColor = data.value("box_color", "#0F0F1A");
-                dlgData.borderColor = data.value("border_color", "#00F0FF");
-                dlgData.borderThickness = data.value("border_thickness", 2.0f);
-                dlgData.cornerRadius = data.value("corner_radius", 8.0f);
+                // T1: precedence = a key the component wrote > the project's UI
+                // theme (Assets/json/ui_theme.json) > the built-in default.
+                // The theme's values ARE the built-ins when the file is absent.
+                const Rowl::State::UiDialogueDefaults& themed = m_uiTheme.story.dialogue;
+                dlgData.authoredMask = dialogueAuthoredMask(data);
+                dlgData.fontSize = data.value("font_size", themed.fontSize);
+                dlgData.speakerFontSize = data.value("speaker_font_size", themed.speakerFontSize);
+                dlgData.textColor = data.value("text_color", Rowl::State::uiColorToHex(themed.textColor));
+                dlgData.speakerColor = data.value("speaker_color", Rowl::State::uiColorToHex(themed.speakerColor));
+                dlgData.textAlignment = data.value("text_alignment", themed.textAlignment);
+                dlgData.boxOpacity = data.value("box_opacity", themed.boxOpacity);
+                dlgData.boxColor = data.value("box_color", Rowl::State::uiColorToHex(themed.boxColor));
+                dlgData.borderColor = data.value("border_color", Rowl::State::uiColorToHex(themed.borderColor));
+                dlgData.borderThickness = data.value("border_thickness", themed.borderThickness);
+                dlgData.cornerRadius = data.value("corner_radius", themed.cornerRadius);
                 dlgData.customBoxTexture = data.value("custom_box_texture", "");
                 dlgData.typewriterSound = data.value("typewriter_sound", data.value("voice_blip_sound", ""));
                 dlgData.voiceBlipPitch = data.value("voice_blip_pitch", 1.0f);
@@ -1376,17 +1581,24 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                     button.y = option.value("y", 520.0f + static_cast<float>(index) * 80.0f);
                     button.width = option.value("width", 560.0f);
                     button.height = option.value("height", 64.0f);
-                    button.fontSize = option.value("font_size", 22.0f);
-                    button.opacity = option.value("opacity", 1.0f);
-                    button.borderThickness = option.value("border_thickness", 2.0f);
-                    button.cornerRadius = option.value("corner_radius", 8.0f);
-                    button.textColor = option.value("text_color", "#FFFFFF");
-                    button.backgroundColor = option.value("background_color", "#1E293B");
-                    button.hoverColor = option.value("hover_color", "#0EA5E9");
-                    button.borderColor = option.value("border_color", "#38BDF8");
-                    button.textAlignment = option.value("text_alignment", "Center");
+                    // T1: option key > project UI theme > built-in (see dialogue above).
+                    const Rowl::State::UiChoiceDefaults& themedChoice = m_uiTheme.story.choice;
+                    button.authoredMask = choiceAuthoredMask(option);
+                    button.fontSize = option.value("font_size", themedChoice.fontSize);
+                    button.opacity = option.value("opacity", themedChoice.opacity);
+                    button.borderThickness = option.value("border_thickness", themedChoice.borderThickness);
+                    button.cornerRadius = option.value("corner_radius", themedChoice.cornerRadius);
+                    button.textColor = option.value("text_color", Rowl::State::uiColorToHex(themedChoice.textColor));
+                    button.backgroundColor = option.value("background_color", Rowl::State::uiColorToHex(themedChoice.backgroundColor));
+                    button.hoverColor = option.value("hover_color", Rowl::State::uiColorToHex(themedChoice.hoverColor));
+                    button.borderColor = option.value("border_color", Rowl::State::uiColorToHex(themedChoice.borderColor));
+                    button.textAlignment = option.value("text_alignment", themedChoice.textAlignment);
                     button.fontFamily = option.value("font_family", "Default");
                     button.backgroundImage = option.value("normal_image", option.value("background_image", ""));
+                    // T2: the other state images of the option (a theme skin fills the ones left empty).
+                    button.hoverImage = option.value("hover_image", "");
+                    button.pressedImage = option.value("pressed_image", "");
+                    button.disabledImage = option.value("disabled_image", "");
                     if (!button.optionId.empty()) m_activeChoiceButtons.push_back(std::move(button));
                     ++index;
                 }
@@ -1429,6 +1641,9 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
                 pendingFxComponents.push_back(data);
             } else if (type == "script") {
                 pendingScripts.push_back(data);
+            } else if (type == "unlock") {
+                if (!replayEntryEffects) continue;
+                pendingUnlocks.push_back(data);
             }
         }
 
@@ -1452,6 +1667,27 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             applyScreenFxComponent(data);
         }
 
+        // D03-1: the node's full voice line. Read for every update (also
+        // load/rewind, replayEntryEffects=false) so blip suppression and the
+        // history row stay consistent; it only PLAYS on a real node entry.
+        m_activeNodeVoiceTrack.clear();
+        for (const auto& data : pendingAudioComponents) {
+            const auto voiceIt = data.find("voice_track");
+            if (voiceIt != data.end() && voiceIt->is_string() &&
+                !voiceIt->get_ref<const std::string&>().empty()) {
+                m_activeNodeVoiceTrack = voiceIt->get<std::string>();
+                break;
+            }
+        }
+
+        // F1 (A-6): while Skip is requested the node's sfx / voice clip are held
+        // back (BGM and volumes still apply); they play when Skip stops here.
+        const bool deferEntrySounds = replayEntryEffects && m_isPlaying && isSkipEffective() &&
+            m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId();
+        // Every scene refresh (entry, load, rewind) starts without a held sound.
+        m_deferredEntryNodeId = 0;
+        m_deferredEntrySfx.clear();
+        m_deferredEntryVoice = false;
         for (const auto& data : pendingAudioComponents) {
             if (!replayEntryEffects) continue;
             std::string dsp = data.value("dsp_filter", "Normal");
@@ -1486,12 +1722,49 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
             // a property edit repeat the sound. A node may still play several
             // SFX components, but only once for each entry.
             if (!sfx.empty() && m_isPlaying &&
-                m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId())
-                m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+                m_lastSfxPlaybackNodeId != m_storyRuntime.currentNodeId()) {
+                // F1 (A-6): Skip holds the sfx back until it stops on this node.
+                if (deferEntrySounds) m_deferredEntrySfx.push_back(sfx);
+                else m_audio->playAudio(sfx, Rowl::Audio::AudioChannelType::Sfx);
+            }
         }
 
-        if (m_isPlaying && !pendingAudioComponents.empty())
+        // D03-1: full voice line = node-entry event, same one-shot marker as
+        // SFX (editor refreshes of the same node never re-trigger it) and only
+        // with replayEntryEffects (load/rewind never replay it). Entering a
+        // different node first cuts the previous node's clip. The Voice
+        // stream also carries typewriter blips, which would clear the clip,
+        // so a node with a voice_track plays no blips (see step()).
+        // The cut also runs on load/rewind: a restored node never keeps
+        // another node's (or a backlog replay's) clip talking over it.
+        if (m_isPlaying && m_audio) {
+            const uint64_t entryNodeId = m_storyRuntime.currentNodeId();
+            if ((!replayEntryEffects || m_voiceClipNodeId != entryNodeId) &&
+                !m_audio->getCurrentVoicePath().empty())
+                m_audio->stopVoice();
+            if (replayEntryEffects && !m_activeNodeVoiceTrack.empty() &&
+                m_lastSfxPlaybackNodeId != entryNodeId) {
+                if (deferEntrySounds) {
+                    m_deferredEntryVoice = true;  // F1 (A-6): played when Skip stops here
+                } else {
+                    m_audio->stopVoice();
+                    m_audio->playAudio(m_activeNodeVoiceTrack, Rowl::Audio::AudioChannelType::Voice);
+                    m_voiceClipNodeId = entryNodeId;
+                }
+            }
+        }
+
+        // F1 (A-2): the one-shot marker follows EVERY real node entry, not only
+        // entries of audio nodes. It used to move on audio nodes alone, so after
+        // A(voice) -> B(plain) -> A the marker still named A and A's voice / sfx
+        // stayed silent on the second visit.
+        if (m_isPlaying && (replayEntryEffects || !pendingAudioComponents.empty())) {
             m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+            if (replayEntryEffects && deferEntrySounds &&
+                (m_deferredEntryVoice || !m_deferredEntrySfx.empty())) {
+                m_deferredEntryNodeId = m_storyRuntime.currentNodeId();
+            }
+        }
 
         // #20/#21: script fazi — firlatabilen JSON/VFS okumalari (stage)
         // canli kume dururken kosar; yikim + aktivasyon ancak hepsi
@@ -1502,6 +1775,15 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
         m_scriptRuntimeStatuses.clear();
         deactivateScripts(replayEntryEffects);
         activateScripts(stagedScripts, replayEntryEffects);
+        // D-K1: a node's on_enter writes its story variables through rowl.var_set into the
+        // Lua side only. Without a commit the GameState never heard of them: a save made on
+        // or after that node, and a rewind back to it, lost the change (kayip_tablo's
+        // Hoca node gives +1 clue; the last choice needs it). Same single immutable
+        // transition ExecuteScript uses; unchanged variables add no step.
+        if (replayEntryEffects && !stagedScripts.empty() && m_luaSandbox && m_gameState) {
+            m_gameState = Rowl::State::GameState::createNextStateWithVariables(
+                m_gameState, m_storyRuntime.currentNodeId(), m_luaSandbox->getAllVariables());
+        }
 
         if (replayEntryEffects && m_audio && (!pendingAudioComponents.empty()) && m_gameState) {
             std::string filter = "Normal";
@@ -1553,6 +1835,16 @@ void Engine::updateSceneFromComponents(const nlohmann::json& root,
 
         if (replayEntryEffects) recordActiveDialogueHistory();
 
+        // D07-1: last step of a successful real entry (never load / rewind /
+        // restore: replayEntryEffects is false there). Cannot throw past here.
+        if (replayEntryEffects) {
+            try {
+                applyEntryUnlocks(pendingUnlocks, pendingAudioComponents);
+            } catch (const std::exception& unlockError) {
+                ROWL_LOG_WARN(std::string("Unlock processing failed: ") + unlockError.what());
+            }
+        }
+
         ROWL_LOG_INFO("Scene Updated (Components) → " + std::to_string(comps.size()) +
                       " comps, " + std::to_string(m_activeCharacters.size()) + " chars, " +
                       std::to_string(m_activeDialogues.size()) + " dlgs, HasBg: " +
@@ -1596,9 +1888,15 @@ bool Engine::parseStoryGraphJson(const std::string& jsonContent) {
 
     // Loading a graph is a new story session. Keeping a previous graph's
     // history here could make Save/Load or rewind jump into another graph.
-    m_gameState = Rowl::State::GameState::createInitialState(m_storyRuntime.currentNodeId());
     m_lastSfxPlaybackNodeId = 0;
     if (m_luaSandbox) m_luaSandbox->clearVariables();
+    // D06-1: new graph = new warning budget; the start node's conditions run
+    // against the freshly cleared variables, before the initial snapshot.
+    m_conditionWarnedNodes.clear();
+    m_unlockWarnedNodes.clear();
+    seedDeclaredVariables(nullptr);  // F2 (B-7)
+    resolveNodeEntryConditions();
+    m_gameState = createStartState();
 
     const auto& startNode = *m_storyRuntime.currentNode();
     if (!startNode.components.empty()) {
@@ -1988,6 +2286,11 @@ void Engine::step(float deltaTime) {
     }
 
     m_playerProfile.tick(deltaTime);  // D01c-1: debounced profile autosave
+    if (const uint32_t failures = m_playerProfile.flushFailureCount(); failures != m_seenProfileFlushFailures) {
+        m_seenProfileFlushFailures = failures;
+        if (failures > 0) notifyProfileNotSaved();  // F2 (B-15)
+    }
+    if (m_titleInputLock > 0.0f) m_titleInputLock = std::max(0.0f, m_titleInputLock - deltaTime);
 
     const auto platformHost = getPlatformHost();
     if (platformHost && platformHost->lifecycleState() == Rowl::Platform::LifecycleState::Stopping) {
@@ -2110,7 +2413,7 @@ void Engine::step(float deltaTime) {
     // E2b: sunum-efekt saati hikaye simulasyonuyla donar/akar (pause'da kare
     // sabit kalir — MS-4 static-gate korunur).
     updateCharacterFx(deltaTime);
-    const auto* fontRenderer = m_window->getFontRenderer();
+    const auto* fontRenderer = m_window->getDialogueFontRenderer();
     for (auto& dlg : m_activeDialogues) {
         dlg.isPlaying = m_isPlaying;
         // MS-6: typewriter progression follows presentation + real dt, not the
@@ -2149,7 +2452,9 @@ void Engine::step(float deltaTime) {
 
                     // MS-6: blip bookkeeping advances in every mode, but paused
                     // previews stay silent.
-                    if (m_isPlaying) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
+                    // D03-1: a node with a full voice clip plays no blips (the
+                    // blip would clear the Voice stream under the clip).
+                    if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(dlg.typewriterSound, pitchMod, dlg.voiceBlipVolume, ch);
                     break;
                 }
             }
@@ -2189,7 +2494,7 @@ void Engine::step(float deltaTime) {
                             ? Rowl::Audio::AudioChannelType::Sfx
                             : Rowl::Audio::AudioChannelType::Voice;
                         // MS-6: paused previews stay silent (see dialogues loop).
-                        if (m_isPlaying) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
+                        if (m_isPlaying && m_activeNodeVoiceTrack.empty()) m_audio->playVoiceBlip(m_activeDialogueData.typewriterSound, pitchMod, m_activeDialogueData.voiceBlipVolume, ch);
                         break;
                     }
                 }
@@ -2202,6 +2507,10 @@ void Engine::step(float deltaTime) {
     // sanitize edilir).
     advanceSpriteSheets(deltaTime);
 
+    // D04-1: the author's auto_advance below may already move the story this
+    // step; the player drivers then stand down (at most one node per step).
+    const uint64_t driverNodeBefore = m_storyRuntime.currentNodeId();
+    const uint64_t driverStepBefore = getCurrentStepId();
     bool autoAdvanceEnabled = false;
     float autoAdvanceDelay = 0.0f;
     for (const auto& dialogue : m_activeDialogues) {
@@ -2234,7 +2543,14 @@ void Engine::step(float deltaTime) {
     } else if (!advanceArmed) {
         m_autoAdvanceElapsed = 0.0f;
     }
+    // D04-1: player-driven Skip / Auto (separate from the author flag above).
+    stepPlayerDrivers(deltaTime, m_storyRuntime.currentNodeId() != driverNodeBefore ||
+                                     getCurrentStepId() != driverStepBefore);
+    playDeferredEntrySounds();  // F1 (A-6)
     } // end MS-6 pause freeze of story simulation
+
+    // D07-2: achievement toast clock (frozen and hidden while any menu is up).
+    updateUnlockToast(deltaTime);
 
     Rowl::Render::ComposedFrame frame;
     frame.hasBackground = m_hasBackground;
@@ -2244,11 +2560,16 @@ void Engine::step(float deltaTime) {
     frame.backgroundWidth = m_activeBackgroundWidth;
     frame.backgroundHeight = m_activeBackgroundHeight;
     frame.dialogues = m_activeDialogues;
-    frame.choices = m_activeChoiceButtons;
+    frame.choices = getLaidOutChoiceButtons();  // D-K3: fitted geometry + focus
     frame.backgroundRotation = m_activeBackgroundRotation;
     frame.backgroundParallaxX = m_activeBackgroundParallaxX;
     frame.backgroundParallaxY = m_activeBackgroundParallaxY;
     frame.backgroundOpacity = m_activeBackgroundOpacity;
+    // D04-2: AUTO / SKIP capsules only over a running, unpaused story (never
+    // on the title, pause menu, backlog or preferences).
+    frame.showAutoBadge = m_isPlaying && !m_paused && m_autoMode;
+    frame.showSkipBadge = m_isPlaying && !m_paused && isSkipping();  // F1 (A-7)
+    frame.toastText = unlockToastText();  // D07-2: empty unless a toast is showing
     // E2b: FX kapali iken composeCharacterFx girisin kopyasidir (legacy kare
     // bayt-birebir); acikken tween/vurgu/harman sunulan kopyaya isler.
     // Window imzasi/hash degismez — C0/D2 kilidine dokunulmaz.
@@ -2271,6 +2592,20 @@ void Engine::step(float deltaTime) {
                 markScriptStatus(moduleId, {}, "failed", m_luaSandbox->getLastError());
             }
         }
+    }
+
+    // F2 (B-1): the story frame is complete here and the overlay is not drawn yet - the one
+    // moment a menu-free copy exists. Taken once when a pause begins (the story is frozen
+    // for the whole pause), or just before an F5 save on a visible window.
+    if (m_pendingQuickSave) {
+        m_pendingQuickSave = false;
+        if (!m_paused) {
+            m_window->captureStoryFrame();
+            playerQuickSave();
+            m_window->clearStoryFrame();
+        }
+    } else if (m_paused && !m_titleActive && !m_window->hasStoryFrame()) {
+        m_window->captureStoryFrame();
     }
 
     // MS-6: pause-menu overlay draws last so it sits above story + entities.
@@ -2439,6 +2774,10 @@ float Engine::getVignetteIntensity() const {
 }
 
 void Engine::run() {
+    run(std::function<void(float)>{});
+}
+
+void Engine::run(const std::function<void(float)>& afterStep) {
     if (!m_initialized) {
         ROWL_LOG_ERROR("Engine run() called without initialization!");
         return;
@@ -2503,6 +2842,8 @@ void Engine::run() {
 
             // step() internally calls pollEvents() and sets m_isRunning = false on quit
             step(dt);
+            // D06-3: host hook (player prefetch); skipped on the quit frame.
+            if (afterStep && m_isRunning) afterStep(dt);
         } catch (const std::exception& e) {
             abortRunLoop(e.what());
             break;
@@ -2607,32 +2948,91 @@ void Engine::markScriptStatus(const std::string& moduleId, const std::string& so
 }
 
 const std::vector<Rowl::State::DialogueHistoryEntry>& Engine::getDialogueHistory() const {
+    // F1: GameState keeps the backlog as a persistent list; the vector view is
+    // memoized per (list identity, locale). A-4: rows that carry a content id
+    // are re-resolved in the ACTIVE locale (the stored text is the fallback),
+    // so a language switch re-translates the whole backlog like the live line.
     static const std::vector<Rowl::State::DialogueHistoryEntry> empty;
-    return (m_gameState && m_gameState->dialogueHistory) ? *m_gameState->dialogueHistory : empty;
+    if (!m_gameState) return empty;
+    const uint64_t identity = m_gameState->dialogueHistory.identity();
+    const std::string& locale = m_localization.getLocale();
+    if (!m_historyViewValid || m_historyViewIdentity != identity || m_historyViewLocale != locale) {
+        m_historyView = m_gameState->dialogueHistory.toVector();
+        for (auto& entry : m_historyView) {
+            if (entry.contentId.empty()) continue;
+            if (!entry.speaker.empty()) {
+                entry.speaker = m_localization.resolveSpeaker(entry.contentId, entry.speaker).value;
+            }
+            entry.dialogue = m_localization.resolveText(entry.contentId, entry.dialogue).value;
+        }
+        m_historyViewIdentity = identity;
+        m_historyViewLocale = locale;
+        m_historyViewValid = true;
+    }
+    return m_historyView;
 }
 
 void Engine::recordActiveDialogueHistory() {
+    // D04-1: the read-before snapshot is taken HERE, before the loop below
+    // marks the lines read - afterwards every presented line is "read" and
+    // read-only Skip could never tell new text from old. Computed on every
+    // presentation (also when nothing is recorded: a node re-entered with the
+    // same id is still presented).
+    refreshReadSnapshot();
+    const bool answered = !m_pendingChoiceAnswer.empty();
     if (!m_isPlaying || !m_gameState || m_storyRuntime.currentNodeId() == 0 ||
-        m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId() ||
-        m_activeDialogues.empty()) {
+        (!answered && m_lastRecordedDialogueNodeId == m_storyRuntime.currentNodeId()) ||
+        (m_activeDialogues.empty() && !answered)) {
         return;
     }
     std::vector<Rowl::State::DialogueHistoryEntry> entries;
-    entries.reserve(m_activeDialogues.size());
+    entries.reserve(m_activeDialogues.size() + 1);
+    if (answered) {
+        // The answer row: no speaker, no voice, no content id, never marked read.
+        Rowl::State::DialogueHistoryEntry answer;
+        answer.nodeId = m_storyRuntime.currentNodeId();
+        answer.dialogue = m_pendingChoiceAnswer;
+        answer.choice = true;
+        entries.push_back(std::move(answer));
+        m_pendingChoiceAnswer.clear();
+    }
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.dialogue.empty()) {
             // D01c-1: presented to the player (play state, same point as the
             // backlog) -> read. Legacy lines have no id and are never marked.
             if (!dialogue.contentId.empty()) m_playerProfile.markRead(dialogue.contentId);
+            // A-4: keep the node-original text; a row with a content id is
+            // re-resolved in the ACTIVE locale when the backlog is shown.
+            const bool keepOriginal = !dialogue.contentId.empty();
             entries.push_back(
-                {m_storyRuntime.currentNodeId(), dialogue.speaker, dialogue.dialogue, true,
-                 dialogue.contentId});
+                {m_storyRuntime.currentNodeId(),
+                 keepOriginal && !dialogue.originalSpeaker.empty() ? dialogue.originalSpeaker
+                                                                   : dialogue.speaker,
+                 keepOriginal && !dialogue.originalDialogue.empty() ? dialogue.originalDialogue
+                                                                    : dialogue.dialogue,
+                 true, dialogue.contentId, m_activeNodeVoiceTrack});
         }
     }
     if (!entries.empty()) {
         m_gameState = Rowl::State::GameState::withDialogueHistory(m_gameState, entries);
         m_lastRecordedDialogueNodeId = m_storyRuntime.currentNodeId();
     }
+}
+
+bool Engine::replayBacklogVoice(size_t index) {
+    // D03-1: a pure audio action. History is read, never written; only the
+    // Voice clip changes. A failed start (missing asset) leaves the previous
+    // clip cut - the Voice stream queues clips, so the cut has to come first.
+    const auto& history = getDialogueHistory();
+    if (!m_audio || index >= history.size() || history[index].voice.empty()) return false;
+    const std::string voicePath = history[index].voice;
+    const uint32_t clipsBefore = m_audio->getVoiceClipCount();
+    m_audio->stopVoice();
+    m_audio->playAudio(voicePath, Rowl::Audio::AudioChannelType::Voice);
+    const bool started = m_audio->getVoiceClipCount() != clipsBefore;
+    // F1 (karar 6): the replayed clip belongs to the open backlog page.
+    if (started) m_backlogReplayActive = true;
+    return started;
 }
 
 void Engine::refreshActiveDialogueLocalization() {
@@ -2657,6 +3057,7 @@ void Engine::refreshActiveDialogueLocalization() {
     };
     refreshOne(m_activeDialogueData);
     for (auto& dlg : m_activeDialogues) refreshOne(dlg);
+    resetAutoWait();  // D04-1: the line length changed; read state is unaffected (content ids are language-stable)
     if (m_hasDialogueBox && !m_activeDialogues.empty()) {
         m_activeSpeaker = m_activeDialogues.front().speaker;
         m_activeDialogue = m_activeDialogues.front().dialogue;
@@ -2665,9 +3066,9 @@ void Engine::refreshActiveDialogueLocalization() {
         m_activeDialogue = m_activeDialogueData.dialogue;
     }
     if (m_window) {
-        if (auto* fontRenderer = m_window->getFontRenderer()) {
-            fontRenderer->invalidateShapeCache();
-        }
+        m_window->forEachFontRenderer([](Rowl::Render::FontRenderer& renderer) {
+            renderer.invalidateShapeCache();
+        });
     }
 }
 
@@ -2689,7 +3090,7 @@ bool Engine::areActiveDialoguesComplete() const {    // MS-6: a paused line rend
     // early-return above stays: paused previews pin elapsed at 9999 s while
     // pause-heavy lines can total beyond that, so a bare reveal would call
     // a settled preview "typing" forever.
-    const auto* gateFontRenderer = m_window ? m_window->getFontRenderer() : nullptr;
+    const auto* gateFontRenderer = m_window ? m_window->getDialogueFontRenderer() : nullptr;
     for (const auto& dialogue : m_activeDialogues) {
         if (!dialogue.typewriterEnabled || dialogue.textSpeed <= 0) continue;
         const auto shaped = shapeDialogue(gateFontRenderer, dialogue);
@@ -2728,13 +3129,34 @@ void Engine::resetSessionProfile() {
     m_pauseConfirmQuit = false;
     m_pauseMode   = PauseMenuMode::Main;
     m_pauseSelected = 0;
+    m_backlogTop = 0;  // D03-2
+    m_backlogLineOffset = 0;
+    m_backlogFromPause = false;
+    m_prefsFromPause = false;  // D05-2
+    m_extrasTop = 0;           // D07-2 (the audio engine is gone already)
+    m_galleryViewing = false;
+    m_musicPlayingId.clear();
+    m_musicRoomTouchedAudio = false;
+    m_toastActive = false;
+    m_toastRemaining = 0.0f;
     m_activeQuickSlot = 0;
     m_pauseSlotCacheValid = false;
     m_titleActive = false;  // D02
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
     m_slotLoadFailed.reset();
     m_textSpeedMultiplier = 1.0f;
     m_autoAdvanceDelayOffset = 0.0f;
+    // D04-1: Auto / Skip are session state; the policy and delay are restored by
+    // the host from the profile after a re-init, like the other preferences.
+    m_autoMode = false;
+    m_skipActive = false;
+    m_skipHold = false;
+    m_skipPolicy = SkipPolicy::ReadOnly;
+    m_autoDelay = 2.0f;
+    m_autoWaitElapsed = 0.0f;
+    m_autoWaitRemaining = 0.0f;
+    m_skipStepCredit = 0.0f;
+    m_activeLinesReadBeforePresentation = true;
     m_defaultBgmTransition = "instant";
     m_defaultBgmTransitionDurationSeconds = 1.0f;
     m_playtimeSeconds = 0.0;
@@ -2764,9 +3186,10 @@ void Engine::resetSessionProfile() {
     m_activeDialogueBoxY = 860.0f;
     m_activeDialogueBoxWidth  = 1760.0f;
     m_activeDialogueBoxHeight = 180.0f;
-    m_activeDialogueData = Rowl::Render::DialogueRenderData{};
+    m_activeDialogueData = themedDialogue();
     m_activeDialogues.clear();
     m_activeChoiceButtons.clear();
+    m_choiceFocusId.clear();
     m_hasActiveScript = false;
     m_activeScriptModuleIds.clear();
     m_activeScriptSources.clear();
@@ -2832,6 +3255,10 @@ void Engine::shutdown() {
     // D2 (#113-kuzeni): proje-override save-dizini de oturuma aittir.
     m_saveDirectoryOverride.clear();
     m_playerProfile.close();  // D01c-1: flush pending profile changes
+    m_extrasCatalog = {};     // D07-1
+    m_extrasCgKeys.clear();
+    m_extrasMusicKeys.clear();
+    m_unlockNotices.clear();
     m_gameIdentity = {};
     m_gameDataLayout = {};
 
@@ -2850,14 +3277,35 @@ Rowl::State::SaveMetadata Engine::buildSaveMetadata() const {
             break;
         }
     }
-    if (m_gameState && m_gameState->dialogueHistory && !m_gameState->dialogueHistory->empty()) {
-        metadata.summary = Rowl::State::truncateSummary(
-            m_gameState->dialogueHistory->back().dialogue);
+    if (m_gameState) {
+        // Last presented dialogue line (a choice row is not a line), in the
+        // active language like the live line.
+        const auto& history = getDialogueHistory();
+        for (size_t i = history.size(); i > 0; --i) {
+            const auto& entry = history[i - 1];
+            if (entry.choice) continue;
+            metadata.summary = Rowl::State::truncateSummary(entry.dialogue);
+            break;
+        }
     }
     uint32_t width = 0, height = 0, pitch = 0;
-    const uint8_t* pixels = getPixelBuffer(&width, &height, &pitch);
+    const uint8_t* pixels = nullptr;
+    size_t bufferLength = 0;
+    if (m_window && m_window->hasStoryFrame()) {
+        // F2 (B-1): the menu-free story frame (taken when the pause menu opened, or just
+        // before an F5 save on a visible window) - never the pixels with the menu on top.
+        pixels = m_window->storyFramePixels();
+        width = m_window->storyFrameWidth();
+        height = m_window->storyFrameHeight();
+        pitch = width * 4u;
+        bufferLength = static_cast<size_t>(pitch) * height;
+    } else {
+        // Offscreen runtimes keep the live surface (the last full story frame); a visible
+        // window has no readable surface, so without a snapshot the save has no thumbnail.
+        pixels = getPixelBuffer(&width, &height, &pitch);
+        bufferLength = m_window ? m_window->getPixelBufferLength() : 0;
+    }
     if (pixels && width > 0 && height > 0) {
-        size_t bufferLength = m_window ? m_window->getPixelBufferLength() : 0;
         const auto thumbnail =
             Rowl::State::encodeThumbnailPng(pixels, bufferLength, width, height, pitch);
         metadata.thumbnailPng = std::move(thumbnail.png);
@@ -2922,6 +3370,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     // D1 (#108/#129/#130): init-öncesi load, oturumu sessizce uygulayıp
     // setSuccess bırakıyordu; sonraki init imha edip stale OK bırakıyordu.
     // Fail-closed: state'e dokunmadan StateError + false.
+    m_lastLoadFailure = LoadFailure::Other;  // F2: every early return below is a failure
     if (!m_initialized) {
         if (m_context) {
             m_context->setError(RuntimeErrorCode::StateError,
@@ -2943,6 +3392,10 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     if (!loadResult.succeeded()) {
         RuntimeErrorCode errorCode = RuntimeErrorCode::ParseError;
         std::string message = "Failed to parse or validate save slot #" + std::to_string(slotIndex);
+        m_lastLoadFailure = loadResult.status == Rowl::State::SessionLoadStatus::UnsupportedVersion
+            ? LoadFailure::Incompatible
+            : loadResult.status == Rowl::State::SessionLoadStatus::NotFound ? LoadFailure::Missing
+                                                                            : LoadFailure::Corrupt;
         switch (loadResult.status) {
             case Rowl::State::SessionLoadStatus::NotFound:
                 errorCode = RuntimeErrorCode::FileNotFound;
@@ -2977,6 +3430,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         const uint64_t savedNode = loadResult.state ? loadResult.state->activeNodeId : 0;
         const auto& doc = getStoryGraphDocument();
         if (!doc.nodes.empty() && doc.nodes.find(savedNode) == doc.nodes.end()) {
+            m_lastLoadFailure = LoadFailure::Incompatible;
             m_context->setError(RuntimeErrorCode::ValidationError,
                                 "Save slot #" + std::to_string(slotIndex) +
                                     " restores node #" + std::to_string(savedNode) +
@@ -3002,6 +3456,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         } else if (!doc.nodes.empty() &&
                    savedGraph !=
                        Rowl::Core::computeGraphIdentity(doc)) {
+            m_lastLoadFailure = LoadFailure::Incompatible;
             m_context->setError(RuntimeErrorCode::ValidationError,
                                 "Save slot #" + std::to_string(slotIndex) +
                                     " was recorded from a different story graph; " +
@@ -3018,6 +3473,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     const uint64_t prevNode = m_storyRuntime.currentNodeId();
     const double prevPlaytime = m_playtimeSeconds;
     const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    const uint64_t prevRecordedNode = m_lastRecordedDialogueNodeId;
     // getAllVariables const-ref döner — kopya şart (clearVariables sonrası
     // referans ölürdü).
     const auto prevLuaVars = m_luaSandbox
@@ -3040,6 +3496,11 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
     }
     // Loading restores state; it is not a node-entry event and must not replay SFX.
     m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+    // D-K1: nor a history entry (the restored history already holds this node's
+    // lines), but the one-shot "line already recorded" marker must not outlive the
+    // restore: it kept the node the player was on BEFORE the load, so walking
+    // back into that node dropped its line from the backlog.
+    m_lastRecordedDialogueNodeId = 0;
 
     // Sync variables to Lua sandbox
     if (m_luaSandbox && m_gameState->variables) {
@@ -3047,6 +3508,8 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         for (const auto& [k, v] : m_gameState->variables->data) {
             m_luaSandbox->setVariable(k, v);
         }
+        // F2 (B-7): a save from before a declaration was added still gets that variable's default.
+        seedDeclaredVariables(m_gameState->variables.get());
     }
 
     // Synchronize scene to loaded node
@@ -3097,6 +3560,7 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
         m_gameState = prevState;
         m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_lastRecordedDialogueNodeId = prevRecordedNode;
         m_storyRuntime.setCurrentNodeId(prevNode);
         if (m_luaSandbox) {
             m_luaSandbox->clearVariables();
@@ -3114,6 +3578,13 @@ bool Engine::loadGameSlot(int32_t slotIndex) {
                             "load_game_slot", std::to_string(slotIndex));
         return false;
     }
+    // D04-1: loading is not a presentation (nothing is marked read), so the
+    // read-before snapshot comes straight from the read set; Skip and the Auto
+    // wait start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    resetAutoWait();
+    m_lastLoadFailure = LoadFailure::None;
     ROWL_LOG_INFO("Loaded Game Slot #" + std::to_string(slotIndex) +
                   " → Node #" + std::to_string(m_storyRuntime.currentNodeId()));
     if (loadResult.migrated()) {
@@ -3151,6 +3622,30 @@ bool Engine::quickSave() {
 bool Engine::quickLoad() {
     ROWL_LOG_INFO("[Player] Quick Loading from Slot #" + std::to_string(m_activeQuickSlot) + "...");
     return loadGameSlot(m_activeQuickSlot);
+}
+
+void Engine::playerQuickSave() {
+    const int32_t slot = m_activeQuickSlot;
+    if (quickSave()) {
+        m_slotSaveFailed.reset(static_cast<size_t>(slot));
+        postNotice(UiText::NoticeSaved, slot);
+    } else {
+        m_slotSaveFailed.set(static_cast<size_t>(slot));
+        postNotice(UiText::NoticeSaveFailed, slot);
+    }
+}
+
+void Engine::playerQuickLoad() {
+    const int32_t slot = m_activeQuickSlot;
+    if (quickLoad()) {
+        postNotice(UiText::NoticeLoaded, slot);
+        return;
+    }
+    postNotice(UiText::NoticeLoadFailed, slot,
+               m_lastLoadFailure == LoadFailure::Missing ? UiText::ReasonEmpty
+               : m_lastLoadFailure == LoadFailure::Incompatible ? UiText::ReasonIncompatible
+               : m_lastLoadFailure == LoadFailure::Corrupt ? UiText::ReasonCorrupt
+                                                           : UiText::ReasonUnreadable);
 }
 
 bool Engine::hasSaveSlot(int32_t slotIndex) const {
@@ -3198,17 +3693,35 @@ bool Engine::rewind(uint64_t steps) {
         }
         return false;
     }
-    auto rewound = Rowl::State::SessionPersistence::rewind(m_gameState, steps);
+    return applyRewoundState(Rowl::State::SessionPersistence::rewind(m_gameState, steps),
+                             "rewind", steps);
+}
+
+bool Engine::rewindNodes(uint64_t nodes) {
+    if (!m_initialized) {
+        if (m_context) {
+            m_context->setError(RuntimeErrorCode::StateError,
+                                "Cannot rewind: engine is not initialized",
+                                "rewind_nodes", std::to_string(nodes));
+        }
+        return false;
+    }
+    return applyRewoundState(Rowl::State::SessionPersistence::rewindNodes(m_gameState, nodes),
+                             "rewind_nodes", nodes);
+}
+
+bool Engine::applyRewoundState(std::shared_ptr<const Rowl::State::GameState> rewound,
+                               const char* what, uint64_t steps) {
     if (!rewound) {
         // D4/R-48: refuse-yolu last-result'a yazılmadan 0 dönüyordu; host
         // bayat Ok kodunu okuyup hatayı kaçırıyordu. Fail-loud.
         m_context->setError(RuntimeErrorCode::InvalidArgument,
                             steps == 0
                                 ? "Cannot rewind zero steps"
-                                : "Cannot rewind " + std::to_string(steps) +
-                                      " steps from step #" +
-                                      std::to_string(getCurrentStepId()),
-                            "rewind", std::to_string(steps));
+                                : std::string("Cannot rewind ") + std::to_string(steps) +
+                                      (std::string(what) == "rewind_nodes" ? " node(s)" : " steps") +
+                                      " from step #" + std::to_string(getCurrentStepId()),
+                            what, std::to_string(steps));
         return false;
     }
 
@@ -3221,6 +3734,7 @@ bool Engine::rewind(uint64_t steps) {
     // kalıyordu.
     const double prevPlaytime = m_playtimeSeconds;
     const uint64_t prevSfxNode = m_lastSfxPlaybackNodeId;
+    const uint64_t prevRecordedNode = m_lastRecordedDialogueNodeId;
     const auto prevLuaVars = m_luaSandbox
         ? m_luaSandbox->getAllVariables()
         : std::unordered_map<std::string, std::string>{};
@@ -3236,12 +3750,19 @@ bool Engine::rewind(uint64_t steps) {
                       " steps lands on node #" + std::to_string(m_gameState->activeNodeId) +
                       " absent from the loaded graph");
     }
+    // D-K1: like a load, a rewind restores state and is not a node-entry event.
+    // The one-shot node-entry markers (SFX / voice clip, backlog line) used to
+    // keep the node the player rewound FROM, so walking forward into that same
+    // node again played no SFX / voice and added no backlog row for it.
+    m_lastSfxPlaybackNodeId = m_storyRuntime.currentNodeId();
+    m_lastRecordedDialogueNodeId = 0;
 
     if (m_luaSandbox && m_gameState->variables) {
         m_luaSandbox->clearVariables();
         for (const auto& [k, v] : m_gameState->variables->data) {
             m_luaSandbox->setVariable(k, v);
         }
+        seedDeclaredVariables(m_gameState->variables.get());  // F2 (B-7)
     }
 
     const StoryNode* activeNode = m_storyRuntime.currentNode();
@@ -3284,6 +3805,7 @@ bool Engine::rewind(uint64_t steps) {
         // #86: playtime senkronu (load karşılığı) + kamera/ses geri-alımı.
         m_playtimeSeconds = prevPlaytime;
         m_lastSfxPlaybackNodeId = prevSfxNode;
+        m_lastRecordedDialogueNodeId = prevRecordedNode;
         m_storyRuntime.setCurrentNodeId(prevNode);
         if (m_luaSandbox) {
             m_luaSandbox->clearVariables();
@@ -3297,10 +3819,16 @@ bool Engine::rewind(uint64_t steps) {
         m_context->setError(RuntimeErrorCode::UnknownError,
                             std::string("Rewind restore failed; session rolled back: ") +
                                 restoreError.what(),
-                            "rewind", std::to_string(steps));
+                            what, std::to_string(steps));
         return false;
     }
-    m_context->setSuccess("rewind", std::to_string(steps));
+    // D04-1: same as load - snapshot from the read set, Skip / Auto start over.
+    refreshReadSnapshot();
+    m_skipActive = false;
+    // F1 (karar 3): going back ends Auto for the session (the profile keeps the
+    // player's remembered Auto choice; only the live driver and its badge stop).
+    setAutoMode(false);
+    m_context->setSuccess(what, std::to_string(steps));
     return true;
 }
 
@@ -3323,8 +3851,14 @@ void Engine::restoreAudioStateFromGameState() {
     }
 
     if (m_gameState->bgmPlaying && !m_gameState->activeBgm.empty()) {
-        m_audio->playAudio(m_gameState->activeBgm, Rowl::Audio::AudioChannelType::Bgm,
-                           m_audio->getActiveFilter());
+        // D-K3: the same track already playing is left alone. Every rewind step
+        // (and a load inside the same scene) used to start it over - the music
+        // cut out for ~1.4 s each Backspace. Volume and filter were applied above;
+        // only a different / stopped track is (re)started, as before.
+        if (!m_audio->isBgmPlaying() || m_audio->getCurrentBgmPath() != m_gameState->activeBgm) {
+            m_audio->playAudio(m_gameState->activeBgm, Rowl::Audio::AudioChannelType::Bgm,
+                               m_audio->getActiveFilter());
+        }
     } else {
         m_audio->stopBgm();
     }

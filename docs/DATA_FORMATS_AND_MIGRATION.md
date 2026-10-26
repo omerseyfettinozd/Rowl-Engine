@@ -22,6 +22,24 @@ optional fields and ignore unknown fields unless stated otherwise.
   `id`, `enabled`, `data`), plus `next_nodes[]` edges of
   `{ id, label, option_id }`. `option_id` is the stable branch identity
   consumed by `RowlEngine_SelectChoice`.
+- **Project variable declarations (F2, B-7):** the graph root may carry
+  `"variables": {"kaba": 0, "isim": "Eleni", "acik": true}` (string, number or
+  boolean values; stored as text like every saved variable; names are non-empty,
+  at most 256 bytes and not a reserved engine name; an invalid declaration
+  rejects the graph). A New Game (and a graph mount) sets them in the Lua
+  sandbox and in the root GameState BEFORE the start node's conditions run, so
+  a condition may read a variable that no earlier node assigned (an undeclared
+  name is `nil` in Lua: `zz < 1` is an error, i.e. false). Loading or rewinding to
+  a state that lacks a declared name (a save from before the declaration
+  existed) gives that name its declared default. No declarations = the old
+  behaviour. Declarations are not part of the graph identity (adding one does
+  not make existing saves "uyumsuz"). The editor does not write or list them
+  yet (follow-up F3/T4: a variables list and a lint for undeclared reads).
+- **Repeated `option_id`:** two options of one node with the same `option_id`
+  are kept apart by the native parser: the second and later copies become
+  `<id>#2`, `<id>#3` ... in the `choice` component and on the matching n-th
+  edge, with one WARN naming the node (focus, digits and clicks used to treat
+  them as one option). The editor should lint it.
 - **Editor loading** (`StoryGraphLoaderService.Load`) is structural, not
   version-gated, and migrates upward:
   | Present shape | Treated as | Migration |
@@ -60,6 +78,15 @@ optional fields and ignore unknown fields unless stated otherwise.
   `thumbnail_width/height` and `thumbnail_png_base64` (320 px PNG, `""`
   when no framebuffer). All optional on decode; no version bump —
   see `docs/SAVE_SLOTS_AND_SEMANTIC_INPUT.md`.
+  F2 (B-1): the thumbnail is the story frame WITHOUT any menu or overlay: the
+  window snapshots it when the pause menu opens (and just before an F5 save on a
+  visible window, whose renderer is only readable while a frame is drawn). An
+  offscreen runtime saved outside the menu uses its live surface; a host that
+  saves through the C API on a visible window outside a pause has no thumbnail.
+  F2 (B-2): the slot LIST reads only the top-level metadata of each file (a SAX
+  walk that never builds the history or decodes the picture) and fetches the
+  selected row's thumbnail lazily; its texture key is `slot|saved_at|size|mtime`,
+  so two saves inside one second do not show the older picture.
 - **`dialogue_history` entries** carry an optional `content_id` (Faz 2
   Dilim 2, UUID form, `""` for pre-migration lines). Decode defaults a
   missing key to `""` and rejects entries over 1024 bytes; no format
@@ -78,7 +105,15 @@ optional fields and ignore unknown fields unless stated otherwise.
 - **History:** states form an immutable chain (`previousState`);
   `SessionPersistence::checkpoint` aligns the chain with the live cursor
   before a save, and `rewind` steps back over it (surfaced as
-  `RowlEngine_Rewind`).
+  `RowlEngine_Rewind`). F1: `rewindNodes` steps over whole node visits
+  (`RowlEngine_RewindNodes`, the player's Backspace): a visit starts at a link
+  with the optional `node_entry: true` key (written by a real node entry) or
+  where `active_node_id` changes. The dialogue backlog is a persistent,
+  structurally shared list (≤ 500 visible rows; a link costs one node, not a
+  copy), so memory per advance is constant. Optional, additive keys: `node_entry`
+  on a state link and `choice: true` on a `dialogue_history` row (the player's
+  own answer; `dialogue` = the option text, no speaker/voice); older saves load
+  with both absent.
 - **Sürüm karar kilidi (Faz 6 Dilim 7 IS 2/2):** yazıcı her zaman
   `j["version"] = 3` yazar (`engine/src/state/game_state.cpp:206`;
   `CurrentSaveFormatVersion = 3` — `engine/include/rowl/state/game_state.hpp:67`).
@@ -155,7 +190,8 @@ optional fields and ignore unknown fields unless stated otherwise.
 ## 4. Project manifest (`project.rowlproj`) — informational, unversioned
 
 - Written by `ProjectFactory` (`name`, `version`, `engineVersion`,
-  `createdAt`/`savedAt`, `nodeCount`, `startNodeId`, `save_slot_count`,
+  `createdAt`/`savedAt`, `nodeCount`, `startNodeId`, `save_slot_count`
+  (read by the player since T2b: slots listed on the Save / Load pages, 1-100),
   `default_bgm_transition*`); older files may carry `virtualResolution`
   instead. There is no schema-version gate.
 - Role: presence marks a project root (registry/discovery, Save-As,
@@ -271,13 +307,14 @@ filters), linter (`ProjectValidationService`), and the packager
 - **Schema (`version = 1`):** `version`, `game_id` (per-game dirs only),
   `language` (`en`/`tr`, `tr-TR` → `tr`), `read_content_ids` (sorted array of
   canonical lowercase UUIDs), `master/bgm/voice/sfx/ambience/ui_volume`
-  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,60]),
+  ([0,1]), `text_speed_multiplier` ([0.25,4]), `auto_advance_delay` ([0,10]),
   `text_scale` (snapped to 1 / 1.25 / 1.5), `high_contrast`, `reduced_motion`,
   `skip_mode` (`off`/`read_only`/`all`), `auto_enabled`, `mixer_fade_curve`
-  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and a reserved
-  `unlocks` array. Wrong-typed or missing fields fall back to their defaults;
-  out-of-range values are clamped. Unknown top-level keys and `unlocks` are
-  preserved verbatim on rewrite.
+  (`Linear`/`EqualPower`), `sfx_pool_depth` ([1,16]), and `unlocks` (D07-1:
+  `{"cg": [ids], "music": [ids], "achievements": [{"id","at"}]}`, `[]` while nothing is
+  unlocked; schema and triggers in `docs/EXTRAS_UNLOCKS.md`). Wrong-typed or missing fields
+  fall back to their defaults; out-of-range values are clamped. Unknown top-level keys and
+  unknown keys inside `unlocks` are preserved verbatim on rewrite.
 - **Read set:** ids are normalized (`ContentIdService.Normalize` rules),
   deduplicated, held in a hash set (O(1) lookup) and written sorted. Bounded at
   1,000,000 ids: past that, new ids are refused with a diagnostic — existing
@@ -310,7 +347,7 @@ filters), linter (`ProjectValidationService`), and the packager
   parity test: `tests/fixtures/profile/player-profile.v1.json`.
 - **Managed side (D01c-2):** the editor player goes through the native store
   (single writer) when it is available; the managed `PlayerProfileStore` keeps
-  `game_id`, `unlocks` and unknown keys on rewrite and is used per game as the
+  `game_id`, `unlocks` (array or object, opaque) and unknown keys on rewrite and is used per game as the
   fallback. Details and the one-time migration of the old global editor profile:
   `docs/PLAYER_PROFILE_AND_CONTENT_ID.md` section 9.
 
@@ -339,3 +376,53 @@ folder and must not assign `XDG_DATA_HOME`, `HOME`, `LOCALAPPDATA`, `APPDATA`,
 `USERPROFILE` or `TMPDIR` (`tools/launcher_contract.py`,
 `data_dir_override_problems`). Machine-checked by `rowl_packaged_game_isolation`
 (`tests/test_packaged_game_isolation.py`).
+
+## 11. Node `condition` component (D06-1)
+
+- **Shape:** `{"type":"condition","data":{"expression":"gold >= 10","fail_target_node_id":"42"}}`.
+  `expression` is the same Lua condition used by choice options
+  (`condition` on an option); `fail_target_node_id` is a node id written as a
+  string (the editor) or a number (hand-written graphs).
+- **When:** evaluated on a real node entry only (advance, choice, New Game,
+  graph mount) and BEFORE any entry effect. Load, rewind and scene restores
+  never re-evaluate it. Several conditions on a node run in order; the first
+  false one decides. An empty/missing expression or a disabled component gates
+  nothing.
+- **False + valid target:** the node is not played at all (no variable, audio,
+  script, transition, camera, history row or read mark); the cursor moves to
+  the target, whose own entry (conditions included) runs. A redirect is one
+  history step and saves/rewinds record the target, never the skipped node.
+  More than 16 redirects in a row is a cycle: one WARN and the node reached
+  plays normally.
+- **False + empty/unknown/unparsable target:** one WARN per node and graph, the
+  node plays normally (an authoring error never locks the game).
+- **Evaluation error** (Lua syntax/runtime error, budget): same policy as a
+  choice option, i.e. the condition counts as false (and one WARN names it).
+  F2 (B-10): every condition has its OWN instruction / wall-clock budget. A
+  condition that runs out of it is false and nothing more: the trip is not carried
+  into the session, so later conditions are judged normally (before, one runaway
+  condition poisoned the session and every later condition read false until
+  New Game / load). A catch-and-respin inside one run still escalates to a real
+  session poison, which only `clearVariables()` lifts. Script callbacks
+  (`on_enter`, `on_update`) keep the strict poison.
+- **Undeclared variables** are `nil`, not 0: declare them in the graph's
+  `variables` object (section 1) or assign them in an earlier node.
+- **Variables:** the Lua evaluator reads the Lua globals, so New Game
+  (`RowlEngine_ResetToStartNode`, title New Game) clears the Lua story
+  variables together with the fresh GameState, as load/rewind/mount already do.
+- No C API or capability change (ABI unchanged).
+
+## 12. Player-interface theme (`Assets/json/ui_theme.json`, T1)
+
+Optional, `format: 1`, read from the project VFS (loose or `.rowlpkg`) by `RowlEngine_SetProjectDirectory`,
+the same way as `extras.json`. Colours, border widths, text sizes and fonts of the engine-drawn player UI
+plus project-wide dialogue / choice defaults (a key written in a node component still wins). No file or a
+missing key = the built-in look, pixel for pixel. A bad value keeps its default and is reported (at most
+32 diagnostics); a whole bad file (over 256 KiB, not an object, wrong `format`) is ignored. Unknown keys are
+ignored, so older engines read newer files. T2 added skins (images, 9-slice frames, title background / logo /
+music, cursor, slider, continue mark; all additive keys, `"format": 1` unchanged) and the optional
+`extras.json` achievement `icon`; T2b added `screens.<page>.layout` (place / size / arrangement of every menu page),
+`slots.layout` (`list` / `cards`) and `slots.number_base`, and the player now reads `save_slot_count` from
+`project.rowlproj` (1-100, default 10) for the Save / Load pages; label texts are a later slice. Full field table:
+`docs/PLAYER_UI_THEME.md`. C API: `RowlEngine_GetUiThemeJson` / `ReloadUiTheme` / `SetUiThemeJson`
+(`ROWL_ENGINE_CAPABILITY_UI_THEME`, ABI baseline 272 symbols (F1 adds `RowlEngine_RewindNodes`)).

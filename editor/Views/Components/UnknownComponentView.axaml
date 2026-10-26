@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.UnknownComponentView"
+             x:DataType="comp:UnknownComponentViewModel">
+  <Border Classes="card" ClipToBounds="True" Margin="0,4">
+    <StackPanel>
+      <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="2">
+          <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="1" Classes="cardTitle" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}" Margin="4,0"/>
+          <Button Grid.Column="2" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                <Separator/>
+                <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+      <StackPanel Spacing="4" Margin="8,6">
+        <TextBlock Text="{l:T Component.Unknown.Hint}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding RawDataPreview}" Classes="hint" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

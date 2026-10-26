@@ -172,7 +172,10 @@ LocaleManifest LocalizationManager::parseManifestJson(
                 firstObjectKey(document, "default_locale", "defaultLocale")) {
             if (defaultNode->is_string()) {
                 const std::string code = normalizeLocale(defaultNode->get<std::string>());
-                if (!code.empty()) manifest.defaultLocale = code;
+                if (!code.empty()) {
+                    manifest.defaultLocale = code;
+                    manifest.declared = true;
+                }
             }
         }
 
@@ -189,7 +192,10 @@ LocaleManifest LocalizationManager::parseManifestJson(
                         supported.push_back(code);
                     }
                 }
-                if (!supported.empty()) manifest.supportedLocales = std::move(supported);
+                if (!supported.empty()) {
+                    manifest.supportedLocales = std::move(supported);
+                    manifest.declared = true;
+                }
             }
         }
     } catch (...) {

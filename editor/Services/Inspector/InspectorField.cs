@@ -84,6 +84,7 @@ namespace RowlEngine.Editor.Services.Inspector
             public const string CharacterVoiceBlip = "character.voice_blip";
             public const string AudioBgmTrack = "audio.bgm_track";
             public const string AudioSfxTrack = "audio.sfx_track";
+            public const string AudioVoiceTrack = "audio.voice_track";
             public const string ChoiceOptionTarget = "choice.option_target";
             public const string ChoiceOptionText = "choice.option_text";
             public const string ScriptPath = "script.script_path";

@@ -95,6 +95,25 @@
                     <ctrl:AudioStreamingBadge Mode="{Binding StreamMode}" BadgeText="{Binding StreamBadgeText}"/>
                 </StackPanel>
 
+                <!-- Voice line (voice_track): full dialogue recording, played once on node entry -->
+                <Separator Background="{DynamicResource BorderColor}" Height="1"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{l:T Component.Audio.Voice.Label}" Classes="body"/>
+                    <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                        <TextBox Grid.Column="0" Text="{Binding VoiceTrack}" Watermark="{l:T Component.Audio.Voice.Watermark}"
+                                 Background="{DynamicResource InputBackground}" Foreground="{DynamicResource PrimaryText}" BorderBrush="{DynamicResource BorderColor}"/>
+                        <Button Classes="ghost" Grid.Column="1" Command="{Binding ToggleVoicePreviewCommand}" Padding="8,4"
+                                ToolTip.Tip="{l:T Component.Audio.Voice.Preview.Tip}">
+                            <Panel>
+                                <TextBlock Text="{l:T Component.Audio.Preview}" IsVisible="{Binding !IsPreviewingVoice}" FontSize="{DynamicResource FontSizeBody}" Foreground="{DynamicResource Accent}"/>
+                                <TextBlock Text="{l:T Component.Audio.Stop}" IsVisible="{Binding IsPreviewingVoice}" FontSize="{DynamicResource FontSizeBody}" Foreground="{DynamicResource ErrorBrush}"/>
+                            </Panel>
+                        </Button>
+                    </Grid>
+                    <ctrl:FieldValidationBadge Validation="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).InspectorViewModel.Validation}"
+                                               NodeId="{Binding Node.Id}" FieldKey="audio.voice_track"/>
+                </StackPanel>
+
                 <!-- Volume Slider -->
                 <Separator Background="{DynamicResource BorderColor}" Height="1"/>
                 <StackPanel Spacing="2">

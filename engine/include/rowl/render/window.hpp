@@ -1,10 +1,12 @@
 #pragma once
 
 #include <string>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <functional>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -13,10 +15,12 @@
 #include "rowl/render/msdf_renderer.hpp"
 #include "rowl/render/camera2d.hpp"
 #include "rowl/render/transition_manager.hpp"
+#include "rowl/state/ui_theme.hpp"
 
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
+struct SDL_Cursor;
 struct SDL_Surface;
 struct SDL_GPUShader;
 struct SDL_GPURenderState;
@@ -141,6 +145,10 @@ struct DialogueRenderData {
     float borderThickness = 2.0f;
     float cornerRadius = 8.0f;
     std::string customBoxTexture;
+
+    /// T1: bit per field the node's component wrote itself (engine_ui_theme.cpp). The other fields hold the project's UI theme
+    /// default and follow a theme reload. Never part of the frame hash.
+    uint32_t authoredMask = 0;
 };
 
 struct ComposedFrame;
@@ -164,10 +172,22 @@ struct ChoiceButtonRenderData {
     std::string textAlignment = "Center";
     std::string fontFamily = "Default";
     bool enabled = true;
+    /// T2: per-state images the option wrote itself (normal_image feeds backgroundImage,
+    /// the focused / disabled ones are read from hover_image / disabled_image). A theme
+    /// skin supplies the state images the option leaves empty. Empty = not mixed into the frame hash.
+    std::string hoverImage;
+    std::string pressedImage;
+    std::string disabledImage;
     /// Author's own "enabled" flag, before the Lua condition was applied.
     bool authorEnabled = true;
     /// Lua gate ("" / "true" / "1" = always open). Re-checked at selection.
     std::string condition;
+    /// D-K3: klavye/fare odagi bu secenekte (cizimde vurgulanir). Yazar
+    /// verisi degil, Engine'in anlik durumudur; kare ozetine yalniz true iken girer.
+    bool focused = false;
+    /// T1: bit per field the option wrote itself (engine_ui_theme.cpp);
+    /// the rest follow the project's UI theme. Not part of the frame hash.
+    uint32_t authoredMask = 0;
 };
 
 class Window {
@@ -193,6 +213,16 @@ public:
      */
     const uint8_t* getPixelBuffer() const;
     size_t getPixelBufferLength() const;
+    /// F2 (B-1): menu-free copy of the story frame for save thumbnails. captureStoryFrame()
+    /// must run after the story / scene are drawn and before the pause overlay and
+    /// endFrame (the visible window's renderer is only readable then). The copy is tightly
+    /// packed RGBA32 (pitch = width * 4) and stays until clearStoryFrame().
+    bool captureStoryFrame();
+    void clearStoryFrame();
+    bool hasStoryFrame() const { return !m_storyFrame.empty(); }
+    const uint8_t* storyFramePixels() const { return m_storyFrame.empty() ? nullptr : m_storyFrame.data(); }
+    uint32_t storyFrameWidth() const { return m_storyFrameWidth; }
+    uint32_t storyFrameHeight() const { return m_storyFrameHeight; }
 
     /**
      * Returns the offscreen surface row pitch in bytes (bytes per scanline).
@@ -237,6 +267,15 @@ public:
                               float& outVirtualX, float& outVirtualY,
                               bool& outBezelTap) const;
 
+    /// D-K3: secenek dugmelerini cizimle AYNI olcumden (yazi boyutu + pencere olcegi
+    /// dahil) sigdirir: metni sigmayan dugme alt kenari sabit yukari buyur, ustteki
+    /// kardesler yukari itilir (ui_text_fit.hpp). Cizim, tiklama ve gozlem bu
+    /// yerlesimi kullanir. Yazi/pencere yoksa ya da sigmayan yoksa girdi aynen kalir.
+    void fitChoiceButtons(std::vector<ChoiceButtonRenderData>& choices) const;
+    /// F2 (D-O3): a hash of every input of fitChoiceButtons except the buttons themselves
+    /// (window size, font text scales); the engine caches the laid-out menu per key.
+    uint64_t choiceLayoutKey() const;
+
     void setInputHandler(std::function<void(const Rowl::Platform::RuntimeInputEvent&)> handler);
 
     /// #60: IME metin-girdisi anahtarı (kenar-tetiklemeli). Engine her
@@ -255,6 +294,9 @@ public:
     /// Returns false for unmapped keys. Public and static so headless tests
     /// can pin the Esc/P/digit/arrow contract without a visible window.
     static bool mapKeyToRuntimeInput(uint32_t sdlKey, Rowl::Platform::RuntimeInputEvent& outEvent);
+    /// F2: whether an OS key-repeat of a key mapped to `type` is delivered (the four arrows
+    /// only; every other key counts once per physical press).
+    static bool keyRepeats(Rowl::Platform::RuntimeInputEvent::Type type);
 
     /// A3 (K2 kilidi): identical-frame skip kararının paketlenmiş-içerik
     /// çekirdeği — yalnız parametre + FNV, üye durumu okumaz. Public ve
@@ -310,8 +352,18 @@ public:
     /// MS-6: pause-menu overlay (dim + panel + rows + hint) in virtual
     /// 1920x1080 layout. No-op unless view.open; safe on offscreen surfaces.
     void renderPauseMenuOverlay(const Rowl::Core::PauseMenuView& view);
+    /// D04-2: AUTO / SKIP capsules, drawn on a freshly rendered story frame
+    /// (renderComposedFrame decides when).
+    void renderPlayerBadges(bool autoBadge, bool skipBadge);
+    /// D07-2: achievement toast capsule, top-centre of the 1920x1080 canvas
+    /// ("Basarim: X"); drawn on a freshly rendered story frame like the badges.
+    void renderUnlockToast(const std::string& text);
     /// D02: frees the cached slot-thumbnail texture (renderer teardown).
     void releasePauseThumbnail();
+    /// D07-2: frees the gallery thumbnail cache (renderer teardown).
+    void releaseGalleryThumbnails();
+    /// Test seam: gallery thumbnail textures currently cached.
+    size_t getGalleryThumbnailCount() const { return m_galleryThumbs.size(); }
     void endFrame();
 
     /// Last-frame profile accessors also report a cache hit: when an identical
@@ -350,13 +402,55 @@ public:
     double getLastFrameRendererFlushMilliseconds() const { return m_lastFrameRendererFlushMilliseconds; }
     void setTextureCacheBudgetBytes(uint64_t bytes);
     FontRenderer* getFontRenderer() const { return m_fontRenderer.get(); }
+    /// T1: the renderer the menus / badges / toast are drawn AND measured with
+    /// (the theme's `fonts.menu` when it loaded, else the project font), and
+    /// likewise for the dialogue text and the speaker tag.
+    FontRenderer* getMenuFontRenderer() const {
+        return m_themeMenuFont && m_themeMenuFont->isLoaded() ? m_themeMenuFont.get() : m_fontRenderer.get();
+    }
+    FontRenderer* getDialogueFontRenderer() const {
+        return m_themeDialogueFont && m_themeDialogueFont->isLoaded() ? m_themeDialogueFont.get()
+                                                                       : m_fontRenderer.get();
+    }
+    FontRenderer* getSpeakerFontRenderer() const {
+        return m_themeSpeakerFont && m_themeSpeakerFont->isLoaded() ? m_themeSpeakerFont.get()
+                                                                      : m_fontRenderer.get();
+    }
+    /// T2: problems found with the theme's images (missing / unreadable / too large),
+    /// one line each, collected when the theme is installed. Merged into GetUiThemeJson.
+    const std::vector<std::string>& skinDiagnostics() const { return m_skinDiagnostics; }
+    /// T2: a theme cursor image is installed on the window.
+    bool hasThemeCursor() const { return m_themeCursor != nullptr; }
+    /// T2: seconds the UI clock has run (drives the continue-indicator animation).
+    double uiClock() const { return m_uiClock; }
+    /// T1: installs the player-UI theme (and its optional high-contrast
+    /// palette), (re)loads the theme fonts from the VFS and invalidates every
+    /// cached frame, including the baked badge / toast state.
+    void setUiTheme(const Rowl::State::UiTheme& theme,
+                    const std::optional<Rowl::State::UiTheme>& highContrast = std::nullopt);
+    /// The theme in force right now (the high-contrast palette while the
+    /// player's high-contrast setting is on and the theme has one).
+    const Rowl::State::UiTheme& uiTheme() const {
+        return (m_themeHc && m_fontRenderer && m_fontRenderer->highContrast()) ? *m_themeHc : m_theme;
+    }
+    /// Test seam: the theme fonts that loaded (menu, dialogue, speaker).
+    bool hasThemeFont(int which) const {
+        const auto& font = which == 0 ? m_themeMenuFont : (which == 1 ? m_themeDialogueFont : m_themeSpeakerFont);
+        return font && font->isLoaded();
+    }
     /// Faz 3 Dilim 5 — visits the main renderer and every cached button
     /// renderer so accessibility display settings apply uniformly.
     template <typename Fn> void forEachFontRenderer(Fn&& fn) {
         if (m_fontRenderer) fn(*m_fontRenderer);
+        if (m_themeMenuFont) fn(*m_themeMenuFont);
+        if (m_themeDialogueFont) fn(*m_themeDialogueFont);
+        if (m_themeSpeakerFont) fn(*m_themeSpeakerFont);
         for (auto& entry : m_buttonFontCache)
             if (entry.second) fn(*entry.second);
     }
+    /// D05-2: display settings (text scale, contrast) change glyph sizes without
+    /// touching scene content; the static-frame cache must re-render then.
+    void invalidateDisplayCache() { m_frameCacheValid = false; }
     void reloadFonts();
 
     /**
@@ -440,12 +534,113 @@ private:
     SDL_Window*   m_sdlWindow         = nullptr;
     SDL_Renderer* m_sdlRenderer       = nullptr;
     SDL_Surface*  m_offscreenSurface  = nullptr;
+    std::vector<uint8_t> m_storyFrame;  // F2: see captureStoryFrame
+    uint32_t m_storyFrameWidth = 0;
+    uint32_t m_storyFrameHeight = 0;
     std::unordered_map<std::string, SDL_Texture*> m_textureCache;
     // D02: pause/title slot thumbnail, one texture keyed "slot|saved_at".
     SDL_Texture* m_pauseThumbTexture = nullptr;
+    // T2b: thumbnails of the slot cards (one texture per slot|saved_at key, LRU-bounded).
+    struct CardThumb {
+        SDL_Texture* texture = nullptr;
+        uint64_t lastUsed = 0;
+    };
+    std::unordered_map<std::string, CardThumb> m_cardThumbs;
+    std::unordered_set<std::string> m_cardThumbFailed;
+    uint64_t m_cardThumbClock = 0;
+    SDL_Texture* slotCardThumbnail(const std::string& key, const std::string& png);
     std::string m_pauseThumbKey;
     std::string m_pauseThumbFailedKey;
     void drawPauseThumbnail(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+
+    // ── T2: skins (window_skin.cpp) ──
+    /// How one skin will be painted: the image (null = colours only) and the
+    /// fill / border colours that apply after the surface's own defaults.
+    struct SkinPaint {
+        SDL_Texture* texture = nullptr;
+        const Rowl::State::UiSkin* skin = nullptr;
+        bool fillOn = false;
+        SDL_Color fill{0, 0, 0, 0};
+        bool borderOn = false;
+        SDL_Color border{0, 0, 0, 0};
+        int rings = 0;       ///< border thickness, physical px
+        float radius = 0.0f; ///< corner radius, physical px
+    };
+    /// Loads the image (or notes it as missing) and merges the skin's colours with the
+    /// surface's own: with an image the surface colours are NOT drawn unless the skin names them.
+    SkinPaint resolveSkin(const Rowl::State::UiSkin& skin,
+                          const std::optional<Rowl::State::UiColor>& baseFill,
+                          const std::optional<Rowl::State::UiColor>& baseBorder,
+                          float baseBorderPx, float scale);
+    /// True when `skin` would put something on screen: its picture loads or it names a colour.
+    /// A skin whose picture is unusable (and names no colour) is as good as absent: the surface
+    /// then draws exactly as it did before skins.
+    bool skinDraws(const Rowl::State::UiSkin& skin);
+    void paintSkinFill(const SDL_FRect& rect, const SkinPaint& paint);
+    void paintSkinImage(const SDL_FRect& rect, const SkinPaint& paint, float scale);
+    void paintSkinBorder(const SDL_FRect& rect, const SkinPaint& paint);
+    /// fill + image + border in that order. True when the image was drawn.
+    bool paintSkin(const SDL_FRect& rect, const Rowl::State::UiSkin& skin,
+                   const std::optional<Rowl::State::UiColor>& baseFill,
+                   const std::optional<Rowl::State::UiColor>& baseBorder,
+                   float baseBorderPx, float scale);
+    /// Image only (no colours), e.g. the title logo or an icon.
+    bool paintSkinImageOnly(const SDL_FRect& rect, const Rowl::State::UiSkin& skin, float scale);
+    void probeThemeImages();
+    void forgetTexture(const std::string& path);
+    void applyThemeCursor();
+    void noteSkinDiagnostic(const std::string& line);
+    std::vector<std::string> m_skinDiagnostics;
+    SDL_Cursor* m_themeCursor = nullptr;
+    double m_uiClock = 0.0;
+    /// Panel / row skin sets that answer for the page being drawn.
+    const Rowl::State::UiSkinSet& panelSkinFor(const std::string& page) const;
+    const Rowl::State::UiSkinSet& rowSkinFor(const std::string& page) const;
+    /// True while a continue-indicator animation needs a fresh frame each tick.
+    bool continueIndicatorAnimating(const std::vector<DialogueRenderData>& dialogues,
+                                    const std::vector<ChoiceButtonRenderData>& choices) const;
+    void drawContinueIndicator(const DialogueRenderData& dlg, const SDL_FRect& box, float scale);
+    bool dialogueTextComplete(const DialogueRenderData& dlg, float scaledWidth, float scale);
+    /// Title screen background / logo / story-frame hiding.
+    bool drawTitleBackdrop(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawTitleLogo(const ViewportMetrics& metrics);
+
+    /// D-K3: konusmaci etiketinin tek yerlesimi (genislik + cizilecek metin + sekil).
+    /// Etiket genisligi, cizilen sekil ve kisaltma ayni olcumden (yazi boyutu dahil)
+    /// gelir; ad asla sarilmaz, kutu sinirini asarsa "…" ile kisalir.
+    struct SpeakerTagLayout {
+        std::string text;
+        float tagWidth = 0.0f;
+        std::shared_ptr<const Rowl::Text::ShapedText> shaped;
+    };
+    SpeakerTagLayout layoutSpeakerTag(const DialogueRenderData& dlg, float scaledDialogueWidth,
+                                      float scale) const;
+    // D07-2: gallery thumbnails. Each visible cell needs a small texture; going
+    // through loadTexture would hold 1920x1080 RGBA (8 MB) per cell and thrash
+    // the 64 MB cache, so the grid keeps its own downscaled copies (at most
+    // kMaxGalleryThumbs, least-recently-used out). The full-screen viewer uses
+    // loadTexture (one image at a time).
+    struct GalleryThumb {
+        SDL_Texture* texture = nullptr;
+        uint64_t lastUsed = 0;
+    };
+    std::unordered_map<std::string, GalleryThumb> m_galleryThumbs;
+    std::unordered_set<std::string> m_galleryThumbFailed;
+    uint64_t m_galleryThumbClock = 0;
+    int m_galleryThumbDecodesThisFrame = 0;
+    SDL_Texture* galleryThumbnail(const std::string& filename);
+    void drawExtrasGraphics(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawExtrasText(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void renderGalleryViewer(const Rowl::Core::PauseMenuView& view, const ViewportMetrics& metrics);
+    void drawOverlayText(const std::string& text, float x, float y, float px, SDL_Color color,
+                         float w, float h, const char* align);
+    std::string fitOverlayText(const std::string& text, float px, float maxWidth);
+    static void fillCapsule(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color);
+    /// T1: rectangle outline `rings` physical pixels thick (rings 1 == SDL_RenderRect).
+    static void strokeRect(SDL_Renderer* renderer, const SDL_FRect& rect, int rings);
+    // D07-2: toast text currently baked into the cached frame pixels (see
+    // m_bakedBadges); a different wanted text forces a re-render.
+    std::string m_bakedToast;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureMemoryBytes;
     std::unordered_map<SDL_Texture*, uint64_t> m_textureLastUsed;
     std::unordered_set<std::string> m_missingTextureCache;
@@ -453,6 +648,13 @@ private:
     // retried when the host raises that budget, unlike genuinely missing files.
     std::unordered_set<std::string> m_budgetRejectedTextureCache;
     std::unique_ptr<FontRenderer> m_fontRenderer;
+    // T1: player-UI theme + its optional fonts (see setUiTheme).
+    Rowl::State::UiTheme m_theme;
+    std::optional<Rowl::State::UiTheme> m_themeHc;
+    std::unique_ptr<FontRenderer> m_themeMenuFont;
+    std::unique_ptr<FontRenderer> m_themeDialogueFont;
+    std::unique_ptr<FontRenderer> m_themeSpeakerFont;
+    std::unique_ptr<FontRenderer> loadThemeFont(const std::string& path);
     SDL_GPUShader* m_msdfFragmentShader = nullptr;
     SDL_GPURenderState* m_msdfRenderState = nullptr;
     std::unique_ptr<MsdfRenderer> m_msdfRenderer;
@@ -503,6 +705,10 @@ private:
                               float bgRotation, float bgParallaxX, float bgParallaxY,
                               float bgOpacity) const;
     void invalidateFrameCache() { m_frameCacheValid = false; }
+    // D04-2: bit 0 = AUTO, bit 1 = SKIP capsule currently baked into the
+    // cached frame pixels. renderComposedFrame forces a re-render whenever it
+    // differs from the wanted set, so a stale capsule never survives.
+    uint8_t m_bakedBadges = 0;
 
     ScreenFxState m_screenFx;
     SDL_Texture* m_vignetteTexture = nullptr;

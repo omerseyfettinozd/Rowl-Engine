@@ -48,6 +48,10 @@ struct LocalizedEntry {
 struct LocaleManifest {
     std::string defaultLocale = kFallbackDefaultLocale;
     std::vector<std::string> supportedLocales = {kFallbackDefaultLocale};
+    /// D05-1: true when the manifest named a usable default and/or supported
+    /// locale. False = the project declares no locales at all (the "en"
+    /// fallback above is only the engine's placeholder, not a game choice).
+    bool declared = false;
 };
 
 /// Which link of the fallback chain produced a resolved string.
@@ -116,6 +120,9 @@ public:
     LocaleSetResult trySetLocale(const std::string& locale);
     const std::string& getLocale() const { return m_activeLocale; }
     const std::string& getDefaultLocale() const { return m_manifest.defaultLocale; }
+    /// D05-1: whether the mounted project declares its locales (see
+    /// LocaleManifest::declared); decides the player UI language default.
+    bool isLocaleDeclared() const { return m_manifest.declared; }
     const std::vector<std::string>& getSupportedLocales() const {
         return m_manifest.supportedLocales;
     }

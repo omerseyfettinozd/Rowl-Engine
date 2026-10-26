@@ -3,13 +3,17 @@
 #include "rowl/render/window.hpp"
 #include "rowl/scene/character_fx.hpp"
 #include "rowl/i18n/localization_manager.hpp"
+#include "rowl/core/menu_layout.hpp"
 #include "rowl/core/pause_menu.hpp"
+#include "rowl/core/player_ui_strings.hpp"
 #include "rowl/platform/game_identity.hpp"
 #include "rowl/platform/platform_host.hpp"
+#include "rowl/state/extras_catalog.hpp"
 #include "rowl/state/game_data_layout.hpp"
 #include "rowl/state/game_state.hpp"
 #include "rowl/state/player_profile.hpp"
 #include "rowl/state/session_persistence.hpp"
+#include "rowl/state/ui_theme.hpp"
 #include "rowl/core/runtime_context.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/core/story_runtime.hpp"
@@ -19,9 +23,13 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -42,6 +50,10 @@ namespace Rowl::Core {
 using Rowl::Render::CharacterRenderData;
 using Rowl::Render::DialogueRenderData;
 using Rowl::Render::ChoiceButtonRenderData;
+
+/// D04-1: which lines the player-driven Skip may pass. Names match the profile
+/// "skip_mode" values ("off" | "read_only" | "all").
+enum class SkipPolicy { Off, ReadOnly, All };
 
 struct EngineConfig {
     std::string appName     = "Rowl Engine Game";
@@ -80,6 +92,11 @@ public:
 
     bool initialize(const EngineConfig& config = EngineConfig{});
     void run();          // Standalone blocking loop (runtime-only mode)
+    /// D06-3: same loop, plus a host hook called on the loop thread after every
+    /// successful step() while the engine is still running (never after quit).
+    /// It sits inside the loop's exception guard, so a throwing hook aborts the
+    /// run exactly like a throwing step() (#123). Empty = plain run().
+    void run(const std::function<void(float)>& afterStep);
     void step(float deltaTime);
     void shutdown();
 
@@ -219,6 +236,47 @@ public:
     /// the serialized story graph or save state.
     void setTextSpeedMultiplier(float multiplier);
     void setAutoAdvanceDelayOffset(float seconds);
+
+    // ── D04-1: player-driven Auto / Skip ──────────────────────────────────
+    // Separate from the author's per-line auto_advance flag (which is
+    // untouched). Auto waits (delay + chars*0.04/textSpeed, clamped to
+    // [0.8, 30] s; also for the node's own voice clip) once the line is fully
+    // shown, then advances. Skip advances one node per >=0.05 s step while the
+    // lines obey the policy; it stops at a choice menu, at an unread line
+    // under read_only, at the chain end, and on pause / title / backlog /
+    // preferences / load / rewind / manual advance. Session-only state.
+    void setAutoMode(bool enabled);
+    bool isAutoMode() const { return m_autoMode; }
+    /// Auto toggle as the player does it (A key): flips the mode and writes
+    /// the profile's auto_enabled (a read-only/unmounted profile refuses
+    /// silently).
+    void toggleAutoMode();
+    /// Refused (false, state unchanged) while the policy is Off or the menu /
+    /// title / backlog is up. Turning it off always succeeds.
+    bool setSkipActive(bool active);
+    bool isSkipActive() const { return m_skipActive; }
+    /// True while skip is requested by S or by holding Ctrl.
+    bool isSkipEffective() const { return (m_skipActive || m_skipHold) && m_skipPolicy != SkipPolicy::Off; }
+    /// F1 (A-6/A-7): Skip is REALLY skipping here - requested (S / Ctrl) AND
+    /// the current node can be skipped over (no open choice menu, a next node
+    /// exists, the line is allowed by the policy). Drives the SKIP badge and
+    /// the voice/sfx mute; isSkipEffective() alone only says it was requested.
+    bool isSkipping() const;
+    void setSkipPolicy(SkipPolicy policy);
+    SkipPolicy getSkipPolicy() const { return m_skipPolicy; }
+    /// NaN keeps the last value; finite values clamp to [0, 10].
+    void setAutoDelay(float seconds);
+    float getAutoDelay() const { return m_autoDelay; }
+    /// Were all lines of the current node already read when they were first
+    /// presented (before the presentation marked them)? Fail-closed: a line
+    /// without a content id counts as unread; a node without lines is true.
+    bool activeLinesReadBeforePresentation() const { return m_activeLinesReadBeforePresentation; }
+    /// Seconds of the current auto wait still to go (0 when auto is idle or
+    /// only the voice clip is awaited).
+    float getAutoWaitRemaining() const { return m_autoWaitRemaining; }
+    /// {auto, skip_active, skip_policy, auto_delay, line_read_before,
+    ///  auto_wait_remaining}
+    std::string getPlayerDriverStateJson() const;
     bool isPlaying() const { return m_isPlaying; }
     void resetToStartNode();
     /// Ends the live session without touching the presented scene: play state
@@ -274,6 +332,14 @@ public:
     const std::vector<Rowl::Render::ChoiceButtonRenderData>& getActiveChoiceButtons() const {
         return m_activeChoiceButtons;
     }
+    /// D-K3: the choice buttons exactly as drawn and hit-tested — geometry fitted
+    /// to the text scale (a button that cannot hold its text grows upward) and
+    /// `focused` set on the keyboard/hover focus. `getActiveChoiceButtons` stays
+    /// the authored data.
+    std::vector<Rowl::Render::ChoiceButtonRenderData> getLaidOutChoiceButtons() const;
+    /// F2 (D-O3): how many times the choice menu's live selectability + fitted geometry were
+    /// actually recomputed (test seam: a mouse move or a repeated query must not add to it).
+    uint64_t choiceLayoutBuildCount() const { return m_choiceLayout.builds; }
     uint64_t getCurrentNodeId()         const { return m_storyRuntime.currentNodeId(); }
     std::string getCurrentChapterId() const { return m_storyRuntime.currentChapterId(); }
     const StoryGraphDocument& getStoryGraphDocument() const { return m_storyRuntime.document(); }
@@ -289,12 +355,28 @@ public:
     const Rowl::I18n::LocalizationManager& getLocalization() const {
         return m_localization;
     }
+    /// D05-1: language of the player's own menus, derived from the current
+    /// locale on every call (never cached: SetLocale flips the next frame).
+    UiLang getUiLanguage() const {
+        return uiLangForLocale(m_localization.getLocale(), m_localization.isLocaleDeclared());
+    }
     /// Re-resolves every live dialogue line (speaker + text) from its
     /// stored original against the current locale, re-syncs the legacy
     /// single-dialogue state, and invalidates the shape cache. Called by
     /// updateScene assembly and after a successful SetLocale so the
     /// visible language flips without a node change.
     void refreshActiveDialogueLocalization();
+
+    // ── D05-2: accessibility state shared by the C API and the Preferences
+    // page (engine_pause_prefs.cpp). The state lives in the font renderers
+    // (scale / contrast) and the camera (reduced motion); with no window the
+    // setters are no-ops and the getters report the defaults.
+    void setTextScale(float scale);
+    float textScale() const;
+    void setHighContrast(bool enabled);
+    bool highContrast() const;
+    void setReducedMotion(bool enabled);
+    bool reducedMotion() const;
 
     // ── Voice Blips & Audio Effects (Milestone 25) ────────────────────────
     void setDialogueVoiceBlip(const std::string& soundPath, float basePitch, float pitchVariance, int cadence, bool skipPunctuation, int channelType);
@@ -356,6 +438,14 @@ public:
     /// MS-6: quick save/load through the active slot (player F5/F9 path).
     bool quickSave();
     bool quickLoad();
+    /// F2 (B-3): why the last loadGameSlot failed (None after a success). Lets the
+    /// menus say "bozuk" (damaged) and "uyumsuz" (a well-formed save of another
+    /// graph / format) apart.
+    enum class LoadFailure : uint8_t { None = 0, Missing, Corrupt, Incompatible, Other };
+    LoadFailure lastLoadFailure() const { return m_lastLoadFailure; }
+    /// F2 (B-3): the transient result capsule ("Kaydedildi: Yuva 2") that F5 / F9 and a
+    /// successful pause-menu load raise; empty when none shows. Drawn like the toast.
+    std::string noticeText() const;
     // ── MS-6 Pause Menu ──────────────────────────────────────────────────
     /// Opens/closes the pause menu. Opening resets navigation to the main
     /// page; closing resumes the simulation. Never quits the game — quitting
@@ -369,6 +459,13 @@ public:
     /// from the host closes it.
     bool openTitleScreen();
     bool isTitleScreenActive() const { return m_titleActive; }
+    /// D03-2: opens the dialogue backlog (Gecmis) over the frozen story.
+    /// Fails (false, StateError) before init and on the title screen. Opened
+    /// from the story, Back returns straight to it; opened while the pause
+    /// menu is up, Back returns to the pause main page. Read-only: touches no
+    /// variable, step id, history row or save slot.
+    bool openBacklog();
+    bool isBacklogOpen() const { return m_paused && m_pauseMode == PauseMenuMode::Backlog; }
     /// Keyboard-equivalent menu navigation (window arrows / C API / tests).
     /// Confirm activates the selected row; Back leaves sub-pages, disarms the
     /// exit confirmation, or resumes from the main page.
@@ -385,6 +482,12 @@ public:
     /// scene, Lua sandbox, playtime clock and live audio mixer to the target
     /// step; failure restores the pre-rewind session and fails loud.
     bool rewind(uint64_t steps = 1);
+    /// F1 (A-1): the player's "back": rewinds by NODE visits (see
+    /// GameState::rewindNodes) - lands on the last link of the previous node,
+    /// so every entry commit of that node (variables, music, backlog line) is
+    /// intact. Same rollback contract as rewind(); false when there is no
+    /// earlier node.
+    bool rewindNodes(uint64_t nodes = 1);
     uint64_t getCurrentStepId() const;
     /// stepId right after the engine presented the start node (graph load,
     /// reset, endSession). The start node's own entry effects are not
@@ -397,6 +500,10 @@ public:
     std::string getProfileDirectory() const;
     std::filesystem::path getProfileDirectoryPath() const;
     void setBgmTransitionDefaults(std::string kind, float durationSeconds);
+    /// T2b: project `save_slot_count` (project.rowlproj): how many slots the Save / Load pages
+    /// list, 1..100 (clamped); default 10. The pages show them in pages of the layout's size.
+    void setSaveSlotCount(int count);
+    int saveSlotCount() const { return m_saveSlotCount; }
     /// D01a: identity of the mounted game (see platform/game_identity.hpp).
     void setGameIdentity(Rowl::Platform::GameIdentity identity) { m_gameIdentity = std::move(identity); }
     const Rowl::Platform::GameIdentity& getGameIdentity() const { return m_gameIdentity; }
@@ -409,6 +516,55 @@ public:
     /// (Re)loads the profile for the current identity + data layout; flushes the
     /// previous one first. Called by SetProjectDirectory after the layout is set.
     void openPlayerProfile();
+
+    // ── D07-1: unlockable content (engine_extras.cpp) ─────────────────────
+    /// A queued "newly unlocked" signal (achievements only; D07-2 shows the toast).
+    struct UnlockNotice {
+        std::string kind;  ///< "achievement"
+        std::string id;
+    };
+    /// (Re)reads `Assets/json/extras.json` from the VFS; call after the project is
+    /// mounted (SetProjectDirectory does). A missing file is the normal "no
+    /// extras" state; an unusable one leaves an empty catalog + diagnostics.
+    void loadExtrasCatalog();
+    const Rowl::State::ExtrasCatalog& extrasCatalog() const { return m_extrasCatalog; }
+
+    // ── T1: player-UI theme (engine_ui_theme.cpp) ──
+    /// (Re)reads `Assets/json/ui_theme.json` from the VFS (same candidate order as
+    /// extras.json), installs the result in the window and re-applies it to the
+    /// dialogue / choices on screen. A missing file is the normal "built-in look"
+    /// state; an unusable one leaves the built-in theme + diagnostics. Called by
+    /// SetProjectDirectory; the editor's live preview calls it after a save.
+    void loadUiTheme();
+    /// Same, from a document instead of the VFS (file-less preview); the source
+    /// reads "(inline)". An unusable document (not JSON, wrong format, too big)
+    /// returns false and leaves the current theme alone.
+    bool setUiThemeText(std::string_view json);
+    const Rowl::State::UiTheme& uiTheme() const { return m_uiTheme; }
+    /// {"format","loaded","source","diagnostics":[..],"theme":{..},
+    /// "high_contrast":{..}|null} (RowlEngine_GetUiThemeJson).
+    std::string getUiThemeJson() const;
+    /// Records an unlock in the profile. The id must exist in the catalog of
+    /// that kind (else Invalid, nothing written). Ok = newly unlocked (a new
+    /// achievement also queues a notice), Unchanged = already unlocked; the
+    /// other results are the profile's (ReadOnly / Unmounted / Full).
+    Rowl::State::ProfileMutation unlockExtra(Rowl::State::UnlockKind kind, std::string_view id);
+    /// Catalog + per-item unlock state as JSON (RowlEngine_GetExtrasJson).
+    std::string getExtrasJson() const;
+    const std::vector<UnlockNotice>& pendingUnlockNotices() const { return m_unlockNotices; }
+    void clearUnlockNotices() { m_unlockNotices.clear(); }
+
+    // ── D07-2: Ekstralar pages + achievement toast (engine_extras_menu.cpp) ──
+    /// Opens the title screen's "Ekstralar" root page (opening the title screen
+    /// first when it is not up). StateError before init and while the catalog
+    /// has no item at all. Read-only: viewing the gallery / achievements and
+    /// playing a music-room track change no variable, save slot, read mark,
+    /// history row, unlock or GameState (activeBgm included).
+    bool openExtras();
+    bool isExtrasOpen() const { return m_paused && isExtrasMode(m_pauseMode); }
+    /// Text of the achievement toast that is on screen right now ("Basarim: X"),
+    /// empty when none is showing (menus open, nothing queued, story not playing).
+    std::string unlockToastText() const;
     std::shared_ptr<const Rowl::State::GameState> getGameState() const { return m_gameState; }
     /// #86: stamps the live mixer gains (master/bgm/sfx/voice) into
     /// m_gameState WITHOUT advancing stepId (see withMixerVolumes), so later
@@ -427,6 +583,13 @@ public:
         return m_scriptRuntimeStatuses;
     }
     const std::vector<Rowl::State::DialogueHistoryEntry>& getDialogueHistory() const;
+    /// D03-1: plays ONLY the voice clip of backlog row `index` (0 = oldest) on
+    /// the Voice channel, cutting any previous Voice clip. Touches no
+    /// GameState, story cursor, variable, read mark, history or entry-effect
+    /// marker (no sfx/script/variable effect is re-run). Returns false for an
+    /// out-of-range index, a voiceless row or a clip the audio side did not
+    /// start (no audio engine, undecodable asset).
+    bool replayBacklogVoice(size_t index);
 
 private:
     std::shared_ptr<RuntimeContext> m_context;
@@ -480,6 +643,9 @@ private:
     Rowl::Render::DialogueRenderData m_activeDialogueData;
     std::vector<Rowl::Render::DialogueRenderData> m_activeDialogues;
     std::vector<Rowl::Render::ChoiceButtonRenderData> m_activeChoiceButtons;
+    /// D-K3: option id holding the keyboard/hover focus while a choice menu is
+    /// presented ("" = none, the state when a menu opens). Reset whenever the scene's buttons change.
+    std::string m_choiceFocusId;
     bool m_hasActiveScript = false;
     std::vector<std::string> m_activeScriptModuleIds;
     // #20/#21: the loaded source per module id (parallel to
@@ -489,11 +655,134 @@ private:
     std::vector<std::string> m_activeScriptSources;
     std::vector<ScriptRuntimeStatus> m_scriptRuntimeStatuses;
     uint64_t m_lastRecordedDialogueNodeId = 0;
+    // D06-1: nodes whose condition problem was already logged (bad target,
+    // evaluation error, redirect cycle) - one WARN per node and graph.
+    std::unordered_set<uint64_t> m_conditionWarnedNodes;
+    // D07-1: catalog of unlockable content + canonical media keys parallel to
+    // its gallery / music lists, the not-yet-announced achievements, and the
+    // nodes whose bad "unlock" component was already logged (one WARN per node
+    // and graph, like the condition warnings).
+    Rowl::State::ExtrasCatalog m_extrasCatalog;
+    // T1: the project's player-UI theme; the window keeps its own copy.
+    Rowl::State::UiTheme m_uiTheme;
+    std::optional<Rowl::State::UiTheme> m_uiThemeHighContrast;
+    std::vector<std::string> m_uiThemeDiagnostics;
+    std::string m_uiThemeSource;   ///< VFS path the theme came from, "(inline)", or empty
+    bool m_uiThemeFileFound = false;
+    bool m_uiThemeUsable = false;
+    void installUiTheme(Rowl::State::UiThemeLoad load, std::string source);
+    // T2b: checked per-page layouts of the installed theme (engine_ui_theme.cpp) and the
+    // slot pages' paging (engine_title_menu.cpp). activeMenuLayout() is the ONE geometry
+    // source of the current page: clicks, wheel, drags and the window's drawing read it.
+    ResolvedMenuLayouts m_menuLayouts;
+    int m_saveSlotCount = 10;
+    mutable int m_slotPage = 0;
+    MenuLayout menuLayoutFor(int screenIndex) const;
+    MenuLayout activeMenuLayout() const;
+    int activeMenuScreenIndex() const;
+    int slotPageCount() const;
+    int slotRowsOnPage() const;
+    int slotAtRow(int row) const;
+    void slotSetPage(int page);
+    void slotPageMove(int direction);
+    void slotCardsMove(int dx, int dy);
+    std::string slotNumberText(int slot) const;
+    PauseMenuView getPauseMenuViewBase() const;
+    void fillSlotPageView(PauseMenuView& view, const MenuLayout& layout) const;
+    /// Sets every field of `dlg` / `button` the component did not write itself
+    /// (authoredMask) to the theme default.
+    void applyUiThemeTo(Rowl::Render::DialogueRenderData& dlg) const;
+    void applyUiThemeTo(Rowl::Render::ChoiceButtonRenderData& button) const;
+    Rowl::Render::DialogueRenderData themedDialogue() const;
+    static uint32_t dialogueAuthoredMask(const nlohmann::json& data);
+    static uint32_t choiceAuthoredMask(const nlohmann::json& data);
+    std::vector<std::string> m_extrasCgKeys;
+    std::vector<std::string> m_extrasMusicKeys;
+    std::vector<UnlockNotice> m_unlockNotices;
+    std::unordered_set<uint64_t> m_unlockWarnedNodes;
+    // D07-2: Ekstralar session. m_extrasTop = first visible gallery grid row /
+    // list item; the viewer shows catalog item m_pauseSelected; the music room
+    // remembers the playing track and whether it ever touched the audio engine
+    // (so leaving restores sound only when something was changed). The toast is
+    // the achievement notice currently on screen (already off the queue).
+    mutable int m_extrasTop = 0;
+    bool m_galleryViewing = false;
+    std::string m_musicPlayingId;
+    bool m_musicRoomTouchedAudio = false;
+    /// T2: the theme's title music is playing because the title screen started it.
+    bool m_titleMusicStarted = false;
+    void startTitleMusic();
+    void endTitleMusic();
+    bool m_toastActive = false;
+    UnlockNotice m_toastNotice;
+    float m_toastRemaining = 0.0f;
+    // F2 (B-3): result notice (F5 / F9 / menu load). Resolved per view from a key, a slot
+    // and a reason so a language change redraws it correctly; shown for kNoticeSeconds.
+    struct Notice {
+        UiText head = UiText::None;
+        int32_t slot = -1;
+        UiText reason = UiText::None;
+    };
+    Notice m_notice;
+    float m_noticeRemaining = 0.0f;
+    static constexpr float kNoticeSeconds = 2.4f;
+    void postNotice(UiText head, int32_t slot, UiText reason = UiText::None);
+    LoadFailure m_lastLoadFailure = LoadFailure::None;
+    /// F2: a slot page's hint line: a UiText plus the slot it talks about ("Yuva 2: kaydedildi").
+    int32_t m_hintSlot = -1;
+    void setMenuHint(UiText hint, int32_t slot = -1) { m_titleHint = hint; m_hintSlot = slot; }
+    std::string menuHintText(UiLang lang) const;
+    /// F2 (B-3): slots whose last save failed - their row says so instead of showing the
+    /// older (still valid) file as if the save had worked.
+    mutable std::bitset<100> m_slotSaveFailed;
+    /// F2 (B-2): the selected row's thumbnail, read lazily from its file.
+    struct SlotThumbnailCache {
+        int32_t slot = -1;
+        std::string stamp;
+        std::shared_ptr<const std::string> png;
+    };
+    mutable SlotThumbnailCache m_slotThumbnail;
+    std::shared_ptr<const std::string> slotThumbnail(int32_t slot, const PauseSlotInfo& info) const;
+    /// Corrupt slot files already reported (slot|size|mtime): one log line per bad file.
+    mutable std::unordered_set<std::string> m_reportedBadSlots;
+    /// F2 (B-1): F5 on a visible window saves after this frame's story is drawn (the
+    /// thumbnail is read from the renderer then), not in the middle of input handling.
+    bool m_pendingQuickSave = false;
+    void playerQuickSave();
+    /// F2 (B-15): a preference change that cannot be kept (read-only profile) or a profile
+    /// write that failed is told to the player ONCE per session.
+    void notifyProfileNotSaved();
+    bool m_profileNoticeShown = false;
+    uint32_t m_seenProfileFlushFailures = 0;
+    /// F2 (B-7): puts the project's declared variables into the Lua sandbox (those `present`
+    /// does not already hold) and builds the New Game root state carrying them.
+    void seedDeclaredVariables(const Rowl::State::VariableMap* present);
+    std::shared_ptr<const Rowl::State::GameState> createStartState() const;
+    void playerQuickLoad();
+    // D06-1: the last advanceStory moved the cursor through a condition
+    // redirect (advanceToChoice must still report the choice as taken).
+    bool m_lastAdvanceRedirected = false;
     uint64_t m_startPresentationStepId = 1;
     // Audio components are applied while a scene is refreshed as well as when
     // a story node is entered. Keep the entry marker separate so inspector
     // preview refreshes cannot retrigger a one-shot SFX.
     uint64_t m_lastSfxPlaybackNodeId = 0;
+    // D03-1: the active node's voice_track (first non-empty audio component
+    // value; refreshed by every component scene update, replay or not, so a
+    // load/rewind still knows the line has a full voice and keeps the
+    // typewriter blips quiet) and the node whose clip was started on node
+    // entry (the clip is cut when a different node is entered).
+    std::string m_activeNodeVoiceTrack;
+    uint64_t m_voiceClipNodeId = 0;
+    // F1 (A-6): entry sounds (sfx list + the node's voice clip) that Skip held
+    // back; played by playDeferredEntrySounds once Skip stops on that node.
+    uint64_t m_deferredEntryNodeId = 0;
+    std::vector<std::string> m_deferredEntrySfx;
+    bool m_deferredEntryVoice = false;
+    // F1 (karar 6): the Voice channel currently carries a clip replayed from
+    // the backlog; closing the backlog stops it (the node's own voice is not
+    // restarted).
+    bool m_backlogReplayActive = false;
 
     // E2b sunum-durumu (canli listeye dokunmaz; yalnizca kare-birlestirmede
     // okunur — bkz. ustteki metot blogu).
@@ -514,6 +803,42 @@ private:
     bool m_pauseConfirmQuit = false;
     PauseMenuMode m_pauseMode = PauseMenuMode::Main;
     int m_pauseSelected = 0;
+    // D03-2: backlog page. m_pauseSelected is the selected history index;
+    // m_backlogTop the first visible one (kept consistent by backlogEnsureVisible,
+    // mutable because the const view builder re-fits it after a font/scale change).
+    /// Shared tail of rewind()/rewindNodes(): restores `rewound` (scene, Lua,
+    /// audio, playtime) with the load-style rollback; `what`/`amount` label logs.
+    bool applyRewoundState(std::shared_ptr<const Rowl::State::GameState> rewound,
+                           const char* what, uint64_t amount);
+    mutable int m_backlogTop = 0;
+    // F1 (A-5): first visible line inside the selected (long) row; reset
+    // whenever the selection moves.
+    mutable int m_backlogLineOffset = 0;
+    // Wrapped lines of the selected row, memoized (full text, up to 64 KiB).
+    struct BacklogWrapCache {
+        uint64_t identity = 0;
+        std::string locale;
+        int index = -1;
+        float scale = 0.0f;
+        bool haveFont = false;
+        std::vector<std::string> lines;
+        bool valid = false;
+    };
+    mutable BacklogWrapCache m_backlogWrapCache;
+    // F1 (A ürün kararı 1): option text of the choice just answered; consumed
+    // by recordActiveDialogueHistory as a "choice" row of the NEXT node.
+    std::string m_pendingChoiceAnswer;
+    // F1 (A-3/A-4): the backlog view is a memoized copy of the persistent
+    // GameState list, with content-id rows re-resolved in the active locale.
+    // Key = list identity + locale; rebuilt only when either changes.
+    mutable std::vector<Rowl::State::DialogueHistoryEntry> m_historyView;
+    mutable uint64_t m_historyViewIdentity = 0;
+    mutable std::string m_historyViewLocale;
+    mutable bool m_historyViewValid = false;
+    bool m_backlogFromPause = false;
+    // D05-2: the Preferences page was opened from the pause main page (Back and
+    // Esc return there); false = opened from the title screen.
+    bool m_prefsFromPause = false;
     int32_t m_activeQuickSlot = 0;
     // A2b: pause slot-page occupancy cache. getPauseMenuView runs per UI
     // refresh (up to every frame from the editor preview); 10 slots x 2
@@ -524,14 +849,24 @@ private:
     mutable bool m_pauseSlotCacheValid = false;
     // D02: the memo now carries metadata per quick slot (0..9) plus the
     // Continue candidate scanned over every valid slot (0..99).
-    mutable std::array<PauseSlotInfo, 10> m_pauseSlotInfo{};
+    mutable std::array<PauseSlotInfo, 100> m_pauseSlotInfo{};
     mutable int m_continueSlot = -1;
     mutable std::string m_continueSavedAt;
     // D02: slots whose load failed this session (graph mismatch etc.) are
     // shown as corrupt and skipped by Continue until they are saved again.
     mutable std::bitset<100> m_slotLoadFailed;
     bool m_titleActive = false;
-    std::string m_titleHint;
+    /// D-K3: the title screen has been shown in this engine session (the packaged
+    /// player opens it by default). Only such a session returns to it when the
+    /// story ends; editor previews and C API hosts that never open a title keep
+    /// the old "stay on the last frame" behaviour.
+    bool m_titleSessionSeen = false;
+    /// F2 (D-O1): seconds during which a title opened by the end of the story ignores
+    /// confirm input (a player mashing Enter/Space/click on the last line would otherwise
+    /// confirm New Game / Continue on the very title that has just appeared).
+    float m_titleInputLock = 0.0f;
+    static constexpr float kEndOfStoryTitleInputLock = 0.6f;
+    UiText m_titleHint = UiText::None;  // D05-1: a key, resolved per view (locale-safe)
     bool m_windowAudioSuspended = false;
     // #160: stall-signal edge latch. Set on the first zero-dt step observed
     // while a camera tween is in flight, cleared when the tween progresses
@@ -539,6 +874,26 @@ private:
     // idle step.
     bool m_cameraStallSignalled = false;
     float m_autoAdvanceElapsed = 0.0f;
+    // D04-1 (see setAutoMode): player-driven Auto / Skip state. Session-only
+    // (the persistent bits live in the profile). m_skipHold = Ctrl is down.
+    bool m_autoMode = false;
+    bool m_skipActive = false;
+    bool m_skipHold = false;
+    SkipPolicy m_skipPolicy = SkipPolicy::ReadOnly;
+    float m_autoDelay = 2.0f;
+    float m_autoWaitElapsed = 0.0f;
+    float m_autoWaitRemaining = 0.0f;
+    float m_skipStepCredit = 0.0f;
+    bool m_activeLinesReadBeforePresentation = true;
+    /// Recomputes m_activeLinesReadBeforePresentation from the profile's read
+    /// set. Must run BEFORE the presentation marks the lines read.
+    void refreshReadSnapshot();
+    /// Zeroes the Auto wait credit (manual advance, node change, load, rewind,
+    /// language change, title, new game).
+    void resetAutoWait();
+    void stepPlayerDrivers(float deltaTime, bool advancedThisStep);
+    void playDeferredEntrySounds();
+    float autoWaitSeconds() const;
     float m_textSpeedMultiplier = 1.0f;
     float m_autoAdvanceDelayOffset = 0.0f;
     // Faz 2 Dilim 4 total playtime: accumulated in step while playing and
@@ -565,8 +920,57 @@ private:
     /// Lua gate of a choice option ("" / "true" / "1" = open; fail-closed
     /// without a sandbox).
     bool choiceConditionHolds(const std::string& condition) const;
+    /// D06-1: node-entry "condition" components. Evaluates the current node's
+    /// conditions in order; the first false one with a valid
+    /// fail_target_node_id moves the cursor to that target (repeatedly, at
+    /// most 16 hops) BEFORE any entry effect runs. Call only on real entries
+    /// (advance, new game, graph mount) - never on load/rewind/restore.
+    void resolveNodeEntryConditions();
+    /// D07-1: the unlock side of a REAL node entry (never load / rewind / restore,
+    /// never a node a condition skipped): explicit "unlock" components plus the
+    /// automatic CG (background / character sprite) and music (bgm_track)
+    /// matches against the catalog. Called once the scene update succeeded.
+    void applyEntryUnlocks(const std::vector<nlohmann::json>& unlockComponents,
+                           const std::vector<nlohmann::json>& audioComponents);
     /// Author-enabled and its condition holds right now.
     bool choiceButtonSelectable(const Rowl::Render::ChoiceButtonRenderData& button) const;
+    /// D-K3: a manual advance (Enter / Space / click / swipe) on the finished last
+    /// node returns to the title screen - same path as the pause menu's "Ana Menü"
+    /// but without the confirmation (the story is over). Auto / Skip never reach it.
+    /// Returns true when it consumed the input.
+    bool tryEndOfStoryTitle();
+    bool titleInputLocked() const { return m_titleActive && m_titleInputLock > 0.0f; }
+    // D-K3 (engine_choice_focus.cpp): keyboard / hover navigation of a presented
+    // choice menu. Indices point into m_activeChoiceButtons.
+    std::vector<std::size_t> selectableChoiceIndices() const;
+    /// F2 (D-O3/D-D3): the menu's LIVE state in one place - per option "author-enabled and its
+    /// condition holds right now" and the geometry fitted to the text scale - computed once per
+    /// (buttons, Lua revision, window layout) and shared by drawing, keyboard focus, hover and
+    /// click. It used to be recomputed (Lua included) on every mouse-motion event, and the
+    /// drawn `enabled` was frozen when the scene was built while keyboard / click asked the
+    /// live condition (an option whose condition turned true later was clickable but invisible).
+    struct ChoiceLayoutCache {
+        bool valid = false;
+        uint64_t key = 0;
+        std::vector<Rowl::Render::ChoiceButtonRenderData> laidOut;  // enabled == selectable
+        uint64_t builds = 0;
+    };
+    mutable ChoiceLayoutCache m_choiceLayout;
+    const ChoiceLayoutCache& choiceLayout() const;
+    /// Focused option (-1 = none: the menu just opened, or the remembered option
+    /// stopped being selectable).
+    int focusedChoiceIndex() const;
+    /// A choice menu with at least one selectable option is on screen, unpaused.
+    bool choiceMenuActive() const;
+    void moveChoiceFocus(int direction);
+    /// Enter/Space on a choice menu: completes a typing line first, then picks the
+    /// focused option. Returns false when there is no choice menu to answer.
+    bool activateFocusedChoice();
+    /// Digit n (1-based) picks the n-th selectable option. Returns false when no
+    /// choice menu is on screen (the digit keeps its quick-save-slot meaning).
+    bool selectChoiceByNumber(int number);
+    /// Pointer hover: moves the focus to the selectable option under the pointer.
+    void focusChoiceAt(float physicalX, float physicalY);
     // MS-6 pause-menu internals: keyboard and pointer funnels share these.
     int pauseMenuRowCount() const;
     void pauseMenuMoveSelection(int direction);
@@ -574,10 +978,51 @@ private:
     void menuActivateSelected();
     void menuChooseSlot(int32_t slotIndex);
     void menuBack();
+    // D03-2 (engine_backlog.cpp)
+    struct BacklogCell {
+        std::vector<std::string> lines;
+        float height = 0.0f;
+        // F1 (A-5): the SELECTED row shows its whole text; when it outgrows the
+        // list area `lines` is a window of `fitLines` lines starting at
+        // m_backlogLineOffset out of `totalLines`.
+        size_t totalLines = 0;
+        size_t fitLines = 0;
+    };
+    BacklogCell backlogCell(size_t index) const;
+    void backlogEnsureVisible() const;
+    void backlogMoveSelection(int direction);
+    void backlogScroll(float deltaY);
+    void backlogActivateSelected();
+    void backlogClose();
+    bool backlogClick(float virtualX, float virtualY);
+    PauseBacklogView buildBacklogView() const;
+    // D07-2 (engine_extras_menu.cpp)
+    void extrasMove(int direction);
+    void extrasAdjust(int direction);
+    void extrasActivateSelected();
+    void extrasBack();
+    void extrasClick(float virtualX, float virtualY);
+    void extrasScroll(float deltaY);
+    void extrasEnsureVisible() const;
+    int extrasItemCount() const;
+    void galleryOpenViewer(int index);
+    void galleryStepViewer(int direction);
+    void musicRoomToggle(int index);
+    void playBgmWithDefaultTransition(const std::string& track);
+    /// Ends the Ekstralar session: stops a music-room track and brings the
+    /// pre-Extras sound back (GameState audio, or silence without a state).
+    void endExtrasSession();
+    PauseExtrasView buildExtrasView() const;
+    PauseMenuView getExtrasMenuView() const;
+    void updateUnlockToast(float deltaTime);
+    int titleRowCount() const;
+    int titlePrefsRow() const;
     // D02 (engine_title_menu.cpp)
     void ensureSlotCache() const;
     void titleActivateSelected();
     void titleBack();
+    /// D05-2: leaves the Preferences page for where it was opened from.
+    void leavePreferencesPage();
     bool titleLoadSlot(int32_t slotIndex);
     void titleStartNewGame();
     bool titleContinue();
@@ -585,8 +1030,26 @@ private:
     void markPresentedDialoguesRead();
     int pauseMenuValueRow() const;
     void persistPauseMenuPreference(int row);
+    /// D05-2: Language row — cycles the game's supported locales (same path as
+    /// RowlEngine_SetLocale incl. refreshActiveDialogueLocalization); no-op on a
+    /// game with fewer than two switchable locales.
+    void cyclePreferenceLanguage(int direction);
+    /// F2 (B-13): the Tercihler "Dil" row exists only when the player can actually change the
+    /// language (the project declares locales and more than one is supported). A single-language
+    /// game's row was a dead control.
+    bool preferenceLanguageRowShown() const;
+    /// Page row (as listed) -> the logical preference row it stands for (skips the hidden Dil row).
+    int logicalPreferenceRow(int pageRow) const;
+    std::string preferenceLanguageText() const;
     PauseMenuView getTitleMenuView() const;
     float pauseMenuVolume(int row) const;
+    /// T2: slider position 0..1 of a Preferences numeric row (value-row numbers 3..8), -1 otherwise.
+    float pauseMenuFraction(int row) const;
+    /// T2: sets that row from a slider position (quantised to the row's own step) and persists it.
+    void pauseMenuSetFraction(int row, float fraction);
+    /// T2: pointer drag of a Preferences slider (value-row number, -1 none).
+    int m_sliderDragRow = -1;
+    void sliderDragTo(float physicalX);
     /// #86: setting a volume row also commits the mixer to the game state
     /// (see commitMixerVolumesToGameState) — pause-menu mixing survives
     /// save/load/rewind instead of staying session-local.

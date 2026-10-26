@@ -73,7 +73,19 @@ struct RuntimeInputEvent {
         // TEXT_EDITING_CANDIDATES dispatcher'da düşüyordu (composition
         // bacağı); committed-text (TextInput) gibi bilinçli tüketilir,
         // hikâye eylemi taşımaz (bkz. handleRuntimeInput).
-        TextEditing
+        TextEditing,
+        // D03-2: backlog (Gecmis) access. Backlog = B key; SecondaryClick =
+        // right mouse button. Engine routes them by pause/title state.
+        Backlog,
+        SecondaryClick,
+        // D04-1: player Auto / Skip. ToggleAuto = A, ToggleSkip = S, SkipHold =
+        // Ctrl pressed (its release arrives as KeyUp with the Ctrl keycode).
+        ToggleAuto,
+        ToggleSkip,
+        SkipHold,
+        // F1 (A-9): the window lost input focus; held-key state (Ctrl Skip-hold)
+        // ends because the matching KeyUp will never arrive.
+        FocusLost
     };
 
     Type type;
@@ -92,6 +104,17 @@ struct RuntimeInputEvent {
     int32_t compositionStart = -1;
     int32_t compositionLength = -1;
 };
+
+/// Event builder that names every field: aggregate init of `{Type, x, y}` leaves
+/// the later members out and trips -Wmissing-field-initializers (D-K3).
+inline RuntimeInputEvent makeRuntimeInput(RuntimeInputEvent::Type type, float x = 0.0f,
+                                          float y = 0.0f) {
+    RuntimeInputEvent event{};
+    event.type = type;
+    event.x = x;
+    event.y = y;
+    return event;
+}
 
 /// Minimum host boundary shared by desktop and future mobile shells. Keep this
 /// contract restricted to resources and signals that genuinely differ by host.

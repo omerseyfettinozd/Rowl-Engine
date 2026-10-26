@@ -298,10 +298,8 @@ public sealed class LocalizationService
             return "Native handle is not available; profile language is unchanged.";
         string active = GetNativeLocale(handle);
         string normalized = PlayerProfile.NormalizeLanguage(active);
-        if (!string.Equals(normalized, active, StringComparison.Ordinal) &&
-            !PlayerProfile.SupportedLanguages.Contains(
-                active, StringComparer.Ordinal))
-            return $"Native locale '{active}' is outside the known languages; profile language is unchanged.";
+        if (normalized.Length == 0)
+            return $"Native locale '{active}' is not a valid language tag; profile language is unchanged.";
         Profile.Language = normalized;
         return null;
     }

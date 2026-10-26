@@ -729,6 +729,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
         }
         if (channel == AudioChannelType::Voice) {
             m_isVoicePlaying = true;
+            m_currentVoicePath = assetPath;
+            ++m_voiceClipCount;
             triggerVoiceDucking(true);
         }
         // M3b: outage'da YENİ Sfx/Ui niyeti sessiz düşüyordu — fail-loud
@@ -1013,6 +1015,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
             // SFX must not alter the active DSP state.
             if (channel == AudioChannelType::Voice) {
                 m_isVoicePlaying = true;
+                m_currentVoicePath = assetPath;
+                ++m_voiceClipCount;
                 triggerVoiceDucking(true);
             }
             applyDspFilter(filter);
@@ -1131,6 +1135,8 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                                    floatSpec.channels, floatSpec.freq);
             } else if (channel == AudioChannelType::Voice) {
                 m_isVoicePlaying = true;
+                m_currentVoicePath = assetPath;
+                ++m_voiceClipCount;
                 triggerVoiceDucking(true);
             }
             applyDspFilter(filter);
@@ -1255,8 +1261,24 @@ void AudioEngine::stopAll() {
     m_isUiPlaying = false;
     m_currentUiPath.clear();
     m_isVoicePlaying = false;
+    m_currentVoicePath.clear();
     triggerVoiceDucking(false);
     ROWL_LOG_INFO("[AudioEngine] All audio channels stopped.");
+}
+
+void AudioEngine::stopVoice() {
+    // Yalniz Voice akisi: kuyruktaki klip/blip atilir, durum + ducking
+    // birakilir. Akis yoksa (cihaz yok / henuz acilmadi) yalniz durum
+    // temizlenir. stopAll'dan farki: diger kanallara dokunmaz.
+    if (m_voiceStream && !SDL_ClearAudioStream(m_voiceStream)) {
+        ROWL_LOG_WARN("[AudioEngine] Failed to clear voice stream: " +
+                      std::string(SDL_GetError()));
+    }
+    m_currentVoicePath.clear();
+    if (m_isVoicePlaying) {
+        m_isVoicePlaying = false;
+        triggerVoiceDucking(false);
+    }
 }
 
 void AudioEngine::setBgmVolume(float volume) {
@@ -1498,6 +1520,7 @@ void AudioEngine::shutdown() {
     m_uiSampleOffset = 0;
     m_isUiPlaying = false;
     m_currentUiPath.clear();
+    m_currentVoicePath.clear();
     resetTelemetry();  // D05: atomik üyeler toptan-atanamaz (derlenmez)
     m_bgmSampleOffset = 0;
 

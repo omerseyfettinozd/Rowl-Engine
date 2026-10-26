@@ -1,11 +1,14 @@
 #include "rowl/c_api.h"
 #include "rowl/platform/crash_handler.hpp"
+#include "rowl/player/chapter_prefetch_driver.hpp"
+#include "rowl/state/profile_language.hpp"
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <string>
 #include <system_error>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
 #include <charconv>
 #include <cstdio>
 #include <cstdint>
@@ -154,12 +157,12 @@ void printGameIdentityBlock(const nlohmann::json& info) {
 // D01d: applies the stored player preferences with the existing public setters
 // and returns "key=value" pairs for the ones applied.
 //
-// Not applied here (no native setter yet - D02/D05): auto_advance_delay (the
-// native knob is an additive per-line offset, not an absolute delay),
-// skip_mode, auto_enabled. language is applied only when it is not the profile
-// default "en": the profile cannot tell "never chosen" from "chose en", and a
-// project whose own default locale is not "en" must keep it until the player
-// explicitly picks another language (explicit marker: D02).
+// D04-1: auto_enabled, skip_mode and auto_advance_delay go through the native
+// player-driver setters (the delay is the player's absolute Auto base delay,
+// clamped by the engine to [0, 10] s; the old per-line offset knob is unrelated).
+// D05-1: language "" means the player never chose, so the game's own default
+// locale stays; any chosen tag ("en" included) is applied when the game supports
+// it (SetLocale decides) and otherwise logged, keeping the default.
 std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
     std::vector<std::string> applied;
     const nlohmann::json status = playerParseObject(playerQueryText(engine, RowlEngine_ProfileGetStatusJson));
@@ -202,6 +205,19 @@ std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
         RowlEngine_SetTextSpeedMultiplier(engine, value);
         note("text_speed_multiplier", floatText(value));
     }
+    if (number("auto_advance_delay", value)) {
+        if (RowlEngine_SetAutoDelay(engine, value) == ROWL_RESULT_OK) {
+            note("auto_advance_delay", floatText(std::clamp(value, 0.0f, 10.0f)));
+        }
+    }
+    if (prefs.value("auto_enabled", false)) {
+        if (RowlEngine_SetAutoMode(engine, 1) == ROWL_RESULT_OK) note("auto_enabled", "true");
+    }
+    {
+        const std::string skipMode = prefs.value("skip_mode", std::string{"read_only"});
+        const int policy = skipMode == "off" ? 0 : (skipMode == "all" ? 2 : 1);
+        if (RowlEngine_SetSkipPolicy(engine, policy) == ROWL_RESULT_OK) note("skip_mode", skipMode);
+    }
     if (number("text_scale", value)) {
         RowlEngine_SetTextScale(engine, value);
         note("text_scale", floatText(RowlEngine_GetTextScale(engine)));
@@ -222,16 +238,15 @@ std::vector<std::string> applyStoredPreferences(RowlEngineHandle engine) {
         RowlEngine_SetSfxPoolDepth(engine, it->get<int>());
         note("sfx_pool_depth", std::to_string(RowlEngine_GetSfxPoolDepth(engine)));
     }
-    const std::string language = prefs.value("language", std::string{"en"});
-    if (language != "en") {
-        const std::string current = playerQueryText(engine, RowlEngine_GetLocale);
-        if (language != current) {
-            if (RowlEngine_SetLocale(engine, language.c_str()) == ROWL_RESULT_OK) {
-                note("language", playerQueryText(engine, RowlEngine_GetLocale));
-            } else {
-                std::cout << "[Player] Stored language '" << language
-                          << "' is not available in this game; keeping '" << current << "'.\n";
-            }
+    const std::string current = playerQueryText(engine, RowlEngine_GetLocale);
+    const std::string language =
+        Rowl::State::profileLanguageToApply(prefs.value("language", std::string{}), current);
+    if (!language.empty()) {
+        if (RowlEngine_SetLocale(engine, language.c_str()) == ROWL_RESULT_OK) {
+            note("language", playerQueryText(engine, RowlEngine_GetLocale));
+        } else {
+            std::cout << "[Player] Stored language '" << language
+                      << "' is not available in this game; keeping '" << current << "'.\n";
         }
     }
     return applied;
@@ -307,12 +322,22 @@ static void printHelp(const char* progName) {
               << "  F9                       Quick Load (active slot)\n"
               << "  0-9                      Select the active quick-save slot\n"
               << "  Backspace / Z            Rewind 1 step back in history\n"
+              << "  A                        Auto: lines advance by themselves (remembered)\n"
+              << "  S / hold Ctrl            Skip on/off / skip while held (read lines by default)\n"
+              << "  B / Mouse wheel up       Backlog (Gecmis): past lines, replay a line's voice\n"
               << "  Escape / P               Pause menu (save/load slots, volumes,\n"
-              << "                           text speed, exit confirmation)\n"
+              << "                           text speed, backlog, exit confirmation)\n"
               << "Pause menu:\n"
               << "  Up / Down / Click        Select item    Left / Right  Adjust value\n"
               << "  Enter / Space / Click    Confirm        Escape        Back / resume\n"
               << "  Exit needs a second confirmation so a stray Escape never quits.\n"
+              << "  Title > Preferences      Volumes, text speed, Otomatik Hizi (auto delay),\n"
+              << "                           Atlama (skip: Okunan / Hepsi / Kapali)\n"
+              << "  AUTO / SKIP badge        Top-right corner while Auto or Skip is on\n"
+              << "Backlog:\n"
+              << "  Up / Down / Wheel        Move through the lines (newest at the bottom)\n"
+              << "  Enter / Space / Click    Replay the selected line's voice (if it has one)\n"
+              << "  Escape / B / Right click Close    Wheel down on the newest line  Close\n"
               << "=========================================================================\n";
 }
 
@@ -539,6 +564,13 @@ int rowlPlayerMain(int argc, char* argv[]) {
     }
     refreshCrashSnapshot(engine);
 
+    // D06-3: asset prefetch. Feeds the chapter loader from the game's own
+    // files (package or loose Assets) and warms the next scene's assets from
+    // the frame hook below. A warm-up only: failures are logged, never fatal.
+    Rowl::Player::ChapterPrefetchDriver prefetch(
+        2.0F, [](const std::string& line) { std::cout << line << "\n"; });
+    if (!gpuSmokeTest) prefetch.attach(engine);
+
     // D01d: the player's stored preferences (volumes, text speed, ...) take
     // effect before the first frame. Only the existing public setters are used.
     {
@@ -608,6 +640,24 @@ int rowlPlayerMain(int argc, char* argv[]) {
             }
             std::cout << "[Player] Package smoke title: ok continue_slot=" << continueSlot << "\n";
         }
+        // D06-3: prefetch drives from the same frame hook as the real loop.
+        // Frames are stepped until the queue drains (bounded), then the
+        // outcome is printed for the packaged-player test.
+        for (int frame = 0; frame < 600 && (frame == 0 || prefetch.pumping()); ++frame) {
+            RowlEngine_Step(engine, 1.0F / 60.0F);
+            prefetch.onFrame(engine);
+        }
+        {
+            const Rowl::Player::ChapterPrefetchDriver::Stats& stats = prefetch.stats();
+            const nlohmann::json progress = Rowl::Player::ChapterPrefetchDriver::progress(engine);
+            std::cout << "[Player] Package smoke prefetch: chapters_fed="
+                      << (stats.chaptersFed ? "true" : "false") << " fed_files=" << stats.fedFiles
+                      << " windows=" << stats.triggers << " refused=" << stats.refusedTriggers
+                      << " total=" << playerFieldText(progress, "total_assets", "0")
+                      << " ready=" << playerFieldText(progress, "ready_assets", "0")
+                      << " missing=" << playerFieldText(progress, "missing_assets", "0")
+                      << " complete=" << playerFieldText(progress, "complete", "false") << "\n";
+        }
         std::cout << "[Player] Package smoke frame rendered from VFS story graph.\n";
     } else if (gpuSmokeTest) {
         // This travels through the same standalone window, VFS-mounted atlas,
@@ -620,8 +670,10 @@ int rowlPlayerMain(int argc, char* argv[]) {
         if (titleState == "title" && RowlEngine_OpenTitleScreen(engine) != ROWL_RESULT_OK) {
             std::cerr << "[Player] Title screen could not be opened; starting the story.\n";
         }
-        // Start standalone interactive game loop
-        RowlEngine_Run(engine);
+        // Start standalone interactive game loop (D06-3: with the prefetch
+        // hook; same guards as RowlEngine_Run).
+        RowlEngine_RunWithFrameCallback(engine, &Rowl::Player::ChapterPrefetchDriver::frameCallback,
+                                        &prefetch);
     }
 
     // Clean teardown

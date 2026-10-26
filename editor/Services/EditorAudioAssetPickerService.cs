@@ -25,7 +25,7 @@ public static class EditorAudioAssetPickerService
 
     /// <summary>
     /// Assigns a selected audio file name and optional volume to an AudioComponentViewModel.
-    /// Supports trackType: "bgm" or "sfx". Clamps volume between 0.0f and 1.0f.
+    /// Supports trackType: "bgm", "sfx" or "voice". Clamps volume between 0.0f and 1.0f.
     /// </summary>
     public static bool ApplyAudioTrackToComponent(
         AudioComponentViewModel? component,
@@ -46,6 +46,11 @@ public static class EditorAudioAssetPickerService
         {
             component.SfxTrack = fileName;
             logAction?.Invoke($"Selected SFX track '{fileName}' for Audio Component");
+        }
+        else if (normalizedType == "voice")
+        {
+            component.VoiceTrack = fileName;
+            logAction?.Invoke($"Selected voice track '{fileName}' for Audio Component");
         }
         else
         {
@@ -83,7 +88,7 @@ public static class EditorAudioAssetPickerService
 
             var files = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = $"Select {(trackType.Equals("bgm", StringComparison.OrdinalIgnoreCase) ? "BGM" : "SFX")} Audio Track (Will auto-copy to Assets/audio)",
+                Title = $"Select {(trackType.Equals("bgm", StringComparison.OrdinalIgnoreCase) ? "BGM" : trackType.Equals("voice", StringComparison.OrdinalIgnoreCase) ? "voice" : "SFX")} Audio Track (Will auto-copy to Assets/audio)",
                 SuggestedStartLocation = startFolder,
                 AllowMultiple = false,
                 FileTypeFilter = new[]

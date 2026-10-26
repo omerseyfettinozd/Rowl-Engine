@@ -36,6 +36,8 @@ PREFETCH_WRITERS = {
     "RowlEngine_AppendChapterFileJson",
     "RowlEngine_LoadChapter",
     "RowlEngine_UnloadChapter",
+    # D06-3: oyuncu bolum dosyalarini VFS'ten besler (yazici: loader'i degistirir).
+    "RowlEngine_FeedChaptersFromVfs",
     "RowlEngine_PrefetchChapterAssets",
     "RowlEngine_PumpPrefetch",
 }

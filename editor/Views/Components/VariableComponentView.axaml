@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.VariableComponentView"
+             x:DataType="comp:VariableComponentViewModel">
+  <Border Classes="card" ClipToBounds="True" Margin="0,4">
+    <StackPanel>
+      <!-- Bileşen kartı başlığı (diğer kartlarla aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü. -->
+      <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+          <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+          <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                        Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+            <TextBlock Classes="cardTitle" Text="{l:T Component.Variable.Title}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{l:T Component.Variable.Title}"/>
+          </ToggleButton>
+          <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+          <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                <Separator/>
+                <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+      <StackPanel IsVisible="{Binding IsExpanded}" Spacing="6" Margin="8,6">
+        <TextBlock Text="{l:T Component.Variable.Key.Label}" Classes="fieldLabel"/>
+        <TextBox x:Name="KeyBox" Text="{Binding Key}" Watermark="{l:T Component.Variable.Key.Watermark}" />
+        <TextBlock IsVisible="{Binding KeyEmpty}" Text="{l:T Component.Variable.Key.Empty.Warning}"
+                   Foreground="{DynamicResource ErrorBrush}" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+        <TextBlock Text="{l:T Component.Variable.Operation.Label}" Classes="fieldLabel"/>
+        <ComboBox x:Name="OperationPicker"
+                  ItemsSource="{x:Static comp:VariableComponentViewModel.OperationOptions}"
+                  SelectedItem="{Binding SelectedOperationOption}"
+                  HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="comp:VariableOperationOption">
+              <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="{l:T Component.Variable.Value.Label}" Classes="fieldLabel"/>
+        <TextBox x:Name="ValueBox" Text="{Binding Value}" Watermark="{l:T Component.Variable.Value.Watermark}" />
+        <TextBlock IsVisible="{Binding AddValueInvalid}" Text="{l:T Component.Variable.Add.Invalid.Warning}"
+                   Foreground="{DynamicResource ErrorBrush}" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+        <TextBlock Text="{l:T Component.Variable.Hint}" Classes="muted" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

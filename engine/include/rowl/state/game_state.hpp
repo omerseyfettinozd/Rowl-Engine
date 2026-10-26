@@ -46,7 +46,6 @@ struct SaveMetadata {
 };
 
 /// A player-visible line kept independently from the rewind-chain internals.
-/// The bounded vector is structurally shared until a new line is appended.
 struct DialogueHistoryEntry {
     uint64_t nodeId = 0;
     std::string speaker;
@@ -55,6 +54,63 @@ struct DialogueHistoryEntry {
     /// Persistent Faz 2 content identity (UUID form); empty when the
     /// presented line predates content_id migration.
     std::string contentId;
+    /// D03-1: voice clip path (VFS/asset path of the node's voice_track) the
+    /// line was presented with; empty when the node had no voice. Optional
+    /// "voice" key in saves - older saves decode to empty.
+    std::string voice;
+    /// F1 (A ürün kararı 1): the row is the answer the player picked at a
+    /// choice (rendered "▸ <option>", no speaker, no voice). Optional
+    /// "choice" key in saves - older saves decode to false. For a choice row
+    /// `dialogue` holds the option text and `contentId` the option's id.
+    bool choice = false;
+};
+
+/// F1 (A-3): the bounded dialogue backlog as a PERSISTENT (immutable,
+/// structurally shared) list. Appending allocates exactly one node and shares
+/// every older node with the previous rewind link, so a state chain of N links
+/// costs O(N) entries instead of O(N * kMaxEntries) vector copies (the old
+/// per-link copy was ~95 KB per advance - 778 MB after 8000 advances).
+/// Value semantics: copying is a shared_ptr copy. The view is the newest
+/// min(total, kMaxEntries) entries; older nodes stay linked (they are also
+/// reachable from older rewind links, which own them anyway).
+class DialogueHistory {
+public:
+    /// Player-visible bound (the backlog shows at most this many rows).
+    static constexpr size_t kMaxEntries = 500;
+
+    DialogueHistory() = default;
+    /// Builds a list from entries oldest->newest (keeps the newest kMaxEntries).
+    explicit DialogueHistory(const std::vector<DialogueHistoryEntry>& entries);
+
+    size_t size() const noexcept;
+    bool empty() const noexcept { return size() == 0; }
+    /// Entry `index` of the visible view (0 = oldest visible). O(size - index).
+    /// Out of range throws std::out_of_range (like std::vector::at).
+    const DialogueHistoryEntry& at(size_t index) const;
+    const DialogueHistoryEntry& operator[](size_t index) const { return at(index); }
+    /// Newest entry; the list must not be empty.
+    const DialogueHistoryEntry& back() const;
+
+    /// New list sharing every existing node plus `entry` (O(1) memory).
+    DialogueHistory appended(DialogueHistoryEntry entry) const;
+
+    /// Visible view copied oldest->newest.
+    std::vector<DialogueHistoryEntry> toVector() const;
+
+    /// Identity of the newest node: a process-unique serial (0 when empty), never
+    /// reused after a node is freed (an address could be). Equal identity means
+    /// an identical list; used to memoize views.
+    uint64_t identity() const noexcept;
+    /// Number of nodes reachable from this list (including trimmed ones).
+    size_t totalNodes() const noexcept;
+    /// Appends the address of every node of the visible view to `out`
+    /// (measurement hook: distinct addresses across a rewind chain = real
+    /// entry storage).
+    void collectNodeAddresses(std::vector<const void*>& out) const;
+
+private:
+    struct Node;
+    std::shared_ptr<const Node> tail_;
 };
 
 // GCC 16 false positive -Warray-bounds with shared_ptr template internals
@@ -83,6 +139,12 @@ struct GameState {
     uint64_t stepId = 0;
     uint64_t activeNodeId = 101;
     uint32_t typewriterIndex = 0;
+    // F1 (A-1): true on the link a real node ENTRY created (the player
+    // arrived at activeNodeId). A node's entry effects (variable, script,
+    // audio commits) add further links with the same activeNodeId and
+    // nodeEntry=false; rewindNodes() treats [entry link .. last commit] as one
+    // node visit. Optional "node_entry" key in saves (absent = false).
+    bool nodeEntry = false;
 
     // String members
     std::string activeBackground = "bg_beach_sunset.png";
@@ -117,18 +179,24 @@ struct GameState {
 
     // Smart pointers last
     std::shared_ptr<const VariableMap> variables = std::make_shared<VariableMap>();
-    std::shared_ptr<const std::vector<DialogueHistoryEntry>> dialogueHistory =
-        std::make_shared<std::vector<DialogueHistoryEntry>>();
+    // F1 (A-3): persistent list shared between rewind links (see DialogueHistory).
+    DialogueHistory dialogueHistory;
     std::shared_ptr<const GameState> previousState = nullptr;
 
     std::string getVariable(const std::string& key, const std::string& defaultValue = "") const;
 
     static std::shared_ptr<const GameState> createInitialState(uint64_t startNodeId = 101);
+    /// F2 (B-7): the root step of a New Game with the project's declared variables already set
+    /// (reserved names dropped, as in every other write path).
+    static std::shared_ptr<const GameState> createInitialState(
+        uint64_t startNodeId, const std::vector<std::pair<std::string, std::string>>& declaredVariables);
     static std::shared_ptr<const GameState> createNextState(
         const std::shared_ptr<const GameState>& current,
         uint64_t nextNodeId,
         const std::string& varKey = "",
-        const std::string& varValue = ""
+        const std::string& varValue = "",
+        // F1: set by the engine's real node-entry transition only.
+        bool nodeEntry = false
     );
     static std::shared_ptr<const GameState> createNextStateWithVariables(
         const std::shared_ptr<const GameState>& current,
@@ -153,6 +221,18 @@ struct GameState {
     static std::shared_ptr<const GameState> rewind(
         const std::shared_ptr<const GameState>& current,
         uint64_t stepsToRewind = 1
+    );
+    /// F1 (A-1): steps back over whole NODE visits and lands on the LAST link
+    /// of the previous visit - i.e. the state after every entry commit of the
+    /// previous node (variables, script, audio, history line). One player
+    /// "back" press = one node, however many links the node's entry wrote.
+    /// A visit starts at a link with nodeEntry=true or where activeNodeId
+    /// changes. Returns nullptr when there is no earlier node (the chain's
+    /// first node cannot be rewound out of); if `nodes` exceeds the available
+    /// visits the oldest reachable visit is returned.
+    static std::shared_ptr<const GameState> rewindNodes(
+        const std::shared_ptr<const GameState>& current,
+        uint64_t nodes = 1
     );
     static std::shared_ptr<const GameState> withDialogueHistory(
         const std::shared_ptr<const GameState>& current,

@@ -243,7 +243,7 @@ void test_rc_soak_and_data_safety() {
             }
             host->lifecycle = Rowl::Platform::LifecycleState::Active;
             host->focus = Rowl::Platform::AudioFocus::Granted;
-            host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+            host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
             for (int i = 0; i < 5; ++i) engine.step(1.0f / 60.0f);
             if (!ringContains(engine.getCurrentNodeId()) ||
                 engine.getAudio()->isOutputSuspended()) {
@@ -294,9 +294,7 @@ void test_rc_soak_and_data_safety() {
                     exit(1);
                 }
                 expectedStep = savedProbe.state->stepId;
-                expectedHist = savedProbe.state->dialogueHistory
-                                   ? savedProbe.state->dialogueHistory->size()
-                                   : 0;
+                expectedHist = savedProbe.state->dialogueHistory.size();
                 if (savedProbe.state->activeNodeId != expected) {
                     std::cerr << "N-stress slot node disagrees at iteration " << i
                               << std::endl;
@@ -332,9 +330,8 @@ void test_rc_soak_and_data_safety() {
             }
             if (deepCheck) {
                 const auto loadedProbe = probe.loadSlotDetailed(slot);
-                const size_t loadedHist = (loadedProbe.succeeded() && loadedProbe.state &&
-                                           loadedProbe.state->dialogueHistory)
-                                              ? loadedProbe.state->dialogueHistory->size()
+                const size_t loadedHist = (loadedProbe.succeeded() && loadedProbe.state)
+                                              ? loadedProbe.state->dialogueHistory.size()
                                               : static_cast<size_t>(-1);
                 if (!loadedProbe.succeeded() || !loadedProbe.state ||
                     loadedProbe.state->stepId != expectedStep ||
@@ -596,7 +593,7 @@ void test_rc_soak_and_data_safety() {
         }
         host->lifecycle = Rowl::Platform::LifecycleState::Active;
         host->focus = Rowl::Platform::AudioFocus::Granted;
-        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+        host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
         for (int i = 0; i < 5; ++i) engine.step(1.0f / 60.0f);
         if (!engine.loadGameSlot(3) || !ringContains(engine.getCurrentNodeId())) {
             std::cerr << "Post-resume load of the mid-freeze save failed" << std::endl;

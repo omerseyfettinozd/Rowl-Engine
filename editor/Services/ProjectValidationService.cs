@@ -17,7 +17,7 @@ public sealed record ProjectValidationIssue(bool IsError, string Message, ulong?
 /// <summary>Pure graph checks shared by export and the editor's issue panel.</summary>
 internal static class ProjectValidationService
 {
-    internal static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
+    internal static readonly string[] AssetKeys = { "texture", "sprite", "bgm_track", "sfx_track", "voice_track", "path", "typewriter_sound", "custom_box_texture" };
 
     public static IReadOnlyList<ProjectValidationIssue> Validate(IEnumerable<NodeViewModel> nodes, IEnumerable<ConnectionViewModel> connections, string assetsPath, ulong? startNodeId = null)
         => Validate(nodes, connections, assetsPath, startNodeId, structure: null);
@@ -229,10 +229,18 @@ internal static class ProjectValidationService
     }
 
     private static void ValidateSingleAssetReference(ulong nodeId, string componentName, string asset, DiskIndex disk, List<ProjectValidationIssue> issues)
+        => ValidateAssetReference($"Node #{nodeId}", nodeId, componentName, asset, disk, issues);
+
+    /// <summary>
+    /// The single asset-reference check (outside path, converter-pending and unsupported formats,
+    /// missing / different-case file) for any owner: a node ("Node #5") or a catalog entry (D07-3,
+    /// "Extras catalog gallery 'id'"). <paramref name="who"/> starts every message.
+    /// </summary>
+    internal static void ValidateAssetReference(string who, ulong? nodeId, string componentName, string asset, DiskIndex disk, List<ProjectValidationIssue> issues)
     {
         if (IsOutsideProjectPath(asset))
         {
-            issues.Add(new(true, $"Node #{nodeId}: asset '{asset}' points outside the project Assets directory ({componentName}). Use an Assets-relative path.", nodeId, asset));
+            issues.Add(new(true, $"{who}: asset '{asset}' points outside the project Assets directory ({componentName}). Use an Assets-relative path.", nodeId, asset));
             return;
         }
 
@@ -247,12 +255,12 @@ internal static class ProjectValidationService
                 if (disk.ExactPaths.Contains(candidate))
                     return;
             }
-            issues.Add(new(false, $"Node #{nodeId}: asset '{asset}' ({componentName}) uses '{ext.ToLowerInvariant()}', which is converted to {ConvertedOutputHint(ext)} on import; no converted output found on disk yet.", nodeId, asset));
+            issues.Add(new(false, $"{who}: asset '{asset}' ({componentName}) uses '{ext.ToLowerInvariant()}', which is converted to {ConvertedOutputHint(ext)} on import; no converted output found on disk yet.", nodeId, asset));
             return;
         }
         if (MediaFormatCatalog.IsKnownUnsupportedMediaExtension(ext))
         {
-            issues.Add(new(true, $"Node #{nodeId}: asset '{asset}' ({componentName}) uses unsupported format '{ext.ToLowerInvariant()}'. Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.", nodeId, asset));
+            issues.Add(new(true, $"{who}: asset '{asset}' ({componentName}) uses unsupported format '{ext.ToLowerInvariant()}'. Accepted: PNG/JPEG/BMP/TGA, WAV/OGG, TTF/OTF.", nodeId, asset));
             return;
         }
 
@@ -262,9 +270,9 @@ internal static class ProjectValidationService
         string? insensitiveHit = candidates.Select(c => disk.InsensitivePaths.TryGetValue(c, out var actual) ? actual : null)
             .FirstOrDefault(hit => hit is not null);
         if (insensitiveHit is not null)
-            issues.Add(new(true, $"Node #{nodeId}: asset '{asset}' does not match any file exactly (found '{insensitiveHit}' with different letter case). Asset paths are case-sensitive; fix the reference.", nodeId, asset));
+            issues.Add(new(true, $"{who}: asset '{asset}' does not match any file exactly (found '{insensitiveHit}' with different letter case). Asset paths are case-sensitive; fix the reference.", nodeId, asset));
         else
-            issues.Add(new(true, $"Node #{nodeId}: missing asset '{asset}' ({componentName}).", nodeId, asset));
+            issues.Add(new(true, $"{who}: missing asset '{asset}' ({componentName}).", nodeId, asset));
     }
 
     private static string ConvertedOutputHint(string ext)

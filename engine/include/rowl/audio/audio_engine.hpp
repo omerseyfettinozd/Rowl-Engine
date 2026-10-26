@@ -116,6 +116,15 @@ public:
     const std::string& getCurrentBgmPath() const { return m_currentBgmPath; }
     bool isBgmPlaying() const { return m_isBgmPlaying; }
     bool isVoicePlaying() const { return m_isVoicePlaying; }
+    // D03-1: tam ses satiri (voice_track / backlog tekrari) gozlemi. Yol,
+    // son BASLATILAN klibin yoludur (typewriter blip'leri yazmaz; stopVoice /
+    // stopAll / shutdown temizler); sayac her klip baslangicinda artar.
+    const std::string& getCurrentVoicePath() const { return m_currentVoicePath; }
+    uint32_t getVoiceClipCount() const { return m_voiceClipCount; }
+    // D03-1: Voice kanalindaki klibi (ve kuyruktaki blip'i) keser; yalniz
+    // Voice akisina dokunur, BGM/SFX/Ambience/Ui aynen kalir, ducking
+    // birakilir. Akis yoksa yalniz durum temizlenir (guvenli no-op).
+    void stopVoice();
     bool isBgmTransitionActive() const { return m_bgmTransitionActive; }
     // Hedef #74: snapshot semantiği — çağrı anındaki değerin kopyası döner
     // (referans YOK; host thread okurken writer ezemez).
@@ -169,6 +178,9 @@ public:
     size_t sfxPoolDepth() const { return m_sfxPool.depth(); }
     size_t sfxActiveVoices() const { return m_sfxPool.activeCount(); }
     std::vector<std::string> sfxActivePaths() const;
+    // D03-1 gozlem: bu motorda baslatilan toplam SFX klibi (blip dahil;
+    // monoton). Backlog tekrarinin SFX tetiklemedigini kilitlemek icin.
+    uint64_t sfxStartedCount() const { return m_sfxPool.startedCount(); }
     // Ambience bed'leri: 0 = BedA (miras tek-bed yolu), 1 = BedB (yeni).
     // Geçersiz bed: bool=false / no-op / 0.0f / "" (fail-closed).
     bool playAmbienceBed(int bed, const std::string& assetPath);
@@ -297,6 +309,9 @@ private:
     std::atomic<uint64_t> m_dropCount{0};
     // Blip yolunda yazılan bayrak da atomiktir (hammera katılır).
     std::atomic<bool> m_isVoicePlaying{false};
+    // D03-1: tam ses klibi gozlemi (blip degil; bkz. getCurrentVoicePath).
+    std::string m_currentVoicePath;
+    std::atomic<uint32_t> m_voiceClipCount{0};
     mutable std::mutex m_stateMutex;
     // D04: pump/stream-ring kilidi (m_stateMutex'tan AYRI yeni mutex).
     // Kilit seçimi karar defteri (m_stateMutex'e karşı yeni mutex):

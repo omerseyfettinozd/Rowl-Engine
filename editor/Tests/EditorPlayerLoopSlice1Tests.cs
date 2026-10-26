@@ -316,7 +316,7 @@ public sealed class EditorPlayerLoopSlice1Tests
             BgmVolume = -2.0f,
             TextSpeedMultiplier = 99.0f,
             AutoAdvanceDelay = -10.0f,
-            Language = "xx-YY",
+            Language = "not a tag!",
             SkipMode = (PlayerSkipMode)42,
             ReadContentIds = new System.Collections.Generic.HashSet<string>(
                 new[] { ContentIdService.NewContentId(), "broken-id" },
@@ -332,9 +332,127 @@ public sealed class EditorPlayerLoopSlice1Tests
         Assert.Equal(PlayerSkipMode.ReadOnly, profile.SkipMode);
         Assert.Single(profile.ReadContentIds);
 
+        // D05-1: any well-formed tag is a valid choice (the game decides support);
+        // case and "_" normalize, a region is kept.
         var regional = new PlayerProfile { Language = "tr-TR" };
         regional.Sanitized();
-        Assert.Equal("tr", regional.Language);
+        Assert.Equal("tr-tr", regional.Language);
+        var unusual = new PlayerProfile { Language = "xx-YY" };
+        unusual.Sanitized();
+        Assert.Equal("xx-yy", unusual.Language);
+    }
+
+    // ── D05-1: profile language = "not chosen" contract (mirror of native) ──
+
+    [Fact]
+    public void PlayerProfile_FreshProfileHasNoLanguageChosen()
+    {
+        Assert.True(PlayerProfile.DefaultLanguage.Length == 0);
+        Assert.Equal(string.Empty, new PlayerProfile().Language);
+    }
+
+    [Theory]
+    [InlineData("", "", true)]
+    [InlineData("   ", "", true)]
+    [InlineData("en", "en", true)]
+    [InlineData(" EN ", "en", true)]
+    [InlineData("tr", "tr", true)]
+    [InlineData("de-DE", "de-de", true)]
+    [InlineData("pt_br", "pt-br", true)]
+    [InlineData("zh-Hans-CN", "zh-hans-cn", true)]
+    [InlineData("fil", "fil", true)]
+    [InlineData("es-419", "es-419", true)]
+    [InlineData("e", "", false)]
+    [InlineData("english", "", false)]
+    [InlineData("en-", "", false)]
+    [InlineData("-en", "", false)]
+    [InlineData("en--us", "", false)]
+    [InlineData("e1", "", false)]
+    [InlineData("en-us!", "", false)]
+    [InlineData("en us", "", false)]
+    [InlineData("abcdefgh-ijklmnop", "", false)]
+    [InlineData("en-abcdefghi", "", false)]
+    [InlineData("çç", "", false)]
+    public void NormalizeLanguage_MatchesTheNativeRule(string input, string expected, bool valid)
+    {
+        Assert.Equal(expected, PlayerProfile.NormalizeLanguage(input, out bool isValid));
+        Assert.Equal(valid, isValid);
+        Assert.Equal(expected, PlayerProfile.NormalizeLanguage(input));
+    }
+
+    [Fact]
+    public void PlayerProfile_EmptyLanguageIsKeptAndRoundTrips()
+    {
+        string directory = NewTempDirectory();
+        try
+        {
+            var profile = new PlayerProfile { Language = string.Empty, MasterVolume = 0.5f };
+            Assert.Null(PlayerProfileStore.Save(directory, profile));
+            string raw = File.ReadAllText(Path.Combine(directory, PlayerProfileStore.FileName));
+            using (var document = JsonDocument.Parse(raw))
+                Assert.Equal(string.Empty, document.RootElement.GetProperty("language").GetString());
+            var loaded = PlayerProfileStore.Load(directory);
+            Assert.Equal(PlayerProfileLoadStatus.Loaded, loaded.Status);
+            Assert.Null(loaded.Diagnostic);
+            Assert.Equal(string.Empty, loaded.Profile.Language);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("tr")]
+    [InlineData("de-de")]
+    [InlineData("pt-br")]
+    public void PlayerProfile_ExplicitLanguageRoundTripsUnchanged(string language)
+    {
+        string directory = NewTempDirectory();
+        try
+        {
+            Assert.Null(PlayerProfileStore.Save(directory, new PlayerProfile { Language = language }));
+            var loaded = PlayerProfileStore.Load(directory);
+            Assert.Equal(language, loaded.Profile.Language);
+            // Rewriting what was read leaves the value (and the document) as it was.
+            string first = File.ReadAllText(Path.Combine(directory, PlayerProfileStore.FileName));
+            Assert.Null(PlayerProfileStore.Save(directory, loaded.Profile));
+            Assert.Equal(first, File.ReadAllText(Path.Combine(directory, PlayerProfileStore.FileName)));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void PlayerProfile_LegacyEnFileIsAnExplicitChoiceAndInvalidTagResetsWithWarning()
+    {
+        string directory = NewTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, PlayerProfileStore.FileName),
+                "{\"version\":1,\"language\":\"en\"}");
+            var legacy = PlayerProfileStore.Load(directory);
+            Assert.Equal("en", legacy.Profile.Language);
+            Assert.Null(legacy.Diagnostic);
+
+            File.WriteAllText(Path.Combine(directory, PlayerProfileStore.FileName),
+                "{\"version\":1,\"language\":\"Klingon Warrior\"}");
+            var invalid = PlayerProfileStore.Load(directory);
+            Assert.Equal(PlayerProfileLoadStatus.Loaded, invalid.Status);
+            Assert.Equal(string.Empty, invalid.Profile.Language);
+            Assert.Contains("Invalid language", invalid.Diagnostic);
+
+            File.WriteAllText(Path.Combine(directory, PlayerProfileStore.FileName),
+                "{\"version\":1,\"language\":\"DE-de\"}");
+            Assert.Equal("de-de", PlayerProfileStore.Load(directory).Profile.Language);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

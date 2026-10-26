@@ -29,14 +29,21 @@ public sealed class PlayerProfile
     /// <summary>Current on-disk profile schema version.</summary>
     public const int CurrentVersion = 1;
 
-    /// <summary>Supported UI locale codes (Faz 3 grows this list).</summary>
+    /// <summary>
+    /// D05-1 — languages the editor's Preferences page OFFERS besides "game default"
+    /// (empty). It is a convenience list, not a validity rule: any well-formed locale
+    /// tag is a valid profile language (the game's own locale list decides support).
+    /// </summary>
     public static readonly IReadOnlyList<string> SupportedLanguages = new[] { "en", "tr" };
 
     /// <summary>Faz 3 Dilim 5 — offered text-size steps (1.0x, 1.25x, 1.5x).</summary>
     public static readonly IReadOnlyList<float> AllowedTextScales = new[] { 1f, 1.25f, 1.5f };
 
-    /// <summary>Default locale for fresh profiles.</summary>
-    public const string DefaultLanguage = "en";
+    /// <summary>
+    /// D05-1 — default of fresh profiles: empty = "the player never chose", so the
+    /// game's own default locale applies. A stored "en"/"tr" is an explicit choice.
+    /// </summary>
+    public const string DefaultLanguage = "";
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -93,8 +100,9 @@ public sealed class PlayerProfile
     public string GameId { get; set; } = string.Empty;
 
     /// <summary>
-    /// D01c-2 — reserved, opaque <c>unlocks</c> array (native owns the meaning).
-    /// Preserved verbatim on rewrite; null means "none seen" (written as <c>[]</c>).
+    /// D01c-2 — opaque <c>unlocks</c> value (native owns the meaning; since D07-1 an object
+    /// <c>{"cg": [...], "music": [...], "achievements": [...]}</c>, while nothing is unlocked an array).
+    /// Preserved verbatim on rewrite (array or object); null means "none seen" (written as <c>[]</c>).
     /// </summary>
     public JsonNode? Unlocks { get; set; }
 
@@ -196,13 +204,36 @@ public sealed class PlayerProfile
         return best;
     }
 
-    internal static string NormalizeLanguage(string? language)
+    internal static string NormalizeLanguage(string? language) => NormalizeLanguage(language, out _);
+
+    /// <summary>
+    /// D05-1 — mirror of the native <c>normalizeProfileLanguage</c> (profile_language.hpp):
+    /// trimmed, lowercase, <c>_</c> becomes <c>-</c>; empty is valid ("not chosen");
+    /// otherwise a language <c>[a-z]{2,3}</c> followed by optional <c>-</c>-separated
+    /// alphanumeric subtags (1-8 chars), at most 16 characters. Anything else is invalid
+    /// and yields the empty string with <paramref name="valid"/> false.
+    /// </summary>
+    internal static string NormalizeLanguage(string? language, out bool valid)
     {
-        string candidate = (language ?? string.Empty).Trim().ToLowerInvariant();
-        // Accept "tr-TR"/"en-US" style tags by their primary subtag.
-        int dash = candidate.IndexOfAny(new[] { '-', '_' });
-        if (dash > 0)
-            candidate = candidate[..dash];
-        return SupportedLanguages.Contains(candidate, StringComparer.Ordinal) ? candidate : DefaultLanguage;
+        valid = true;
+        string tag = (language ?? string.Empty).Trim(' ', '\t', '\r', '\n')
+            .ToLowerInvariant().Replace('_', '-');
+        if (tag.Length == 0)
+            return tag;
+        bool ok = tag.Length <= 16;
+        string[] parts = tag.Split('-');
+        for (int i = 0; ok && i < parts.Length; i++)
+        {
+            string part = parts[i];
+            ok = i == 0
+                ? part.Length is >= 2 and <= 3 && part.All(c => c is >= 'a' and <= 'z')
+                : part.Length is >= 1 and <= 8 && part.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9');
+        }
+        if (!ok)
+        {
+            valid = false;
+            return string.Empty;
+        }
+        return tag;
     }
 }

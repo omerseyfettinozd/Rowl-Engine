@@ -30,19 +30,36 @@ namespace Rowl::Core {
 
 void Engine::setPaused(bool paused) {
     if (m_paused == paused) return;
+    endExtrasSession();  // D07-2: a music-room track never outlives the menu
     m_paused = paused;
+    // D04-1: opening any menu (pause / backlog / preferences) ends Skip.
+    if (paused) {
+        m_skipActive = false;
+        m_skipHold = false;
+    }
     // D02: a host closing the menu also closes the title screen; the hint
     // of the previous session never leaks into a fresh menu.
-    if (!paused) m_titleActive = false;
-    m_titleHint.clear();
+    if (!paused) {
+        m_titleActive = false;
+        // F2 (B-1): the menu-free story frame belongs to one pause; the next pause takes its own.
+        if (m_window) m_window->clearStoryFrame();
+        m_slotSaveFailed.reset();  // a failed save is reported on that visit only
+    }
+    m_titleHint = UiText::None;
+    m_hintSlot = -1;
     // Opening always lands on a predictable main page; closing resumes.
     // Pausing never quits — exit requires the two-step menu confirmation.
     m_pauseMode = PauseMenuMode::Main;
     m_pauseSelected = 0;
     m_pauseConfirmQuit = false;
+    m_backlogTop = 0;  // D03-2: a fresh open never inherits backlog state
+    m_backlogLineOffset = 0;
+    m_backlogFromPause = false;
+    m_prefsFromPause = false;  // D05-2
     // A2b: a fresh menu open rebuilds slot occupancy — saves or deletes may
     // have happened out-of-band while unpaused (editor, quick keys).
     m_pauseSlotCacheValid = false;
+    if (!paused) endTitleMusic();  // T2: the title music never outlives the title
     ROWL_LOG_INFO(paused ? "[Player] Paused — menu open (Esc/P to resume)."
                          : "[Player] Resumed.");
 }
@@ -50,55 +67,133 @@ void Engine::setPaused(bool paused) {
 int Engine::pauseMenuRowCount() const {
     switch (m_pauseMode) {
         case PauseMenuMode::Main: return PauseMenuLayout::kMainRows;
-        case PauseMenuMode::Title: return PauseMenuLayout::kTitleRows;
-        case PauseMenuMode::Preferences: return PauseMenuLayout::kPreferenceRows;
-        default: return PauseMenuLayout::kSlotRows;
+        case PauseMenuMode::Title: return titleRowCount();
+        case PauseMenuMode::Extras:
+        case PauseMenuMode::Gallery:
+        case PauseMenuMode::MusicRoom:
+        case PauseMenuMode::Achievements: return extrasItemCount();
+        case PauseMenuMode::Preferences:
+            return PauseMenuLayout::kPreferenceRows - (preferenceLanguageRowShown() ? 0 : 1);  // F2 (B-13)
+        case PauseMenuMode::Backlog: return static_cast<int>(getDialogueHistory().size());
+        default: return slotRowsOnPage();  // T2b: the visible page of the Save / Load slots
     }
 }
 
 void Engine::pauseMenuMoveSelection(int direction) {
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: a list, never wraps
+        backlogMoveSelection(direction);
+        return;
+    }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: grid / lists never wrap
+        extrasMove(direction);
+        return;
+    }
+    if ((m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) &&
+        activeMenuLayout().cards) {  // T2b: a card grid - Up / Down step a whole card line
+        slotCardsMove(0, direction);
+        return;
+    }
     const int count = pauseMenuRowCount();
     if (count <= 0) return;
     m_pauseSelected = (m_pauseSelected + direction + count) % count;
     m_pauseConfirmQuit = false;
-    m_titleHint.clear();
+    m_titleHint = UiText::None;
 }
 
 void Engine::menuChooseSlot(int32_t slotIndex) {
     if (m_pauseMode != PauseMenuMode::SaveSlots &&
         m_pauseMode != PauseMenuMode::LoadSlots) return;
-    if (slotIndex < kPauseMenuQuickSlotMin || slotIndex > kPauseMenuQuickSlotMax) return;
+    if (slotIndex < 0 || slotIndex >= m_saveSlotCount) return;  // T2b: project save_slot_count
     if (m_titleActive) {  // D02: title Load page leaves the title on success
         titleLoadSlot(slotIndex);
         return;
     }
     if (m_pauseMode == PauseMenuMode::SaveSlots) {
+        // F2 (B-3): the result is shown (hint line), a failed save is not hidden behind the
+        // older file the row still describes.
         if (saveGameSlot(slotIndex)) {
+            m_slotSaveFailed.reset(static_cast<size_t>(slotIndex));
+            setMenuHint(UiText::HintSaved, slotIndex);
             ROWL_LOG_INFO("[Player] Saved to slot #" + std::to_string(slotIndex) + " from pause menu.");
+        } else {
+            m_slotSaveFailed.set(static_cast<size_t>(slotIndex));
+            setMenuHint(UiText::HintSaveFailed, slotIndex);
         }
-    } else {
-        if (loadGameSlot(slotIndex)) {
-            ROWL_LOG_INFO("[Player] Loaded slot #" + std::to_string(slotIndex) + " from pause menu.");
-        }
+        return;
     }
-    // Stay paused on the slot page so occupancy refreshes visibly.
+    ensureSlotCache();
+    const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slotIndex - kPauseMenuQuickSlotMin)];
+    if (info.state == PauseSlotInfo::State::Empty) {
+        setMenuHint(UiText::HintEmptySlot, slotIndex);
+        return;
+    }
+    if (info.state == PauseSlotInfo::State::Corrupt) {
+        setMenuHint(UiText::HintCorruptSave, slotIndex);
+        return;
+    }
+    if (info.state == PauseSlotInfo::State::Incompatible) {
+        setMenuHint(UiText::HintIncompatibleSave, slotIndex);
+        return;
+    }
+    if (loadGameSlot(slotIndex)) {
+        ROWL_LOG_INFO("[Player] Loaded slot #" + std::to_string(slotIndex) + " from pause menu.");
+        // F2 (B-3 product decision): a successful load closes the menu and the story goes on
+        // from the loaded place; the capsule says what happened.
+        setPaused(false);
+        postNotice(UiText::NoticeLoaded, slotIndex);
+        return;
+    }
+    if (m_lastLoadFailure != LoadFailure::Incompatible) m_slotLoadFailed.set(static_cast<size_t>(slotIndex));
+    m_pauseSlotCacheValid = false;
+    ensureSlotCache();
+    setMenuHint(m_lastLoadFailure == LoadFailure::Incompatible ? UiText::HintIncompatibleSave
+                                                               : UiText::HintLoadFailed,
+                slotIndex);
 }
 
 void Engine::menuActivateSelected() {
     if (!m_paused) return;
     if (m_titleActive || m_pauseMode == PauseMenuMode::Title ||
-        m_pauseMode == PauseMenuMode::Preferences) {
+        m_pauseMode == PauseMenuMode::Preferences || isExtrasMode(m_pauseMode)) {
         titleActivateSelected();
         return;
     }
+    if (m_pauseMode == PauseMenuMode::Backlog) {
+        backlogActivateSelected();
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main) {
-        menuChooseSlot(static_cast<int32_t>(m_pauseSelected));
+        menuChooseSlot(slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, slotRowsOnPage() - 1))));
         return;
     }
     switch (m_pauseSelected) {
         case 0: setPaused(false); break;
-        case 1: m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
-        case 2: m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_pauseConfirmQuit = false; break;
+        case 1:
+            m_pauseMode = PauseMenuMode::SaveSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false;
+            m_titleHint = UiText::None;  // F2: a page opens without the last visit's result line
+            break;
+        case 2:
+            m_pauseMode = PauseMenuMode::LoadSlots; m_pauseSelected = 0; m_slotPage = 0; m_pauseConfirmQuit = false;
+            m_titleHint = UiText::None;
+            break;
+        case PauseMenuLayout::kMainPrefsRow:
+            // D05-2: the shared Preferences page opens over the pause menu and
+            // Back / Esc return to this row.
+            m_pauseMode = PauseMenuMode::Preferences;
+            m_prefsFromPause = true;
+            m_pauseSelected = 0;
+            m_pauseConfirmQuit = false;
+            break;
+        case PauseMenuLayout::kMainBacklogRow:
+            // D03-2: the backlog opens over the pause menu and Back returns here.
+            m_pauseMode = PauseMenuMode::Backlog;
+            m_backlogFromPause = true;
+            m_pauseConfirmQuit = false;
+            m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
+            m_backlogTop = m_pauseSelected;
+            m_backlogLineOffset = 0;
+            backlogEnsureVisible();
+            break;
         case PauseMenuLayout::kMainTitleRow:
             // D02: back to the title screen; unsaved progress is lost, so it
             // takes the same two-step confirmation as exit.
@@ -117,11 +212,7 @@ void Engine::menuActivateSelected() {
                 m_pauseConfirmQuit = true;
             }
             break;
-        default:
-            // Value rows (3-7) have no activation of their own; keyboard
-            // Confirm still steps them up like Right for parity with clicks.
-            pauseMenuAdjustSelected(+1);
-            break;
+        default: break;
     }
 }
 
@@ -131,13 +222,29 @@ void Engine::menuBack() {
         titleBack();
         return;
     }
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2
+        backlogClose();
+        return;
+    }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2
+        extrasBack();
+        return;
+    }
     if (m_pauseConfirmQuit) {
         m_pauseConfirmQuit = false;
         return;
     }
+    if (m_pauseMode == PauseMenuMode::Preferences) {  // D05-2: back to its opener's row
+        leavePreferencesPage();
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main) {
+        // F2 (D-D2): Back from the Save / Load pages lands on the row that opened them (like
+        // Tercihler and the title do), not on "Devam Et".
+        m_pauseSelected = m_pauseMode == PauseMenuMode::SaveSlots ? 1
+                        : m_pauseMode == PauseMenuMode::LoadSlots ? 2 : 0;
         m_pauseMode = PauseMenuMode::Main;
-        m_pauseSelected = 0;
+        m_titleHint = UiText::None;
         return;
     }
     setPaused(false);
@@ -157,7 +264,28 @@ void Engine::pauseMenuCommand(PauseMenuCommand command) {
 
 void Engine::pauseMenuClick(float virtualX, float virtualY) {
     if (!m_paused) return;
-    const int row = PauseMenuLayout::rowAt(virtualX, virtualY, pauseMenuRowCount());
+    if (m_pauseMode == PauseMenuMode::Backlog) {  // D03-2: variable-height list
+        backlogClick(virtualX, virtualY);
+        return;
+    }
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: grid cells / scrolled lists
+        extrasClick(virtualX, virtualY);
+        return;
+    }
+    m_sliderDragRow = -1;  // a new press ends any drag
+    // T2b: the same MenuLayout the window draws with.
+    const MenuLayout layout = activeMenuLayout();
+    const bool slotPage = m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots;
+    if (slotPage && slotPageCount() > 1) {
+        const int turn = layout.pagerDirectionAt(virtualX, virtualY);
+        if (turn != 0) {
+            slotPageMove(turn);
+            return;
+        }
+    }
+    const int rowCount = pauseMenuRowCount();
+    const int row = (slotPage && layout.cards) ? layout.cardAt(virtualX, virtualY, rowCount)
+                                               : layout.rowAt(virtualX, virtualY, rowCount);
     if (row < 0) return; // gaps and outside miss; selection is kept
     const bool alreadySelected = (row == m_pauseSelected);
     m_pauseSelected = row;
@@ -165,7 +293,15 @@ void Engine::pauseMenuClick(float virtualX, float virtualY) {
     // (keyboard moves disarm the same way in pauseMenuMoveSelection).
     if (!alreadySelected) m_pauseConfirmQuit = false;
     if (pauseMenuValueRow() >= 0) {
-        const int dir = PauseMenuLayout::adjustDirection(virtualX);
+        // T2: with the slider style a press on the track sets the value and starts a drag.
+        const int valueRow = pauseMenuValueRow();
+        if (m_uiTheme.preferences.valueStyle == "slider" && pauseMenuFraction(valueRow) >= 0.0f &&
+            layout.inSliderZone(virtualX)) {
+            m_sliderDragRow = valueRow;
+            pauseMenuSetFraction(valueRow, layout.sliderFractionAt(virtualX));
+            return;
+        }
+        const int dir = layout.adjustDirection(virtualX);
         if (dir != 0) {
             pauseMenuAdjustSelected(dir);
             return;
@@ -190,65 +326,146 @@ std::string pauseMenuSpeedText(float multiplier) {
     return std::to_string(whole) + "." + (frac < 10 ? "0" : "") + std::to_string(frac) + "x";
 }
 
+std::string pauseMenuDelayText(float seconds, UiLang lang) {
+    const int tenths = static_cast<int>(seconds * 10.0f + 0.5f);
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " " +
+           uiText(UiText::SecondsUnit, lang);
+}
+
+// ── T2b: which layout the current page uses ──────────────────────────────────
+
+int Engine::activeMenuScreenIndex() const {
+    using Rowl::State::uiScreenIndex;
+    const char* name = "pause";
+    switch (m_pauseMode) {
+        case PauseMenuMode::Main: name = m_pauseConfirmQuit ? "confirm" : "pause"; break;
+        case PauseMenuMode::Title: name = m_pauseConfirmQuit ? "confirm" : "title"; break;
+        case PauseMenuMode::Preferences: name = "preferences"; break;
+        case PauseMenuMode::SaveSlots: name = "save"; break;
+        case PauseMenuMode::LoadSlots: name = "load"; break;
+        case PauseMenuMode::Backlog: name = "history"; break;
+        case PauseMenuMode::Extras: name = "extras_root"; break;
+        case PauseMenuMode::Gallery: name = "gallery"; break;
+        case PauseMenuMode::MusicRoom: name = "music"; break;
+        case PauseMenuMode::Achievements: name = "achievements"; break;
+    }
+    int index = uiScreenIndex(name);
+    // The confirmation page keeps the rows of the page it was armed on unless the theme
+    // gives "confirm" a layout of its own.
+    const int confirm = uiScreenIndex("confirm");
+    if (index == confirm && !m_menuLayouts.declared[static_cast<size_t>(confirm)]) {
+        index = uiScreenIndex(m_pauseMode == PauseMenuMode::Title ? "title" : "pause");
+    }
+    return index;
+}
+
+MenuLayout Engine::menuLayoutFor(int screenIndex) const {
+    const size_t i = static_cast<size_t>(std::clamp(screenIndex, 0, static_cast<int>(Rowl::State::kUiScreenCount) - 1));
+    const bool slotPage = i == static_cast<size_t>(Rowl::State::uiScreenIndex("save")) ||
+                          i == static_cast<size_t>(Rowl::State::uiScreenIndex("load"));
+    return menuLayoutForTextScale(m_menuLayouts.pages[i], textScale(), slotPage);
+}
+
+MenuLayout Engine::activeMenuLayout() const { return menuLayoutFor(activeMenuScreenIndex()); }
+
 PauseMenuView Engine::getPauseMenuView() const {
+    PauseMenuView view = getPauseMenuViewBase();
+    if (view.open) {
+        view.layout = activeMenuLayout();
+        if (m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) {
+            fillSlotPageView(view, view.layout);
+        }
+    }
+    return view;
+}
+
+PauseMenuView Engine::getPauseMenuViewBase() const {
     PauseMenuView view;
     view.open = m_paused;
     if (!m_paused) return view;
     if (m_pauseMode == PauseMenuMode::Title || m_pauseMode == PauseMenuMode::Preferences) {
         return getTitleMenuView();
     }
+    if (isExtrasMode(m_pauseMode)) return getExtrasMenuView();  // D07-2
     view.selected = m_pauseSelected;
     view.titleActive = m_titleActive;
+    const UiLang lang = getUiLanguage();
+    auto T = [lang](UiText id) { return std::string(uiText(id, lang)); };
+    if (m_pauseMode == PauseMenuMode::Backlog) {
+        // D03-2: entries (visible window) ride in view.backlog; an empty history
+        // shows one dim line instead and selects nothing.
+        view.page = "history";
+        view.title = T(UiText::History);
+        view.backlog = buildBacklogView();
+        view.selected = view.backlog.selected;
+        if (view.backlog.total == 0) {
+            PauseMenuRow empty;
+            empty.label = T(UiText::HistoryEmpty);
+            empty.enabled = false;
+            view.rows.push_back(empty);
+        }
+        const bool voiced = view.backlog.selected >= 0 &&
+            !getDialogueHistory()[static_cast<size_t>(view.backlog.selected)].voice.empty();
+        view.hint = T(voiced ? UiText::HintBacklogVoiced : UiText::HintBacklog);
+        return view;
+    }
     if (m_pauseMode == PauseMenuMode::Main) {
         const bool confirmTitle =
             m_pauseConfirmQuit && m_pauseSelected == PauseMenuLayout::kMainTitleRow;
         const bool confirmExit = m_pauseConfirmQuit && !confirmTitle;
-        view.title = "Duraklatildi";
+        view.page = (confirmTitle || confirmExit) ? "confirm" : "pause";
+        view.title = T(UiText::Paused);
+        // D-K3: makePauseRow names every field (aggregate rows tripped
+        // -Wmissing-field-initializers); the rows are unchanged.
         view.rows = {
-            {"Devam Et", "", false},
-            {"Oyunu Kaydet", "yuva sec >", false},
-            {"Oyunu Yukle", "yuva sec >", false},
-            {"Ana Ses", pauseMenuPercent(pauseMenuVolume(3)), true},
-            {"Muzik", pauseMenuPercent(pauseMenuVolume(4)), true},
-            {"SFX", pauseMenuPercent(pauseMenuVolume(5)), true},
-            {"Seslendirme", pauseMenuPercent(pauseMenuVolume(6)), true},
-            {"Metin Hizi", pauseMenuSpeedText(m_textSpeedMultiplier), true},
-            {"Ana Menu", confirmTitle ? "emin misin?" : "", false},
-            {"Cikis", confirmExit ? "emin misin?" : "", false},
+            makePauseRow(T(UiText::Resume), ""),
+            makePauseRow(T(UiText::SaveGame), T(UiText::PickSlotValue)),
+            makePauseRow(T(UiText::LoadGame), T(UiText::PickSlotValue)),
+            makePauseRow(T(UiText::Preferences), ">", false, "", true),
+            makePauseRow(T(UiText::History), T(UiText::LinesValue), false, "", true),
+            makePauseRow(T(UiText::MainMenu), confirmTitle ? T(UiText::AreYouSure) : ""),
+            makePauseRow(T(UiText::Quit), confirmExit ? T(UiText::AreYouSure) : ""),
         };
-        view.hint = confirmTitle
-            ? "ENTER: ana menuye don (kaydedilmemis ilerleme kaybolur)   ESC: vazgec"
-            : confirmExit
-            ? "ENTER: cikisi onayla   ESC: vazgec"
-            : "YUKARI/ASAGI: sec   SOL/SAG: ayar   ENTER: tamam   ESC: devam et";
+        view.hint = confirmTitle ? T(UiText::HintConfirmMainMenu)
+                  : confirmExit ? T(UiText::HintConfirmQuit)
+                  : T(UiText::HintPauseMain);
     } else {
         const bool saving = (m_pauseMode == PauseMenuMode::SaveSlots);
-        view.title = saving ? "Kayit Yuvasi Sec" : "Yukleme Yuvasi Sec";
-        // A2b: occupancy is memoized (see m_pauseSlotCacheValid) — a slot
-        // page holds 10 rows and this view rebuilds per UI refresh.
-        static_assert(kPauseMenuQuickSlotMax - kPauseMenuQuickSlotMin + 1 ==
-                      10, "pause slot cache assumes the 0..9 quick-slot window");
+        view.page = saving ? "save" : "load";
+        view.title = T(saving ? UiText::SaveSlotTitle : UiText::LoadSlotTitle);
+        // A2b: occupancy is memoized (see m_pauseSlotCacheValid) - the page lists the visible slots
+        // only (T2b: save_slot_count slots in pages of the layout's size).
         ensureSlotCache();
-        for (int32_t slot = kPauseMenuQuickSlotMin; slot <= kPauseMenuQuickSlotMax; ++slot) {
-            const PauseSlotInfo& info =
-                m_pauseSlotInfo[static_cast<size_t>(slot - kPauseMenuQuickSlotMin)];
+        const int rowsOnPage = slotRowsOnPage();
+        view.selected = std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1));  // the page may have shrunk (text size)
+        for (int pageRow = 0; pageRow < rowsOnPage; ++pageRow) {
+            const int32_t slot = slotAtRow(pageRow);
+            const PauseSlotInfo& info = m_pauseSlotInfo[static_cast<size_t>(slot)];
             PauseMenuRow row;
-            row.label = "Yuva " + std::to_string(slot);
-            row.value = info.state == PauseSlotInfo::State::Valid ? "dolu"
-                      : info.state == PauseSlotInfo::State::Corrupt ? "bozuk" : "bos";
+            row.label = T(UiText::SlotLabel) + " " + slotNumberText(slot);
+            row.value = T(m_slotSaveFailed.test(static_cast<size_t>(slot)) ? UiText::SlotSaveFailed
+                        : info.state == PauseSlotInfo::State::Valid ? UiText::SlotFull
+                        : info.state == PauseSlotInfo::State::Corrupt ? UiText::SlotCorrupt
+                        : info.state == PauseSlotInfo::State::Incompatible ? UiText::SlotIncompatible
+                        : UiText::SlotEmpty);
             row.detail = pauseSlotDetail(info);
+            row.slotState = info.state == PauseSlotInfo::State::Valid ? 2
+                          : info.state == PauseSlotInfo::State::Corrupt ? 3 : 1;  // T2
             view.rows.push_back(row);
         }
-        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(
-            std::clamp(m_pauseSelected, 0, kPauseMenuQuickSlotMax))];
-        if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.thumbnailPng &&
-            !selectedInfo.thumbnailPng->empty()) {
-            view.thumbnailPng = selectedInfo.thumbnailPng;
-            view.thumbnailKey = std::to_string(m_pauseSelected) + "|" + selectedInfo.savedAt;
+        const int selectedSlot = std::max(0, slotAtRow(std::clamp(m_pauseSelected, 0, std::max(0, rowsOnPage - 1))));
+        const PauseSlotInfo& selectedInfo = m_pauseSlotInfo[static_cast<size_t>(selectedSlot)];
+        if (selectedInfo.state == PauseSlotInfo::State::Valid && selectedInfo.hasThumbnail) {
+            // F2 (B-2): read lazily for the selected row only; the key carries file size and
+            // write time so a second save in the same second gets a fresh texture.
+            if (auto png = slotThumbnail(selectedSlot, selectedInfo); png && !png->empty()) {
+                view.thumbnailPng = std::move(png);
+                view.thumbnailKey = std::to_string(selectedSlot) + "|" + selectedInfo.thumbnailStamp;
+            }
         }
-        view.hint = (m_titleActive && !m_titleHint.empty())
-            ? m_titleHint
-            : "ENTER/tik: sec   0-9: dogrudan sec   ESC: geri";
+        view.hint = m_titleHint != UiText::None
+            ? menuHintText(lang)
+            : T(slotPageCount() > 1 ? UiText::HintSlotsPaged : UiText::HintSlots);
     }
     view.continueSlot = m_pauseSlotCacheValid ? m_continueSlot : -1;
     return view;
@@ -263,7 +480,8 @@ static void appendPauseMenuJsonString(std::string& out, const std::string& text)
             default:
                 if (static_cast<unsigned char>(c) < 0x20) {
                     char buf[7];
-                    std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    std::snprintf(buf, sizeof(buf), "\\u%04x",
+                                  static_cast<unsigned>(static_cast<unsigned char>(c)));
                     out += buf;
                 } else {
                     out.push_back(c);
@@ -288,6 +506,8 @@ std::string Engine::getPauseMenuJson() const {
     out += (m_pauseConfirmQuit && !confirmTitle) ? "true" : "false";
     out += ",\"quick_slot\":";
     out += std::to_string(m_activeQuickSlot);
+    out += ",\"page\":";
+    appendPauseMenuJsonString(out, view.page);
     out += ",\"title\":";
     appendPauseMenuJsonString(out, view.title);
     out += ",\"hint\":";
@@ -315,6 +535,92 @@ std::string Engine::getPauseMenuJson() const {
     out += confirmTitle ? "true" : "false";
     out += ",\"selected_has_thumbnail\":";
     out += view.thumbnailPng ? "true" : "false";
+    if (view.open) {
+        // T2b: where the page puts its parts (virtual 1920x1080) - the geometry clicks are hit-tested with.
+        const auto num = [](float v) {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.6g", static_cast<double>(v));
+            return std::string(buf);
+        };
+        const MenuLayout& lay = view.layout;
+        out += ",\"layout\":{\"panel\":{\"x\":" + num(lay.panelX) + ",\"y\":" + num(lay.panelY) +
+               ",\"w\":" + num(lay.panelW) + ",\"h\":" + num(lay.panelH) + "},\"row_x\":" + num(lay.rowX) +
+               ",\"row_w\":" + num(lay.rowW) + ",\"rows\":[";
+        const int count = static_cast<int>(view.rows.size());
+        const bool listRows = !view.backlog.active && !view.extras.active && view.cards.empty();
+        if (listRows) {
+            for (int i = 0; i < count; ++i) {
+                if (i > 0) out.push_back(',');
+                out += "{\"y\":" + num(lay.rowTop(i, count)) + ",\"h\":" + num(lay.rowHOf(count)) + "}";
+            }
+        }
+        out += "]}";
+        if (!view.cards.empty()) {
+            out += ",\"cards\":[";
+            for (size_t i = 0; i < view.cards.size(); ++i) {
+                const auto& card = view.cards[i];
+                if (i > 0) out.push_back(',');
+                out += "{\"slot\":" + std::to_string(card.slot) + ",\"x\":" + num(card.x) + ",\"y\":" + num(card.y) +
+                       ",\"w\":" + num(card.w) + ",\"h\":" + num(card.h) + "}";
+            }
+            out += "]";
+        }
+        if (view.page == "save" || view.page == "load") {
+            out += ",\"slot_page\":{\"page\":" + std::to_string(view.pager.active ? view.pager.page : m_slotPage) +
+                   ",\"page_count\":" + std::to_string(slotPageCount()) +
+                   ",\"slot_count\":" + std::to_string(m_saveSlotCount) +
+                   ",\"first_slot\":" + std::to_string(std::max(0, slotAtRow(0))) +
+                   ",\"cards\":" + (lay.cards ? "true" : "false");
+            if (view.pager.active) {
+                out += ",\"pager\":{\"x\":" + num(view.pager.x) + ",\"y\":" + num(view.pager.y) +
+                       ",\"w\":" + num(view.pager.w) + ",\"h\":" + num(view.pager.h) + "}";
+            }
+            out += "}";
+        }
+    }
+    if (view.backlog.active) {
+        // D03-2: only the visible window rides along (history can hold 500
+        // rows of up to 64 KiB); `total`/`scroll`/`selected` index the full history.
+        out += ",\"backlog\":{\"total\":";
+        out += std::to_string(view.backlog.total);
+        out += ",\"selected\":";
+        out += std::to_string(view.backlog.selected);
+        out += ",\"scroll\":";
+        out += std::to_string(view.backlog.scroll);
+        out += ",\"counter\":";
+        appendPauseMenuJsonString(out, view.backlog.counter);
+        out += ",\"entries\":[";
+        for (size_t i = 0; i < view.backlog.entries.size(); ++i) {
+            const auto& entry = view.backlog.entries[i];
+            if (i > 0) out.push_back(',');
+            out += "{\"index\":";
+            out += std::to_string(entry.index);
+            out += ",\"speaker\":";
+            appendPauseMenuJsonString(out, entry.speaker);
+            out += ",\"dialogue\":";
+            appendPauseMenuJsonString(out, entry.dialogue);
+            out += ",\"lines\":[";  // F1: what is drawn (selected row = full text window)
+            for (size_t l = 0; l < entry.lines.size(); ++l) {
+                if (l > 0) out.push_back(',');
+                appendPauseMenuJsonString(out, entry.lines[l]);
+            }
+            out.push_back(']');
+            out += ",\"choice\":";
+            out += entry.choice ? "true" : "false";
+            out += ",\"has_voice\":";
+            out += entry.hasVoice ? "true" : "false";
+            out += ",\"selected\":";
+            out += entry.selected ? "true" : "false";
+            out.push_back('}');
+        }
+        out += "]}";
+    }
+    if (view.extras.active) {
+        // D07-2: Ekstralar page state (gallery cells / list window); a locked
+        // gallery cell carries no image path.
+        out += ",\"extras\":";
+        out += pauseExtrasViewJson(view.extras);
+    }
     out += "}";
     return out;
 }

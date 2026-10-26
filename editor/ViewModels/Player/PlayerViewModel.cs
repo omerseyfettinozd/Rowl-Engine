@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RowlEngine.Editor.Native;
 using RowlEngine.Editor.Services;
+using RowlEngine.Editor.Services.Strings;
 
 namespace RowlEngine.Editor.ViewModels.Player;
 
@@ -20,6 +22,9 @@ public sealed class PlayerChoiceOption
     public string OptionId { get; }
     public string Label { get; }
 }
+
+/// <summary>D05-1 — one entry of the Preferences language ComboBox (empty code = game default).</summary>
+public sealed record LanguageChoice(string Code, string Label);
 
 /// <summary>
 /// Faz 2 Dilim 5 — integration brain of the standalone player shell.
@@ -114,7 +119,26 @@ public sealed partial class PlayerViewModel : ViewModelBase
     public string TitleContinueLabel => Slots.TitleContinueLabel;
 
     public Array AvailableSkipModes => Enum.GetValues(typeof(PlayerSkipMode));
-    public IReadOnlyList<string> AvailableLanguages => PlayerProfile.SupportedLanguages;
+    /// <summary>
+    /// D05-1 — language choices of the Preferences page: "game default" (empty =
+    /// the player never chose), the offered languages, and the profile's current
+    /// language when it is none of those (e.g. a "de-de" written by the player).
+    /// </summary>
+    public IReadOnlyList<LanguageChoice> AvailableLanguages
+    {
+        get
+        {
+            var choices = new List<LanguageChoice>
+            {
+                new(string.Empty, EditorStrings.T("Player.Prefs.LanguageDefault")),
+            };
+            foreach (string code in PlayerProfile.SupportedLanguages)
+                choices.Add(new LanguageChoice(code, code));
+            if (Profile.Language.Length > 0 && choices.All(c => c.Code != Profile.Language))
+                choices.Add(new LanguageChoice(Profile.Language, Profile.Language));
+            return choices;
+        }
+    }
     public IReadOnlyList<float> AvailableTextScales => PlayerProfile.AllowedTextScales;
 
     /// <summary>Faz 3 Dilim 5 — pushes profile accessibility to the engine.</summary>

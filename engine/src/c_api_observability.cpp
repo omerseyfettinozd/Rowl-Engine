@@ -263,13 +263,16 @@ ROWL_API int RowlEngine_QueryWorldJson(
         }
         // Story Choices
         nlohmann::json choicesArray = nlohmann::json::array();
-        for (const auto& chBtn : engine->getActiveChoiceButtons()) {
+        // D-K3: bounds are the drawn / hit-tested geometry (fitted to the text
+        // scale); "focused" is additive: the option holding keyboard/hover focus.
+        for (const auto& chBtn : engine->getLaidOutChoiceButtons()) {
             choicesArray.push_back({
                 {"id", chBtn.optionId},
                 {"text", chBtn.text},
                 {"bounds", {
                     {"x", chBtn.x}, {"y", chBtn.y}, {"w", chBtn.width}, {"h", chBtn.height}
-                }}
+                }},
+                {"focused", chBtn.focused}
             });
         }
         story["choices"] = choicesArray;
@@ -293,9 +296,9 @@ ROWL_API int RowlEngine_QueryWorldJson(
                 cur = cur->previousState;
             }
 
-            if (gs->dialogueHistory) {
+            {
                 nlohmann::json historyArr = nlohmann::json::array();
-                const auto& hist = *gs->dialogueHistory;
+                const auto& hist = gs->dialogueHistory;
                 size_t startIdx = hist.size() > 5 ? hist.size() - 5 : 0;
                 for (size_t i = startIdx; i < hist.size(); ++i) {
                     historyArr.push_back({

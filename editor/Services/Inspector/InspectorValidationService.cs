@@ -30,7 +30,7 @@ namespace RowlEngine.Editor.Services.Inspector
     public sealed class InspectorValidationService
     {
         private static readonly string[] AssetKeys =
-            { "texture", "sprite", "bgm_track", "sfx_track", "path", "typewriter_sound", "custom_box_texture" };
+            { "texture", "sprite", "bgm_track", "sfx_track", "voice_track", "path", "typewriter_sound", "custom_box_texture" };
 
         /// <summary>
         /// Component types whose Serialize() can emit an <see cref="AssetKeys"/>
@@ -47,6 +47,7 @@ namespace RowlEngine.Editor.Services.Inspector
                 [("character", "sprite")] = InspectorFieldDescriptor.Keys.CharacterSprite,
                 [("audio", "bgm_track")] = InspectorFieldDescriptor.Keys.AudioBgmTrack,
                 [("audio", "sfx_track")] = InspectorFieldDescriptor.Keys.AudioSfxTrack,
+                [("audio", "voice_track")] = InspectorFieldDescriptor.Keys.AudioVoiceTrack,
                 [("dialogue", "typewriter_sound")] = InspectorFieldDescriptor.Keys.DialogueBlipSound,
                 [("character", "voice_blip_sound")] = InspectorFieldDescriptor.Keys.CharacterVoiceBlip,
                 [("script", "path")] = InspectorFieldDescriptor.Keys.ScriptPath,

@@ -23,6 +23,7 @@
 #include <array>
 #include <iterator>
 #include <cstdlib>
+#include <ctime>
 #include <iomanip>
 #include <sstream>  // A3-tur6: frameHashFail hex-formatı harness-helper'a taşındı
 #include <SDL3/SDL.h>
@@ -60,6 +61,34 @@
     std::cerr << lockName << " lock failure: " << message << std::endl;
     std::exit(1);
 }
+
+// D-K2: pins the process time zone for the scope (TZ + tzset) and restores the
+// previous value, so local-time displays are deterministic on any machine.
+struct ScopedTimeZone {
+    explicit ScopedTimeZone(const char* tz) {
+        const char* old = std::getenv("TZ");
+        hadOld = old != nullptr;
+        if (old) oldValue = old;
+        apply(tz);
+    }
+    ~ScopedTimeZone() { apply(hadOld ? oldValue.c_str() : nullptr); }
+    ScopedTimeZone(const ScopedTimeZone&) = delete;
+    ScopedTimeZone& operator=(const ScopedTimeZone&) = delete;
+
+private:
+    static void apply(const char* tz) {
+#ifdef _WIN32
+        _putenv_s("TZ", tz ? tz : "");
+        _tzset();
+#else
+        if (tz) ::setenv("TZ", tz, 1);
+        else ::unsetenv("TZ");
+        ::tzset();
+#endif
+    }
+    bool hadOld = false;
+    std::string oldValue;
+};
 
 inline std::vector<uint8_t> decodeBase64(const std::string_view input) {
     static constexpr std::string_view alphabet =
@@ -183,7 +212,29 @@ void test_native_player_profile();  // D01c-1: player profile v1 (preferences + 
 void test_boot_story_diagnostics();  // #118/#119/#120: grafsiz/bozuk boot ayirt edilebilirlik kilidi
 void test_project_mount_cwd();  // cwd = proje koku iken oynatici VFS baglamasi kilidi
 void test_title_screen();  // D02: native baslik ekrani / Devam Et / Tercihler
+void test_backlog_replay();  // D03-1: gecmis satirina ses + guvenli ses tekrari
+void test_f2_audit_fixes();  // F2: girdi korumalari, kayit/yukle geri bildirimi, yuva onbellegi, secim menusu, kosullar
+void test_f2_visible_window();  // F2 B-1: gorunur pencerede kayit kucuk resmi (pause-overlay gorunur testinden hemen sonra kosar)
+void test_f1_audit_fixes();  // F1: dugum geri sarma, kalici gecmis, giris sesleri, gecmis ekrani
+void test_backlog_screen();  // D03-2: oyuncuda Gecmis (backlog) ekrani
+void test_auto_skip();  // D04-1: oyuncu Otomatik + okunana duyarli Atla surucusu
+void test_chapter_boundary_persistence();  // D06-3: bolum siniri kayit/yukle/geri sarma + muzik + oyuncu prefetch surucusu
+void test_ui_skin_visible_window();  // T2: gorunur pencerede skin + tema imleci (pause-overlay gorunur testinden hemen sonra kosar)
+void test_menu_layout();  // T2b: sayfa yerlesimi (screens.<sayfa>.layout) + yuva sayfalari
+void test_ui_skin();    // T2: skin (gorsel cerceve) — her oyuncu arayuzu yuzeyi: ayristirici, 9-dilim, durum, kaydirici, tani
+void test_ui_theme();  // T1: oyuncu arayuzu temasi (ui_theme.json): ayristirici, varsayilan == eski sabitler, temali pikseller, oncelik, yazi tipi, reload
+void test_extras_screens();  // D07-2: Ekstralar sayfalari (Galeri / Muzik Odasi / Basarimlar) + basarim bildirimi
+void test_extras_unlocks();  // D07-1: acilabilir icerik (extras.json, profil unlocks, tetikleyiciler, C API)
+void test_condition_component();  // D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
+void test_auto_skip_ui();  // D04-2: Tercihler Otomatik/Atlama satirlari + AUTO/SKIP gostergesi
+void test_player_preferences_menu();  // D05-2: Tercihler pause'dan + dil / metin boyutu / kontrast / hareket satirlari, sigma
+void test_player_ui_language();  // D05-1: oyuncu arayuz dili (tr/en), UTF-8 menu yolu, profil dili
 void test_choice_input_guard();  // secim menusunu duz ilerleme yanitlamaz kilidi
+void test_choice_keyboard();  // D-K3: secim menusunde klavye / fare odagi kilidi
+void test_pause_subpage_back();  // D-K3: Esc duraklatma alt sayfalarinda Geri kilidi
+void test_ui_text_fit();  // D-K3: konusmaci etiketi + secenek dugmesi yazi boyutuyla sigar kilidi
+void test_bgm_continuity();  // D-K3: geri sarma / yukleme calan muzigi bastan baslatmaz kilidi
+void test_end_of_story_title();  // D-K3: hikaye bitince baslik ekrani kilidi
 void test_graph_vnext();
 void test_localization();
 void test_locale_cluster();  // Dilim Locale kümesi kilitleri (T1-T7)

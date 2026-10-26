@@ -2,8 +2,8 @@
  * player_profile.cpp — D01c-1 native player profile v1 (preferences + read set).
  *
  * Mirrors the managed PlayerProfile/PlayerProfileStore clamp, default and
- * normalization rules (same JSON keys) and adds: game_id binding, a reserved
- * `unlocks` array, opaque round-trip of unknown top-level keys, read-only
+ * normalization rules (same JSON keys) and adds: game_id binding, the D07-1
+ * `unlocks` records, opaque round-trip of unknown keys, read-only
  * handling of future versions, quarantine of corrupt files, a bounded read set
  * and debounced atomic writes.
  */
@@ -11,6 +11,8 @@
 
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
+#include "rowl/state/extras_catalog.hpp"
+#include "rowl/state/profile_language.hpp"
 #include "rowl/state/save_durability.hpp"
 
 #include <nlohmann/json.hpp>
@@ -27,6 +29,7 @@
 #include <iterator>
 #include <limits>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 
 namespace Rowl::State {
@@ -80,13 +83,6 @@ float snapTextScale(float value) {
         }
     }
     return best;
-}
-
-std::string normalizeLanguage(std::string_view language) {
-    std::string candidate = trimmedLower(language);
-    const size_t dash = candidate.find_first_of("-_");
-    if (dash != std::string::npos && dash > 0) candidate.resize(dash);
-    return (candidate == "en" || candidate == "tr") ? candidate : "en";
 }
 
 std::string normalizeFadeCurve(std::string_view name) {
@@ -179,6 +175,37 @@ std::string utcStamp() {
     return buffer;
 }
 
+/// ISO-8601 UTC "YYYY-MM-DDTHH:MM:SSZ" of now (the achievement unlock time).
+std::string isoUtcNow() {
+    const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm fields{};
+#ifdef _WIN32
+    gmtime_s(&fields, &now);
+#else
+    gmtime_r(&now, &fields);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &fields);
+    return buffer;
+}
+
+/// True for the exact "YYYY-MM-DDTHH:MM:SSZ" shape (digits only checked; the
+/// time is informational, never parsed back into a calendar).
+bool isIsoUtcStamp(std::string_view text) {
+    if (text.size() != 20) return false;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        switch (i) {
+            case 4: case 7: if (c != '-') return false; break;
+            case 10: if (c != 'T') return false; break;
+            case 13: case 16: if (c != ':') return false; break;
+            case 19: if (c != 'Z') return false; break;
+            default: if (c < '0' || c > '9') return false; break;
+        }
+    }
+    return true;
+}
+
 bool isHex(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
@@ -243,10 +270,65 @@ std::optional<std::string> normalizeContentId(std::string_view value) {
     return canonical;
 }
 
-struct PlayerProfileStore::Extras {
-    Json unlocks = Json::array();
-    Json other = Json::object();  ///< unknown top-level keys, in file order
+namespace {
+
+/// One kind's unlock records in unlock order. `times` runs parallel to `ids`
+/// (achievements only; "" = unknown, also used for cg / music).
+struct UnlockList {
+    std::vector<std::string> ids;
+    std::vector<std::string> times;
+    std::unordered_set<std::string> index;
+
+    bool add(std::string id, std::string at) {
+        if (!index.insert(id).second) return false;
+        ids.push_back(std::move(id));
+        times.push_back(std::move(at));
+        return true;
+    }
+    void clear() {
+        ids.clear();
+        times.clear();
+        index.clear();
+    }
 };
+
+}  // namespace
+
+struct PlayerProfileStore::Extras {
+    UnlockList cg;
+    UnlockList music;
+    UnlockList achievements;
+    Json unlocksOther = Json::object();  ///< unknown keys INSIDE `unlocks`, in file order
+    Json other = Json::object();         ///< unknown top-level keys, in file order
+
+    UnlockList& list(UnlockKind kind) {
+        switch (kind) {
+            case UnlockKind::Cg: return cg;
+            case UnlockKind::Music: return music;
+            case UnlockKind::Achievement: break;
+        }
+        return achievements;
+    }
+    const UnlockList& list(UnlockKind kind) const {
+        return const_cast<Extras*>(this)->list(kind);
+    }
+};
+
+const char* unlockKindName(UnlockKind kind) {
+    switch (kind) {
+        case UnlockKind::Cg: return "cg";
+        case UnlockKind::Music: return "music";
+        case UnlockKind::Achievement: return "achievement";
+    }
+    return "cg";
+}
+
+std::optional<UnlockKind> parseUnlockKind(std::string_view name) {
+    if (name == "cg") return UnlockKind::Cg;
+    if (name == "music") return UnlockKind::Music;
+    if (name == "achievement") return UnlockKind::Achievement;
+    return std::nullopt;
+}
 
 PlayerProfileStore::PlayerProfileStore() : m_extras(std::make_unique<Extras>()) {}
 
@@ -272,6 +354,7 @@ void PlayerProfileStore::open(const fs::path& profileDir, const std::string& gam
     m_dir = profileDir;
     m_path = profileDir / kPlayerProfileFileName;
     m_gameId = gameId;
+    m_flushFailures = 0;
     try {
         loadFromDisk();
     } catch (const std::exception& error) {
@@ -457,7 +540,13 @@ void PlayerProfileStore::loadFromDisk() {
     float number = 0.0f;
     bool flag = false;
     int integer = 0;
-    if (readString(root, "language", text)) prefs.language = normalizeLanguage(text);
+    if (readString(root, "language", text)) {
+        bool validLanguage = true;
+        prefs.language = normalizeProfileLanguage(text, &validLanguage);
+        if (!validLanguage) {
+            notes.push_back("Invalid language '" + text.substr(0, 32) + "' reset to \"\" (not chosen).");
+        }
+    }
     auto volume = [&](const char* key, float& field) {
         if (readFloat(root, key, number)) field = clampFloat(number, 0.0f, 1.0f);
     };
@@ -471,7 +560,7 @@ void PlayerProfileStore::loadFromDisk() {
         prefs.textSpeedMultiplier = clampFloat(number, 0.25f, 4.0f);
     }
     if (readFloat(root, "auto_advance_delay", number)) {
-        prefs.autoAdvanceDelay = clampFloat(number, 0.0f, 60.0f);
+        prefs.autoAdvanceDelay = clampFloat(number, 0.0f, kPlayerProfileMaxAutoAdvanceDelay);
     }
     if (readFloat(root, "text_scale", number)) prefs.textScale = snapTextScale(number);
     if (readBool(root, "high_contrast", flag)) prefs.highContrast = flag;
@@ -515,14 +604,71 @@ void PlayerProfileStore::loadFromDisk() {
         }
     }
 
-    // Everything else is preserved on write.
-    if (const auto it = root.find("unlocks"); it != root.end()) {
-        if (it->is_array()) {
-            m_extras->unlocks = *it;
-        } else {
-            notes.push_back("Non-array unlocks reset to an empty array.");
+    // Unlock records (D07-1). The pre-D07 reserved form was an opaque array: an
+    // empty one is simply "nothing unlocked", anything else cannot be mapped to
+    // the schema and is dropped with a note. Unknown keys inside the object are
+    // kept for forward compatibility.
+    auto loadUnlocks = [&](const Json& value) {
+        if (value.is_array()) {
+            if (!value.empty()) {
+                notes.push_back("Legacy non-empty unlocks array dropped (the schema is an object with cg / "
+                                "music / achievements).");
+            }
+            return;
         }
-    }
+        if (!value.is_object()) {
+            notes.push_back("Non-object unlocks reset to empty.");
+            return;
+        }
+        size_t dropped = 0;
+        size_t overLimit = 0;
+        const auto readIds = [&](const char* key, UnlockList& out, bool withTime) {
+            const auto it = value.find(key);
+            if (it == value.end()) return;
+            if (!it->is_array()) {
+                notes.push_back(std::string("Non-array unlocks.") + key + " ignored.");
+                return;
+            }
+            for (const auto& item : *it) {
+                std::string id;
+                std::string at;
+                if (item.is_string() && !withTime) {
+                    id = item.get<std::string>();
+                } else if (item.is_object() && withTime) {
+                    const auto idIt = item.find("id");
+                    if (idIt != item.end() && idIt->is_string()) id = idIt->get<std::string>();
+                    const auto atIt = item.find("at");
+                    if (atIt != item.end() && atIt->is_string() && isIsoUtcStamp(atIt->get<std::string>())) {
+                        at = atIt->get<std::string>();
+                    }
+                }
+                if (!isValidExtrasId(id)) {
+                    ++dropped;
+                } else if (out.index.find(id) != out.index.end()) {
+                    ++dropped;  // duplicate
+                } else if (out.ids.size() >= m_unlockLimit) {
+                    ++overLimit;
+                } else {
+                    out.add(std::move(id), std::move(at));
+                }
+            }
+        };
+        readIds("cg", m_extras->cg, false);
+        readIds("music", m_extras->music, false);
+        readIds("achievements", m_extras->achievements, true);
+        if (dropped > 0) notes.push_back(std::to_string(dropped) + " malformed or repeated unlock record(s) ignored.");
+        if (overLimit > 0) {
+            notes.push_back(std::to_string(overLimit) + " unlock record(s) beyond the per-kind limit of " +
+                            std::to_string(m_unlockLimit) + " dropped.");
+        }
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            const std::string& key = it.key();
+            if (key != "cg" && key != "music" && key != "achievements") {
+                m_extras->unlocksOther[key] = it.value();
+            }
+        }
+    };
+    if (const auto it = root.find("unlocks"); it != root.end()) loadUnlocks(*it);
     for (auto it = root.begin(); it != root.end(); ++it) {
         if (!isKnownKey(it.key())) m_extras->other[it.key()] = it.value();
     }
@@ -570,6 +716,60 @@ bool PlayerProfileStore::isRead(std::string_view contentId) const {
     return id && m_readIds.find(*id) != m_readIds.end();
 }
 
+ProfileMutation PlayerProfileStore::unlock(UnlockKind kind, std::string_view id, std::string_view atUtc) {
+    if (m_status == PlayerProfileStatus::Unmounted) return ProfileMutation::Unmounted;
+    if (m_readOnly) return ProfileMutation::ReadOnly;
+    if (!isValidExtrasId(id)) return ProfileMutation::Invalid;
+    UnlockList& list = m_extras->list(kind);
+    const std::string key(id);
+    if (list.index.find(key) != list.index.end()) return ProfileMutation::Unchanged;
+    if (list.ids.size() >= m_unlockLimit) {
+        const std::string note = std::string("Unlock list '") + unlockKindName(kind) + "' is full (" +
+                                 std::to_string(m_unlockLimit) + " records): new unlocks are not recorded.";
+        if (m_diagnostic.find(note) == std::string::npos) {
+            if (!m_diagnostic.empty()) m_diagnostic += ' ';
+            m_diagnostic += note;
+        }
+        return ProfileMutation::Full;
+    }
+    std::string at;
+    if (kind == UnlockKind::Achievement) {
+        at = isIsoUtcStamp(atUtc) ? std::string(atUtc) : isoUtcNow();
+    }
+    list.add(key, std::move(at));
+    markDirty();
+    return ProfileMutation::Ok;
+}
+
+bool PlayerProfileStore::isUnlocked(UnlockKind kind, std::string_view id) const {
+    if (m_status == PlayerProfileStatus::Unmounted) return false;
+    const UnlockList& list = m_extras->list(kind);
+    return list.index.find(std::string(id)) != list.index.end();
+}
+
+std::size_t PlayerProfileStore::unlockCount(UnlockKind kind) const {
+    return m_extras->list(kind).ids.size();
+}
+
+std::vector<std::string> PlayerProfileStore::unlockedIds(UnlockKind kind) const {
+    return m_extras->list(kind).ids;
+}
+
+std::string PlayerProfileStore::achievementTime(std::string_view id) const {
+    const UnlockList& list = m_extras->achievements;
+    for (std::size_t i = 0; i < list.ids.size(); ++i) {
+        if (list.ids[i] == id) return list.times[i];
+    }
+    return {};
+}
+
+void PlayerProfileStore::clearUnlocksForTesting() {
+    m_extras->cg.clear();
+    m_extras->music.clear();
+    m_extras->achievements.clear();
+    markDirty();
+}
+
 ProfileMutation PlayerProfileStore::setPreferencesJson(std::string_view json, std::string* errorOut) {
     auto invalid = [&](std::string why) {
         if (errorOut) *errorOut = std::move(why);
@@ -596,7 +796,14 @@ ProfileMutation PlayerProfileStore::setPreferencesJson(std::string_view json, st
         bool ok = true;
         if (key == "language") {
             ok = value.is_string();
-            if (ok) next.language = normalizeLanguage(value.get<std::string>());
+            if (ok) {
+                bool validLanguage = true;
+                next.language = normalizeProfileLanguage(value.get<std::string>(), &validLanguage);
+                if (!validLanguage) {
+                    ROWL_LOG_WARN("[PlayerProfile] Invalid language '" + value.get<std::string>() +
+                                  "' reset to \"\" (not chosen).");
+                }
+            }
         } else if (key == "master_volume") ok = number(next.masterVolume, 0.0f, 1.0f);
         else if (key == "bgm_volume") ok = number(next.bgmVolume, 0.0f, 1.0f);
         else if (key == "voice_volume") ok = number(next.voiceVolume, 0.0f, 1.0f);
@@ -604,7 +811,7 @@ ProfileMutation PlayerProfileStore::setPreferencesJson(std::string_view json, st
         else if (key == "ambience_volume") ok = number(next.ambienceVolume, 0.0f, 1.0f);
         else if (key == "ui_volume") ok = number(next.uiVolume, 0.0f, 1.0f);
         else if (key == "text_speed_multiplier") ok = number(next.textSpeedMultiplier, 0.25f, 4.0f);
-        else if (key == "auto_advance_delay") ok = number(next.autoAdvanceDelay, 0.0f, 60.0f);
+        else if (key == "auto_advance_delay") ok = number(next.autoAdvanceDelay, 0.0f, kPlayerProfileMaxAutoAdvanceDelay);
         else if (key == "text_scale") {
             float raw = 1.0f;
             ok = number(raw, -std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
@@ -674,7 +881,31 @@ std::string PlayerProfileStore::serialize() const {
     out["auto_enabled"] = m_preferences.autoEnabled;
     out["mixer_fade_curve"] = m_preferences.mixerFadeCurve;
     out["sfx_pool_depth"] = m_preferences.sfxPoolDepth;
-    out["unlocks"] = m_extras->unlocks;
+    out["unlocks"] = [this] {
+        const Extras& extras = *m_extras;
+        // Nothing unlocked: keep the v1 reserved shape `[]` (byte-compatible with
+        // files written before D07 and by the managed store); the first unlock
+        // rewrites it as an object.
+        if (extras.cg.ids.empty() && extras.music.ids.empty() && extras.achievements.ids.empty() &&
+            extras.unlocksOther.empty()) {
+            return Json::array();
+        }
+        Json object = Json::object();
+        object["cg"] = extras.cg.ids;
+        object["music"] = extras.music.ids;
+        Json achievements = Json::array();
+        for (std::size_t i = 0; i < extras.achievements.ids.size(); ++i) {
+            Json row = Json::object();
+            row["id"] = extras.achievements.ids[i];
+            if (!extras.achievements.times[i].empty()) row["at"] = extras.achievements.times[i];
+            achievements.push_back(std::move(row));
+        }
+        object["achievements"] = std::move(achievements);
+        for (auto it = extras.unlocksOther.begin(); it != extras.unlocksOther.end(); ++it) {
+            object[it.key()] = it.value();
+        }
+        return object;
+    }();
     for (auto it = m_extras->other.begin(); it != m_extras->other.end(); ++it) {
         out[it.key()] = it.value();
     }
@@ -716,6 +947,7 @@ bool PlayerProfileStore::flush(std::string* errorOut) {
     }
     m_dirtyAge = 0.0f;
     m_retryDelay = kAutosaveRetryDelaySeconds;
+    ++m_flushFailures;
     if (errorOut) *errorOut = std::move(error);
     return false;
 }

@@ -227,10 +227,7 @@ namespace RowlEngine.Editor.Services
                     clonedObj.IsActive = obj.IsActive;
                     foreach (var comp in obj.Components)
                     {
-                        var compCopy = ComponentRegistry.Create(comp.TypeKey);
-                        compCopy.Deserialize(comp.Serialize().ToDictionary(
-                            pair => pair.Key,
-                            pair => (object?)pair.Value));
+                        var compCopy = ComponentRegistry.Clone(comp);
                         // Cloned dialogues are new content: never reuse the
                         // source content_id (duplicates block the build).
                         if (compCopy is DialogueComponentViewModel copiedDialogue)

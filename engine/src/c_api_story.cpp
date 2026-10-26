@@ -380,6 +380,7 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // embedded editor preview resolve the same component contract.
         std::string transition = "instant";
         float transitionDuration = 1.0f;
+        int saveSlotCount = 10;  // T2b: slots the Save / Load pages list
         const auto manifestPath = projectPath / "project.rowlproj";
         std::error_code manifestError;
         if (std::filesystem::is_regular_file(manifestPath, manifestError) && !manifestError &&
@@ -389,9 +390,14 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                 const auto json = nlohmann::json::parse(manifest);
                 transition = json.value("default_bgm_transition", transition);
                 transitionDuration = json.value("default_bgm_transition_duration_seconds", transitionDuration);
+                const auto slotsIt = json.find("save_slot_count");
+                if (slotsIt != json.end() && slotsIt->is_number_integer()) {
+                    saveSlotCount = static_cast<int>(std::clamp<long long>(slotsIt->get<long long>(), 1, 100));
+                }
             } catch (...) { }
         }
         engine->setBgmTransitionDefaults(transition, transitionDuration);
+        engine->setSaveSlotCount(saveSlotCount);
         if (engine->getVfs()) {
             // #122: a dead root used to clear the mounts in total silence —
             // the story boot then missed with no diagnosis anywhere. Record
@@ -408,6 +414,14 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
         // D01b: per-game save/profile dirs + one-time legacy save copy
         // (thin wrapper in c_api_game_data.cpp; falls back to <root>/saves).
         applyProjectGameData(*engine, projectPath);
+        // D07-1: unlockable-content catalog (extras.json) - after the profile
+        // opened and before the story loads, so the start node's entry can
+        // already unlock.
+        engine->loadExtrasCatalog();
+        // T1: player-UI theme (ui_theme.json) - before the story loads, so the
+        // first node already hydrates with the project's dialogue / choice
+        // defaults; the window (when there is one) gets it right away.
+        engine->loadUiTheme();
         // Faz 3 Dilim 1 (#92): manifest locales + catalogs load on project
         // mount — AFTER the VFS remount above, so the VFS-first catalog
         // probe sees packaged locales (Assets/locales inside .rowlpkg).
