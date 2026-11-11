@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cctype>
 #include <cstdio>
+#include <cwctype>
 #include <exception>
 #include <optional>
 #include <system_error>
@@ -381,12 +382,19 @@ void VFSManager::mountPackagesUnder(const fs::path& pkgPath) {
                     // scan must explain itself.
                     ROWL_LOG_WARN("VFS package scan skipped unreadable entry in '" + pkgUtf8 +
                                   "': " + entryError.message());
-                } else if (regular && entry.path().extension().wstring() == L".rowlpkg") {
-                    // Wide-karşılaştırma: hot-loop'ta narrow-literal/path
-                    // dönüşümü sıfır. pathToUtf8 temiz u8-roundtrip'tir
-                    // (kanıtlı) ve o da iç try'ın kalkanındadır.
-                    mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
-                    mountedAny = true;
+                } else if (regular) {
+                    // uzantı karşılaştırması büyük/küçük harf duyarsız
+                    // olmalı — GAME.ROWLPKG hiç mount edilmeden yok sayılıyordu.
+                    std::wstring extension = entry.path().extension().wstring();
+                    std::transform(extension.begin(), extension.end(), extension.begin(),
+                                   [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+                    if (extension == L".rowlpkg") {
+                        // Wide-karşılaştırma: hot-loop'ta narrow-literal/path
+                        // dönüşümü sıfır. pathToUtf8 temiz u8-roundtrip'tir
+                        // (kanıtlı) ve o da iç try'ın kalkanındadır.
+                        mountPackage("", Rowl::Platform::pathToUtf8(entry.path()));
+                        mountedAny = true;
+                    }
                 }
             } catch (const std::exception& ex) {
                 ROWL_LOG_WARN("VFS package scan skipped throwing entry in '" + pkgUtf8 +
@@ -633,8 +641,26 @@ void physicalPathKey(const fs::path& path, std::string& key) {
     //
     // YAKALAMA DİR. Yalnız yol-dönüşümü aileleri; std::bad_alloc gibi gerçek
     // bir hata burada gizlenmez (gizlemek "sessiz düşme"nin ta kendisidir).
-    converted = Rowl::Platform::pathToUtf8(resolved);
-    canonical = true;
+    // pathToUtf8 Windows'ta fırlatabilir (std::system_error/std::range_error);
+    // yakalanmazsa yedek kimlik dalı erişilemez kalır ve teşhis hiç üretilmez.
+    try {
+        converted = Rowl::Platform::pathToUtf8(resolved);
+        canonical = true;
+    } catch (const std::system_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+    } catch (const std::range_error& e) {
+        emitPathDiagnosis(
+            "VFS shadow diagnosis: path could not be canonicalised: " +
+            std::string(e.what()) +
+            ". Using a non-canonical fallback identity for this path; its shadow "
+            "check is UNVERIFIED and may report a FALSE shadow. It cannot hide a "
+            "real one.");
+    }
     if (!canonical) {
         // Yedek kimlik: ham yazım. Aynı dosyanın iki yazımı farklı sayılır
         // (sahte uyarı — kabul edilen yön), iki farklı dosya ASLA aynı

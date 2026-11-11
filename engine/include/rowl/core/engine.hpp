@@ -735,13 +735,16 @@ private:
     /// F2 (B-3): slots whose last save failed - their row says so instead of showing the
     /// older (still valid) file as if the save had worked.
     mutable std::bitset<100> m_slotSaveFailed;
-    /// F2 (B-2): the selected row's thumbnail, read lazily from its file.
+    /// F2 (B-2): a slot's thumbnail, read lazily and kept per slot. A "cards" page
+    /// asks for every visible card per frame, so a bounded LRU map replaces the one entry.
     struct SlotThumbnailCache {
-        int32_t slot = -1;
-        std::string stamp;
-        std::shared_ptr<const std::string> png;
+        std::string stamp;                       ///< info.thumbnailStamp the png was read for
+        std::shared_ptr<const std::string> png;  ///< null: an unreadable thumbnail is not retried per frame
+        uint64_t lastUsed = 0;                   ///< LRU clock tick (see m_slotThumbnailClock)
     };
-    mutable SlotThumbnailCache m_slotThumbnail;
+    static constexpr size_t kSlotThumbnailCacheMax = 64;
+    mutable std::unordered_map<int32_t, SlotThumbnailCache> m_slotThumbnail;
+    mutable uint64_t m_slotThumbnailClock = 0;
     std::shared_ptr<const std::string> slotThumbnail(int32_t slot, const PauseSlotInfo& info) const;
     /// Corrupt slot files already reported (slot|size|mtime): one log line per bad file.
     mutable std::unordered_set<std::string> m_reportedBadSlots;

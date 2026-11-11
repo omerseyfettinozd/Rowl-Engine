@@ -334,15 +334,27 @@ std::string Engine::slotNumberText(int slot) const {
 
 std::shared_ptr<const std::string> Engine::slotThumbnail(int32_t slot, const PauseSlotInfo& info) const {
     if (!info.hasThumbnail) return nullptr;
-    if (m_slotThumbnail.slot == slot && m_slotThumbnail.stamp == info.thumbnailStamp) {
-        return m_slotThumbnail.png;  // may be null: an unreadable thumbnail is not retried per frame
+    auto hit = m_slotThumbnail.find(slot);
+    if (hit != m_slotThumbnail.end() && hit->second.stamp == info.thumbnailStamp) {
+        hit->second.lastUsed = ++m_slotThumbnailClock;
+        return hit->second.png;  // may be null: an unreadable thumbnail is not retried per frame
     }
     std::string png = Rowl::State::readSaveSlotThumbnail(
         getSaveDirectoryPath() / ("save_slot_" + std::to_string(slot) + ".json"));
-    m_slotThumbnail.slot = slot;
-    m_slotThumbnail.stamp = info.thumbnailStamp;
-    m_slotThumbnail.png = png.empty() ? nullptr : std::make_shared<const std::string>(std::move(png));
-    return m_slotThumbnail.png;
+    // A "cards" page reads every visible card per frame; keep one entry per slot and evict
+    // the least recently used one so the map stays bounded without re-parsing per card.
+    if (hit == m_slotThumbnail.end() && m_slotThumbnail.size() >= kSlotThumbnailCacheMax) {
+        auto oldest = m_slotThumbnail.begin();
+        for (auto it = m_slotThumbnail.begin(); it != m_slotThumbnail.end(); ++it) {
+            if (it->second.lastUsed < oldest->second.lastUsed) oldest = it;
+        }
+        m_slotThumbnail.erase(oldest);
+    }
+    SlotThumbnailCache& entry = m_slotThumbnail[slot];
+    entry.stamp = info.thumbnailStamp;
+    entry.png = png.empty() ? nullptr : std::make_shared<const std::string>(std::move(png));
+    entry.lastUsed = ++m_slotThumbnailClock;
+    return entry.png;
 }
 
 std::string Engine::menuHintText(UiLang lang) const {

@@ -254,3 +254,4 @@ void test_save_slot_and_package_fuzz();
 void test_camera_and_transition_pipeline();
 void test_scene_update_rollback();  // #20/#21: scene-update atomic-rollback hybrid probe
 void test_render_transition_fixes();  // #160/#162/#163/#164: render/transition lock tests
+void test_agent_audit_regressions();  // denetim duzeltme kilidi (A-I): tema nesting, cursor skin, save kimlik/version, lua NUL/sayi anahtar, chapter order/replace, profil nesting

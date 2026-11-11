@@ -5,6 +5,7 @@
  * the parser and the serializer, so the file format and GetUiThemeJson cannot
  * drift apart.
  */
+#include "rowl/state/json_nesting.hpp"
 #include "rowl/state/ui_theme.hpp"
 
 #include "rowl/text/hex_color.hpp"
@@ -26,6 +27,9 @@ using Json = nlohmann::ordered_json;
 
 constexpr std::size_t kMaxPathBytes = 260;
 constexpr std::size_t kMaxEchoBytes = 40;
+// nlohmann::json::parse recurses per nesting level with no depth limit; refuse
+// a deeply nested document before the (uncatchable) thread-stack overflow.
+constexpr std::size_t kUiThemeMaxNestingDepth = 128;
 
 char lowerAscii(char c) {
     return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
@@ -1087,7 +1091,8 @@ bool uiThemeHasSkins(const UiTheme& theme) {
         if (!skin.image.empty() || (set != nullptr && set->none)) any = true;
     });
     visitTheme(copy, walker, true);
-    return any;
+    // A lone custom cursor still counts: High Contrast must step it aside.
+    return any || !copy.cursor.image.empty();
 }
 
 UiTheme uiThemeWithoutSkins(const UiTheme& theme) {
@@ -1097,6 +1102,8 @@ UiTheme uiThemeWithoutSkins(const UiTheme& theme) {
         if (set != nullptr) set->none = false;
     });
     visitTheme(copy, walker, true);
+    // The walker's imagePath is a no-op, so the custom cursor is dropped here.
+    copy.cursor.image.clear();
     return copy;
 }
 
@@ -1121,6 +1128,10 @@ UiThemeLoad parseUiTheme(std::string_view json) {
     };
     if (json.size() > kUiThemeMaxFileBytes) {
         return fail("larger than " + std::to_string(kUiThemeMaxFileBytes) + " bytes; ignored");
+    }
+    // A deeply nested document would blow the parser stack before any field.
+    if (!jsonNestingWithinBudget(json, kUiThemeMaxNestingDepth)) {
+        return fail("nesting too deep; ignored");
     }
     const Json root = Json::parse(json.begin(), json.end(), nullptr, false);
     if (root.is_discarded() || !root.is_object()) {

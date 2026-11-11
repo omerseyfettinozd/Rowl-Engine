@@ -920,6 +920,9 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                 // kuyruk-hatasi (prova/Clear hic calismaz; fail yolu birebir ayni).
                 m_testFailQueueNext = false;
             } else if (SDL_SetAudioStreamFormat(targetStream, &floatSpec, nullptr)) {
+                // Frekans oranı akış özelliğidir; blip pitch'inden kalır. Yeni
+                // kuyruk oranı 1.0f'e döndürür (blip hızıyla çalmasın).
+                SDL_SetAudioStreamFrequencyRatio(targetStream, 1.0f);
                 if (!needsReplace) {
                     // Voice + transition-scratch: doğrudan ek-kuyruk
                     // (yıkıcı adım yoktur; eski davranış aynen).
@@ -1035,7 +1038,19 @@ void AudioEngine::playAudio(const std::string& assetPath, AudioChannelType chann
                     m_bgmData.assign(floatBuffer, floatBuffer + floatLength);
                     m_bgmChannels = (floatSpec.channels >= 1 && floatSpec.channels <= 8) ? floatSpec.channels : 2;
                     m_bgmRateHz = (floatSpec.freq > 0) ? floatSpec.freq : 48000;
+                    // Yarıda kalan crossfade iptal edilir: scratch akışı temizlenip
+                    // duraklatılır, yoksa update() eski parçayı sonsuza dek besler.
+                    const bool hadActiveTransition = m_bgmTransitionActive;
+                    if (m_transitionBgmStream) {
+                        SDL_ClearAudioStream(m_transitionBgmStream);
+                        SDL_PauseAudioStreamDevice(m_transitionBgmStream);
+                    }
+                    m_transitionBgmData.clear();
                     m_bgmTransitionActive = false;
+                    if (hadActiveTransition) {
+                        // Fade'de kısılmış BGM kazancı tam değere döner.
+                        applyChannelGains();
+                    }
                 }
                 // Faz 5 Dilim 1: RAM taahhüdü snapshot'ı (önceki stream
                 // kaynağı kapanır; over-threshold WAV köşesinde karar
@@ -1246,6 +1261,12 @@ void AudioEngine::stopAll() {
                             std::string(SDL_GetError()));
         }
     }
+    // Voice akışı da susturulur: aksi halde stopAll "tüm kanallar durdu" derken
+    // kuyruktaki replik çalmaya devam eder (state sıfırlanır ama ses kalır).
+    if (m_voiceStream && !SDL_ClearAudioStream(m_voiceStream)) {
+        noteStopFailure("Unable to clear voice audio stream while stopping: " +
+                        std::string(SDL_GetError()));
+    }
     cancelAmbienceCrossfade();
     m_ambienceData.clear();
     m_ambienceSampleOffset = 0;
@@ -1380,7 +1401,9 @@ void AudioEngine::update(float deltaSeconds) {
         // A5-tur1: loop-feed fail'leri warn-once ile kayda geçer.
         // m_lastError'e YAZILMAZ — o "son API çağrısı" snapshot'ıdır,
         // update-thread onu ezmemelidir.
-        if (m_bgmStream && !m_bgmData.empty() && m_bgmLoop) {
+        // Streamed BGM'de besleme pump'ındır; eski RAM PCM'i (m_bgmData)
+        // yeni akışa geri kuyruklanmamalıdır (yanlış format/parça çalar).
+        if (m_bgmStream && !m_isBgmStreamed && !m_bgmData.empty() && m_bgmLoop) {
             int available = SDL_GetAudioStreamAvailable(m_bgmStream);
             if (available <= 0) {
                 SDL_AudioSpec bgmSpec{};
@@ -2286,6 +2309,11 @@ void AudioEngine::playVoiceBlip(const std::string& assetPath, float pitch, float
     // okuyucularıyla (ve diğer blip thread'leriyle) yarışmaz. Sayaçların
     // kendisi de atomiktir (kilitsiz exact-count okuma için).
     std::lock_guard<std::mutex> lock(m_stateMutex);
+
+    // Blip snapshot'ı her çağrıda tazelenir; başarılı asset kuyruğu başka
+    // kanaldan kalan eski hatayı play_voice_blip damgası olarak sızdırmasın.
+    m_lastError.clear();
+    m_lastErrorClass = AudioErrorClass::None;
 
     if (!std::isfinite(pitch) || pitch <= 0.01f) pitch = 1.0f;
     if (!std::isfinite(volume)) volume = 0.85f;

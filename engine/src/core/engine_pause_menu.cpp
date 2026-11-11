@@ -190,7 +190,9 @@ void Engine::menuActivateSelected() {
             m_backlogFromPause = true;
             m_pauseConfirmQuit = false;
             m_pauseSelected = std::max<int>(0, static_cast<int>(getDialogueHistory().size()) - 1);
-            m_backlogTop = m_pauseSelected;
+            // Top 0'dan başlar: backlogEnsureVisible onu "seçimi gösteren en küçük
+            // indeks"e çeker, sayfa dolar (top = seçim iken tek satır çiziliyordu).
+            m_backlogTop = 0;
             m_backlogLineOffset = 0;
             backlogEnsureVisible();
             break;

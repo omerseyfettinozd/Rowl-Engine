@@ -641,7 +641,9 @@ void FontRenderer::renderText(
         if (maxHeight > 0.0f && (currentY - startY + lineHeight > maxHeight)) {
             break; // Do not overflow box height
         }
-        if (codepointsDrawn >= maxVisibleRevealUnits) {
+        // daktilo limiti reveal UNIT, çizim sayacı ise SKALER sayar;
+        // birim->skaler dönüşümü yapılmış visibleScalars ile karşılaştır.
+        if (codepointsDrawn >= visibleScalars) {
             break;
         }
 
@@ -657,7 +659,7 @@ void FontRenderer::renderText(
         float cursorX = lineX;
         size_t byteIdx = 0;
 
-        while (byteIdx < line.length() && codepointsDrawn < maxVisibleRevealUnits) {
+        while (byteIdx < line.length() && codepointsDrawn < visibleScalars) {
             uint32_t cp = getNextCodepoint(line, byteIdx);
             codepointsDrawn++;
 

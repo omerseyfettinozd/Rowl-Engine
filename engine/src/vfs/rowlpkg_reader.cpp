@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <array>
 #include <streambuf>
 #include <cctype>
@@ -70,8 +71,17 @@ std::optional<std::string> normalizePackagePath(std::string path) {
 
     std::replace(path.begin(), path.end(), '\\', '/');
     // A2a: entry names are UTF-8 — same narrow-ctor trap as the mount root.
-    const std::filesystem::path normalized =
-        std::filesystem::path(std::u8string(path.begin(), path.end())).lexically_normal();
+    // bozuk UTF-8 giriş adı fs::path kurucusunda (MSVC) std::range_error
+    // fırlatır; istisna bool dönen indeks yüklemesinden kaçmasın — giriş reddedilir.
+    std::filesystem::path normalized;
+    try {
+        normalized =
+            std::filesystem::path(std::u8string(path.begin(), path.end())).lexically_normal();
+    } catch (const std::system_error&) {
+        return std::nullopt;
+    } catch (const std::range_error&) {
+        return std::nullopt;
+    }
     if (normalized.empty() || normalized.is_absolute() || normalized.has_root_name() ||
         normalized.has_root_directory()) {
         return std::nullopt;
@@ -764,7 +774,10 @@ std::unique_ptr<std::istream> RowlPkgDataSource::tryOpenStream(const std::string
     // A present-but-empty entry yields a valid empty stream, not nullptr.
     auto data = readEntry(it->second, path);
     if (!data) return nullptr;
-    std::string bytes(reinterpret_cast<const char*>(data->data()), data->size());
+    // boş vektörde data() nullptr olur; std::string(nullptr, 0)
+    // önkoşul ihlalidir (UB) — engaged boş girdi gerçek boş akış olarak kalır.
+    std::string bytes;
+    if (!data->empty()) bytes.assign(reinterpret_cast<const char*>(data->data()), data->size());
     return std::make_unique<std::istringstream>(std::move(bytes), std::ios::binary);
 }
 

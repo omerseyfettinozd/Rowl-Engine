@@ -77,8 +77,12 @@ constexpr std::size_t kRecoveryReserveBytes = 1024u * 1024u;
 // the environment boundary also prevents `_G.rowl = ...` from breaking the
 // component later in the same callback.
 static int lua_module_newindex(lua_State* state) {
-    const char* key = lua_tostring(state, 2);
-    if (key && std::string_view(key) == "rowl") return 0;
+    // lua_tostring sayı anahtarını YERİNDE string'e çevirir; "rowl"
+    // kapısı yalnız gerçek string anahtarda bakmalı, rawset özgün anahtarı görmeli.
+    if (lua_type(state, 2) == LUA_TSTRING) {
+        const char* key = lua_tostring(state, 2);
+        if (key && std::string_view(key) == "rowl") return 0;
+    }
     lua_rawset(state, 1);
     return 0;
 }
@@ -457,23 +461,36 @@ void LuaSandbox::sweepStrayGlobals() {
     // Only sandbox-owned names survive a session boundary; lua_next cannot
     // tolerate mutation mid-iteration, so collect first, then clear.
     std::vector<std::string> strayGlobals;
+    // string olmayan anahtarlar da oturum sınırını aşar (sayı/tablo
+    // anahtarlı strays); anahtarı registry'de tut, iterasyondan sonra ham sil.
+    std::vector<int> strayOtherKeys;
     lua_pushglobaltable(m_luaState);
+    const int globalsIndex = lua_gettop(m_luaState);
     lua_pushnil(m_luaState);
-    while (lua_next(m_luaState, -2) != 0) {
+    while (lua_next(m_luaState, globalsIndex) != 0) {
         if (lua_type(m_luaState, -2) == LUA_TSTRING) {
             if (const char* name = lua_tostring(m_luaState, -2)) {
                 if (m_initialGlobals.find(name) == m_initialGlobals.end()) {
                     strayGlobals.emplace_back(name);
                 }
             }
+        } else {
+            lua_pushvalue(m_luaState, -2);
+            strayOtherKeys.push_back(luaL_ref(m_luaState, LUA_REGISTRYINDEX));
         }
         lua_pop(m_luaState, 1);
     }
-    lua_pop(m_luaState, 1);
     for (const auto& name : strayGlobals) {
         lua_pushnil(m_luaState);
         lua_setglobal(m_luaState, name.c_str());
     }
+    for (const int keyRef : strayOtherKeys) {
+        lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, keyRef);
+        lua_pushnil(m_luaState);
+        lua_rawset(m_luaState, globalsIndex);
+        luaL_unref(m_luaState, LUA_REGISTRYINDEX, keyRef);
+    }
+    lua_pop(m_luaState, 1); // globals
 }
 
 void LuaSandbox::bindEngineApis() {
@@ -841,8 +858,10 @@ bool LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     // past the cap the write is rejected instead of growing unboundedly.
     // Embedded NULs are rejected too: lua_pushstring would truncate them and
     // leave the map and the globals split-brained on the same key.
+    // denetim yalnız anahtarda kalmıştı; değer de aynı kapıdan geçer.
     if (key.size() > kMaxVariableKeyBytes || value.size() > kMaxVariableValueBytes ||
-        key.size() != std::strlen(key.c_str())) {
+        key.size() != std::strlen(key.c_str()) ||
+        value.size() != std::strlen(value.c_str())) {
         ROWL_LOG_WARN("Lua Sandbox rejected oversized variable: '" + key + "'");
         return false;
     }
@@ -1286,18 +1305,24 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     // Each component owns an environment. It inherits only the sandbox's safe
     // globals, keeps _G local, and hides the metatable so one component cannot
     // mutate another component's lookup path.
-    lua_newtable(m_luaState);                         // env
-    const int environmentIndex = lua_gettop(m_luaState);
-    lua_pushvalue(m_luaState, environmentIndex);
-    lua_setfield(m_luaState, environmentIndex, "_G");
-    lua_newtable(m_luaState);                         // metatable
-    lua_pushglobaltable(m_luaState);
-    lua_setfield(m_luaState, -2, "__index");
-    lua_pushcfunction(m_luaState, lua_module_newindex);
-    lua_setfield(m_luaState, -2, "__newindex");
-    lua_pushboolean(m_luaState, 0);
-    lua_setfield(m_luaState, -2, "__metatable");
-    lua_setmetatable(m_luaState, environmentIndex);
+    // kota tavandayken lua_newtable/setfield interning
+    // nullptr döndürüp pcall dışında panic ile süreci öldürür; rezerv karşılar.
+    int environmentIndex = 0;
+    {
+        const RecoveryScope recovery(this);
+        lua_newtable(m_luaState);                         // env
+        environmentIndex = lua_gettop(m_luaState);
+        lua_pushvalue(m_luaState, environmentIndex);
+        lua_setfield(m_luaState, environmentIndex, "_G");
+        lua_newtable(m_luaState);                         // metatable
+        lua_pushglobaltable(m_luaState);
+        lua_setfield(m_luaState, -2, "__index");
+        lua_pushcfunction(m_luaState, lua_module_newindex);
+        lua_setfield(m_luaState, -2, "__newindex");
+        lua_pushboolean(m_luaState, 0);
+        lua_setfield(m_luaState, -2, "__metatable");
+        lua_setmetatable(m_luaState, environmentIndex);
+    }
 
     resetInstructionCounter();
     const int loadStatus = luaL_loadbufferx(m_luaState, scriptCode.data(), scriptCode.size(),
@@ -1377,8 +1402,13 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
         return false;
     }
 
-    lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
-    lua_getfield(m_luaState, -1, functionName.c_str());
+    {
+        // yeni functionName interning'i kota tavandayken
+        // pcall dışında panic'e gider; okuma rezerv altında kalır.
+        const RecoveryScope recovery(this);
+        lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+        lua_getfield(m_luaState, -1, functionName.c_str());
+    }
     if (lua_isnil(m_luaState, -1)) {
         lua_pop(m_luaState, 2);
         return true;

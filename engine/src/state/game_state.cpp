@@ -3,6 +3,7 @@
 #include "rowl/core/logger.hpp"
 #include "rowl/core/story_graph.hpp"
 #include "rowl/platform/user_data_directories.hpp"
+#include "rowl/state/json_nesting.hpp"
 #include "rowl/state/save_metadata.hpp"
 #include "rowl/state/session_persistence.hpp"
 #include <nlohmann/json.hpp>
@@ -121,28 +122,10 @@ constexpr size_t kMaxThumbnailBase64Bytes = 1024 * 1024;
 // skipped so brackets inside dialogue text never count.
 constexpr size_t kMaxSaveNestingDepth = 128;
 
+// The scan now lives in json_nesting.hpp so the profile and theme loaders share
+// the one depth guard (kMaxSaveNestingDepth above stays the save budget).
 bool saveNestingWithinBudget(std::string_view text) {
-    size_t depth = 0;
-    bool inString = false;
-    for (size_t i = 0; i < text.size(); ++i) {
-        const char c = text[i];
-        if (inString) {
-            if (c == '\\') {
-                ++i;  // skip the escaped byte, whatever it is
-            } else if (c == '"') {
-                inString = false;
-            }
-            continue;
-        }
-        if (c == '"') {
-            inString = true;
-        } else if (c == '[' || c == '{') {
-            if (++depth > kMaxSaveNestingDepth) return false;
-        } else if (c == ']' || c == '}') {
-            if (depth > 0) --depth;
-        }
-    }
-    return true;
+    return jsonNestingWithinBudget(text, kMaxSaveNestingDepth);
 }
 
 // B7 (#25/#30 reserve dual-reality): bridge and stdlib names must never enter
@@ -285,6 +268,14 @@ nlohmann::json encodeStateObject(const GameState& s, bool withThumbnail,
 std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t version,
                                              const GameState* historyRoot = nullptr) {
     auto state = std::make_shared<GameState>();
+    // A present id must be an unsigned integer: a negative or float value would
+    // wrap (or be UB) through the get below, so refuse it on the existing path.
+    for (const char* key : {"step_id", "active_node_id"}) {
+        if (j.contains(key) && !j[key].is_number_unsigned()) {
+            ROWL_LOG_ERROR("GameState JSON contains a non-unsigned step or node identifier");
+            return nullptr;
+        }
+    }
     state->stepId = j.value("step_id", static_cast<uint64_t>(1));
     state->activeNodeId = j.value("active_node_id", static_cast<uint64_t>(101));
     state->typewriterIndex = j.value("typewriter_index", static_cast<uint32_t>(0));
@@ -392,6 +383,12 @@ std::shared_ptr<GameState> decodeStateObject(const nlohmann::json& j, uint32_t v
     auto decodeEntry = [](const nlohmann::json& rawEntry, DialogueHistoryEntry& entry) {
         if (!rawEntry.is_object()) {
             ROWL_LOG_ERROR("GameState JSON dialogue history entry must be an object");
+            return false;
+        }
+        // node_id follows the state-id rule: a present value must be an unsigned
+        // integer; a wrapped/negative one is refused, not silently defaulted.
+        if (rawEntry.contains("node_id") && !rawEntry["node_id"].is_number_unsigned()) {
+            ROWL_LOG_ERROR("GameState JSON dialogue history entry has a non-unsigned node id");
             return false;
         }
         entry.nodeId = rawEntry.value("node_id", uint64_t{0});
@@ -823,13 +820,16 @@ GameStateDecodeResult GameState::decodeJson(const std::string& jsonStr) {
             ROWL_LOG_ERROR("GameState JSON version must be an unsigned integer");
             return {};
         }
-        const auto version = j.value("version", CurrentSaveFormatVersion);
-        // #86 (v4): 1/2/3 decode as Migrated (mixer keys default to 1.0);
-        // anything else is foreign.
-        if (version != 1 && version != 2 && version != 3 && version != CurrentSaveFormatVersion) {
-            ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(version));
-            return {nullptr, GameStateDecodeStatus::UnsupportedVersion, version};
+        // #86 (v4): 1/2/3 decode as Migrated, anything else is foreign. Compare
+        // wide: a uint32_t get would wrap >2^32-1 onto the accepted 1..4 range.
+        const auto rawVersion = j.value("version", static_cast<uint64_t>(CurrentSaveFormatVersion));
+        if (rawVersion != 1 && rawVersion != 2 && rawVersion != 3 &&
+            rawVersion != CurrentSaveFormatVersion) {
+            ROWL_LOG_ERROR("Unsupported GameState save version: " + std::to_string(rawVersion));
+            return {nullptr, GameStateDecodeStatus::UnsupportedVersion,
+                    static_cast<uint32_t>(rawVersion)};
         }
+        const auto version = static_cast<uint32_t>(rawVersion);
 
         auto state = decodeStateObject(j, version);
         if (!state) {

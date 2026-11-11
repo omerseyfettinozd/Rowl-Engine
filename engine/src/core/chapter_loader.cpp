@@ -8,6 +8,7 @@
 #include "rowl/core/chapter_loader.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -51,7 +52,22 @@ bool readChapterMeta(const nlohmann::json& entry, ChapterLoaderMeta& out, std::s
             error = "chapter order must be an integer; rejected";
             return false;
         }
-        out.order = static_cast<int>(orderIt->get<int64_t>());
+        // get<int64_t>() daraltmasi denetimsizdir (unsigned 2^32 int'e kirpilir):
+        // deger once int araligina sigdigi icin dogrulanir.
+        constexpr int64_t kOrderMin = (std::numeric_limits<int>::min)();
+        constexpr int64_t kOrderMax = (std::numeric_limits<int>::max)();
+        const int64_t rawOrder = orderIt->is_number_unsigned()
+                                     ? static_cast<int64_t>(orderIt->get<uint64_t>())
+                                     : orderIt->get<int64_t>();
+        const bool orderOutOfRange =
+            orderIt->is_number_unsigned()
+                ? orderIt->get<uint64_t>() > static_cast<uint64_t>(kOrderMax)
+                : (rawOrder < kOrderMin || rawOrder > kOrderMax);
+        if (orderOutOfRange) {
+            error = "chapter order is out of range; rejected";
+            return false;
+        }
+        out.order = static_cast<int>(rawOrder);
     }
     const auto titleIt = entry.find("title");
     if (titleIt != entry.end() && titleIt->is_string()) out.title = titleIt->get<std::string>();
@@ -414,9 +430,11 @@ bool ChapterLoader::appendChapterFileJson(const std::string& json, std::string& 
     std::vector<StoryNode> parsed;
     if (!parseChapterNodes(*nodesIt, fileChapter, parsed, error)) return false;
 
-    // Duplicate kontrolu (atomik: once dogrula, sonra isle).
+    // Replace sozlesmesi (baslik 64-66): ayni chapter yeniden beslenince eski
+    // kova cikarilir; yalniz BASKA kovanin kimlikleri duplicate sayilir.
     for (const StoryNode& node : parsed) {
-        if (m_nodeBucket.find(node.id) != m_nodeBucket.end()) {
+        const auto owner = m_nodeBucket.find(node.id);
+        if (owner != m_nodeBucket.end() && owner->second != fileChapter) {
             error = "duplicate node id " + std::to_string(node.id) +
                     " across chapter files; rejected";
             return false;
@@ -442,6 +460,18 @@ bool ChapterLoader::appendChapterFileJson(const std::string& json, std::string& 
         rebuildOrder();
     }
     const std::string bucket = fileChapter;
+    // Replace: eski kova once tamamen cikarilir; silinen dugumler resident/
+    // nodeBucket'ta kalmaz, total sayaci eski boyut kadar iner.
+    const auto oldBucket = m_buckets.find(bucket);
+    if (oldBucket != m_buckets.end()) {
+        for (const StoryNode& node : oldBucket->second) {
+            m_nodeBucket.erase(node.id);
+            m_resident.erase(node.id);
+        }
+        m_totalNodes -= oldBucket->second.size();
+        m_residentChapters.erase(bucket);
+        oldBucket->second.clear();
+    }
     auto& stored = m_buckets[bucket];
     for (const StoryNode& node : parsed) {
         stored.push_back(node);

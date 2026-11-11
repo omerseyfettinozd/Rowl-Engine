@@ -12,6 +12,7 @@
 #include "rowl/core/logger.hpp"
 #include "rowl/platform/user_data_directories.hpp"
 #include "rowl/state/extras_catalog.hpp"
+#include "rowl/state/json_nesting.hpp"
 #include "rowl/state/profile_language.hpp"
 #include "rowl/state/save_durability.hpp"
 
@@ -40,6 +41,10 @@ using Json = nlohmann::ordered_json;
 namespace {
 
 constexpr float kAutosaveRetryDelaySeconds = 30.0f;
+
+// nlohmann::json::parse recurses per nesting level with no depth limit; refuse
+// a deeply nested document before the (uncatchable) thread-stack overflow.
+constexpr std::size_t kPlayerProfileMaxNestingDepth = 128;
 
 const char* const kKnownKeys[] = {
     "version", "game_id", "language", "read_content_ids", "master_volume", "bgm_volume",
@@ -411,6 +416,12 @@ void PlayerProfileStore::quarantineCorruptFile() {
         name = prefix + stamp + suffix + ".json";
     }
     ec.clear();
+    // The name must never already exist: overwriting would destroy an earlier
+    // evidence copy when the clock moved backwards. Leave the file, report it.
+    if (fs::exists(m_dir / name, ec)) {
+        m_diagnostic += " The corrupt file could not be quarantined (the target name is taken).";
+        return;
+    }
     const fs::path target = m_dir / name;
     fs::rename(m_path, target, ec);
     if (ec) {
@@ -481,6 +492,12 @@ void PlayerProfileStore::loadFromDisk() {
             corrupt("could not be read", false);
             return;
         }
+    }
+    // nlohmann::json::parse recurses per nesting level with no limit of its own,
+    // so answer Corrupt here instead of overflowing the thread stack (uncatchable).
+    if (!jsonNestingWithinBudget(raw, kPlayerProfileMaxNestingDepth)) {
+        corrupt("is nested too deeply", true);
+        return;
     }
     Json root = Json::parse(raw, nullptr, false);
     if (root.is_discarded()) {
