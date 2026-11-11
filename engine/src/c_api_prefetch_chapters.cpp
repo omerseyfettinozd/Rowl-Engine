@@ -447,7 +447,6 @@ RowlEngine_ResultCode RowlEngine_GetLoadedChaptersJson(RowlEngineHandle handle, 
 }
 
 int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
-    if (nodeId == 0) return 0;
     // D13 okuyucu: shared.
     std::shared_lock<std::shared_mutex> lock(g_prefetchMutex);
     // D3 (#150/#157): int-taşıyıcıda kod taşınamaz; yabancı WrongThread
@@ -460,6 +459,9 @@ int RowlEngine_IsChapterBoundaryNode(RowlEngineHandle handle, uint64_t nodeId) {
         stampWrongThread(handle, "is_chapter_boundary");
         return 0;
     }
+    // A4/guard sirasi: 0 dugumu arguman reddi, handle kararindan SONRA gelir;
+    // yabanci thread artik sessiz 0 yerine damgali reddedilir.
+    if (nodeId == 0) return 0;
     return invokeNoexcept<int>([&] {
         const PrefetchChapterRuntime empty{};
         const auto it = g_prefetchStates.find(handle);

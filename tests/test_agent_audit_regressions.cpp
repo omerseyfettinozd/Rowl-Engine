@@ -13,6 +13,15 @@
  *     toplam dugum sayisi degismez; dugumu silinmis surum silinen dugumu dusurur.
  *  H. StoryGraphParser: chapters[].order 4294967296 reddedilir ("out of range").
  *  I. PlayerProfileStore: 200000 derinlikte dosya cokmeden Corrupt durumu verir.
+ *  J. RowlEngine_InjectInputJson: ne id ne index tasiyan "choice", bos "choice_id"
+ *     ve sonlu olmayan tap koordinati (1e300) reddedilir (0) ve hikaye ilerlemez.
+ *  K. RowlEngine_ReplayBacklogVoice: Init edilmemis handle'da STATE_ERROR; sonuc
+ *     kodu ayni, last-result operation "replay_backlog_voice".
+ *  L. RowlEngine_GetSaveSlotMetadataJson: slot -1 INVALID_ARGUMENT; sonuc kodu
+ *     ayni, last-result operation "get_save_slot_metadata".
+ *  M. SetCharacterSlotAsset gecersiz UTF-8'li yolu saklar; GetCharacterDrawListJson
+ *     ROWL_RESULT_OK doner ve cizim listesi varligi tasir (strict dump UNKNOWN_ERROR
+ *     uretmez).
  *
  * Ses aygiti / pencere / ag / gercek kullanici dizini gerekmez; profil bolumu
  * test_native_player_profile.cpp'nin gecici dizin kalibini izler.
@@ -236,10 +245,113 @@ void playerProfileDeepNestingTest() {
     TEST_PASS("I: 200000-deep player-profile.json -> Corrupt 'nested too deeply' (no crash)");
 }
 
+// ── J ───────────────────────────────────────────────────────────────────────
+// Kurulum test_observability_c_api.cpp makeTwoNodeEngine ile birebir ayni:
+// SetProjectDirectory -> Init(320x180) -> dosyadan LoadStoryGraph -> Step.
+void injectInputJsonValidationTest() {
+    const fs::path root = fs::temp_directory_path() / "rowl_agent_audit_regressions_inject";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+
+    RowlEngineHandle h = RowlEngine_Create();
+    req(h != nullptr, "RowlEngine_Create returned null");
+    RowlEngine_SetProjectDirectory(h, root.string().c_str());
+    req(RowlEngine_Init(h, 320, 180, 0) == 1, "RowlEngine_Init(320x180) failed");
+    const fs::path graphPath = root / "two_node.json";
+    writeText(graphPath, R"({"format_version":4,"start_node_id":101,"nodes":[)"
+                        R"({"id":101,"speaker":"Guide","dialogue":"First.","next_nodes":[{"id":102}]},)"
+                        R"({"id":102,"speaker":"Guide","dialogue":"Second."}]})");
+    RowlEngine_LoadStoryGraph(h, graphPath.string().c_str());
+    RowlEngine_Step(h, 0.0f);
+    req(RowlEngine_GetCurrentNodeId(h) == 101, "setup: start node != 101");
+
+    req(RowlEngine_InjectInputJson(h, R"([{"t":"choice"}])") == 0,
+        "a choice event with neither a stable id nor an index was accepted");
+    req(RowlEngine_InjectInputJson(h, R"([{"t":"choice_id"}])") == 0,
+        "a choice_id event with an empty id was accepted");
+    req(RowlEngine_InjectInputJson(h, R"([{"t":"tap","x":1e300,"y":0}])") == 0,
+        "a tap with a non-finite x coordinate was accepted");
+    RowlEngine_Step(h, 0.0f);
+    req(RowlEngine_GetCurrentNodeId(h) == 101,
+        "a rejected input batch advanced the story");
+
+    req(RowlEngine_InjectInputJson(h, R"([{"t":"advance"}])") == 1,
+        "control: a valid advance event was rejected");
+    RowlEngine_Step(h, 0.0f);
+    req(RowlEngine_GetCurrentNodeId(h) == 102,
+        "control: the valid advance did not reach node 102");
+
+    RowlEngine_Shutdown(h);
+    RowlEngine_Destroy(h);
+    TEST_PASS("J: id-less choice, empty choice_id and 1e300 tap rejected without advancing");
+}
+
+// ── K ───────────────────────────────────────────────────────────────────────
+void replayBacklogVoicePreInitLastResultTest() {
+    RowlEngineHandle h = RowlEngine_Create();
+    req(h != nullptr, "RowlEngine_Create returned null");
+    req(RowlEngine_ReplayBacklogVoice(h, 0) == ROWL_RESULT_STATE_ERROR,
+        "ReplayBacklogVoice before Init must be STATE_ERROR");
+    req(RowlEngine_GetLastResultCode(h) == ROWL_RESULT_STATE_ERROR,
+        "the pre-init rejection is missing from the last-result code");
+    const std::string operation = RowlEngine_GetLastResultOperation(h);
+    req(operation == "replay_backlog_voice",
+        "last-result operation is '" + operation + "', expected 'replay_backlog_voice'");
+    RowlEngine_Destroy(h);
+    TEST_PASS("K: ReplayBacklogVoice before Init -> STATE_ERROR + op replay_backlog_voice");
+}
+
+// ── L ───────────────────────────────────────────────────────────────────────
+void saveSlotMetadataRangeLastResultTest() {
+    RowlEngineHandle h = RowlEngine_Create();
+    req(h != nullptr, "RowlEngine_Create returned null");
+    uint32_t required = 0;
+    req(RowlEngine_GetSaveSlotMetadataJson(h, -1, nullptr, 0, &required) ==
+            ROWL_RESULT_INVALID_ARGUMENT,
+        "out-of-range slot -1 metadata must be INVALID_ARGUMENT");
+    req(RowlEngine_GetLastResultCode(h) == ROWL_RESULT_INVALID_ARGUMENT,
+        "the out-of-range slot rejection is missing from the last-result code");
+    const std::string operation = RowlEngine_GetLastResultOperation(h);
+    req(operation == "get_save_slot_metadata",
+        "last-result operation is '" + operation + "', expected 'get_save_slot_metadata'");
+    RowlEngine_Destroy(h);
+    TEST_PASS("L: slot -1 metadata -> INVALID_ARGUMENT + op get_save_slot_metadata");
+}
+
+// ── M ───────────────────────────────────────────────────────────────────────
+// Kurulum test_character_layers.cpp testCApiVectors ile ayni (Init oncesi
+// Create + slot asset + caller-buffer draw list); gecersiz UTF-8'li yol
+// isSyntacticallyResolvableAsset'ten gecer, yani cizim listesine girer.
+void characterDrawListInvalidUtf8AssetTest() {
+    RowlEngineHandle h = RowlEngine_Create();
+    req(h != nullptr, "RowlEngine_Create returned null");
+    req(RowlEngine_SetCharacterSlotAsset(h, "body", "caf\xE9.png") == ROWL_RESULT_OK,
+        "the invalid-UTF-8 asset path was rejected at set time");
+
+    uint32_t required = 0;
+    req(RowlEngine_GetCharacterDrawListJson(h, nullptr, 0, &required) == ROWL_RESULT_OK &&
+            required >= 1,
+        "draw list size query with an invalid-UTF-8 asset is not OK");
+    std::string drawList(required, '\0');
+    uint32_t repeated = 0;
+    req(RowlEngine_GetCharacterDrawListJson(h, drawList.data(), required, &repeated) ==
+                ROWL_RESULT_OK &&
+            repeated == required,
+        "draw list copy with an invalid-UTF-8 asset is not OK");
+    drawList.resize(required - 1);
+    req(drawList.find("\"slot\":\"body\"") != std::string::npos &&
+            drawList.find("caf") != std::string::npos,
+        "the draw list does not carry the body asset: " + drawList);
+
+    RowlEngine_Destroy(h);
+    TEST_PASS("M: invalid-UTF-8 asset path -> draw list OK with the body asset present");
+}
+
 } // namespace
 
 void test_agent_audit_regressions() {
-    TEST_SECTION("Agent Audit Regressions (A-I)");
+    TEST_SECTION("Agent Audit Regressions (A-M)");
 
     themeNestingDepthTest();
     themeCursorSkinTest();
@@ -250,4 +362,8 @@ void test_agent_audit_regressions() {
     chapterLoaderOrderAndReplaceTest();
     storyGraphChapterOrderTest();
     playerProfileDeepNestingTest();
+    injectInputJsonValidationTest();
+    replayBacklogVoicePreInitLastResultTest();
+    saveSlotMetadataRangeLastResultTest();
+    characterDrawListInvalidUtf8AssetTest();
 }

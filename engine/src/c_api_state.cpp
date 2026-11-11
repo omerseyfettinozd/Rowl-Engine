@@ -134,7 +134,10 @@ RowlEngine_ResultCode RowlEngine_ReplayBacklogVoice(RowlEngineHandle handle, uin
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;
-        if (!engine->isInitialized()) return ROWL_RESULT_STATE_ERROR;
+        // D1: init-öncesi erken dönüş last-result kanalına StateError işlesin;
+        // dönüş kodu aynı kalır, disiplinsiz host tanılamayı okuyabilir.
+        if (!requireEngineInitialized(engine, "replay_backlog_voice"))
+            return ROWL_RESULT_STATE_ERROR;
         if (static_cast<size_t>(index) >= engine->getDialogueHistory().size())
             return ROWL_RESULT_INVALID_ARGUMENT;
         return engine->replayBacklogVoice(static_cast<size_t>(index))
@@ -266,7 +269,14 @@ RowlEngine_ResultCode RowlEngine_GetSaveSlotMetadataJson(
         return ROWL_RESULT_WRONG_THREAD;
     }
     if (!isLiveHandle(handle)) return ROWL_RESULT_INVALID_HANDLE;
-    if (!Rowl::State::isValidSlot(slotIndex)) return ROWL_RESULT_INVALID_ARGUMENT;
+    // W8-f1 (3): aralık hatası da last-result kanalına damgalanır
+    // (Engine::deleteSaveSlot emsali); dönüş kodu aynen INVALID_ARGUMENT.
+    if (!Rowl::State::isValidSlot(slotIndex)) {
+        stampInvalidArgument(toEngineChecked(handle),
+                             "Save slot index out of range (0-99); failing closed",
+                             "get_save_slot_metadata");
+        return ROWL_RESULT_INVALID_ARGUMENT;
+    }
     return invokeNoexcept<RowlEngine_ResultCode>([&] {
         auto engine = toEngineChecked(handle);
         if (!engine) return ROWL_RESULT_INVALID_HANDLE;

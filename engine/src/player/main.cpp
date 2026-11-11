@@ -505,6 +505,15 @@ int rowlPlayerMain(int argc, char* argv[]) {
     // non-ASCII kökte FIRLATIR (fix-5 bug sınıfı); C API sözleşmesi UTF-8'dir.
     const std::string baseProjUtf8 = playerPathToUtf8(baseProj);
     RowlEngine_SetProjectDirectory(engine, baseProjUtf8.c_str());
+    // A failed mount only reaches the last-result channel, so read it here:
+    // --print-game-identity must not report a broken package as a working game.
+    bool projectMountFailed = false;
+    if (playerQueryText(engine, RowlEngine_GetLastResultOperationUtf8) == "set_project_directory" &&
+        RowlEngine_GetLastResultCode(engine) != ROWL_RESULT_OK) {
+        projectMountFailed = true;
+        std::cerr << "[Player] Project mount failed: "
+                  << playerQueryText(engine, RowlEngine_GetLastResultMessageUtf8) << "\n";
+    }
     refreshCrashSnapshot(engine);
 
     // D01d: say where this game keeps its identity, saves and profile.
@@ -512,7 +521,7 @@ int rowlPlayerMain(int argc, char* argv[]) {
     if (printGameIdentity) {
         std::cout << gameInfo.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace) << std::endl;
         RowlEngine_Destroy(engine);
-        return 0;
+        return projectMountFailed ? 1 : 0;
     }
     printGameIdentityBlock(gameInfo);
 
@@ -550,6 +559,14 @@ int rowlPlayerMain(int argc, char* argv[]) {
 
     if (!packageSmokeTest && !storyGraphPath.empty() && !storyPath.empty()) {
         RowlEngine_LoadStoryGraph(engine, storyGraphPath.c_str());
+        // A rejected explicit --story used to fall through to an empty default
+        // scene and exit 0; report the graph error and stop instead.
+        const std::string storyError = playerQueryText(engine, RowlEngine_GetLastStoryGraphErrorUtf8);
+        if (!storyError.empty()) {
+            std::cerr << "[Player] Story graph load failed: " << storyError << "\n";
+            RowlEngine_Destroy(engine);
+            return 1;
+        }
     } else if (!packageSmokeTest && RowlEngine_GetCurrentNodeId(engine) != 0) {
         // Gerçek ekran denemesi (2026-10-20): sürüm paketinde grafik zaten
         // SetProjectDirectory ile VFS'ten (Assets/packages/game.rowlpkg) yüklenir;

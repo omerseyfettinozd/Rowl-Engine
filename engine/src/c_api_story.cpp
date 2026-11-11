@@ -388,8 +388,16 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             try {
                 std::ifstream manifest(manifestPath);
                 const auto json = nlohmann::json::parse(manifest);
-                transition = json.value("default_bgm_transition", transition);
-                transitionDuration = json.value("default_bgm_transition_duration_seconds", transitionDuration);
+                // Alan tipi bozuksa atla: fırlayan type_error tüm bloğu
+                // düşürüp geçerli save_slot_count'u da kaybettiriyordu.
+                const auto transitionIt = json.find("default_bgm_transition");
+                if (transitionIt != json.end() && transitionIt->is_string()) {
+                    transition = transitionIt->get<std::string>();
+                }
+                const auto durationIt = json.find("default_bgm_transition_duration_seconds");
+                if (durationIt != json.end() && durationIt->is_number()) {
+                    transitionDuration = durationIt->get<float>();
+                }
                 const auto slotsIt = json.find("save_slot_count");
                 if (slotsIt != json.end() && slotsIt->is_number_integer()) {
                     saveSlotCount = static_cast<int>(std::clamp<long long>(slotsIt->get<long long>(), 1, 100));
@@ -407,6 +415,9 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
                 engine->recordStoryGraphCause(
                     "Project root is missing or not a directory: " +
                     std::string(projectRoot));
+                // Ölü kökte kimlik/kayıt/tema zincirini boş VFS'e bağlama;
+                // mount'lar zaten temizlendi, tanı kanalda kalır.
+                return;
             }
         }
         // D01a: game identity (package carrier -> manifest -> derived).
@@ -447,8 +458,9 @@ void RowlEngine_SetProjectDirectory(RowlEngineHandle handle, const char* project
             win->reloadFonts();
         }
         // Try loading story graph via VFS first (project Assets is now mounted)
-        engine->loadStoryGraphFile();
-        if (engine->getCurrentNodeId() == 0) {
+        // Dönüş değeri kullanılır: başarısız yükleme eski grafın imleci != 0
+        // olsa da kök-seviye doğrudan adayların denenmesini engellemez.
+        if (!engine->loadStoryGraphFile()) {
             // A2b: UTF-8 in, wide path out — the narrow path ctor would
             // reinterpret a non-ASCII project root in the ANSI codepage on
             // Windows (mojibake miss), and the throwing probes turn a

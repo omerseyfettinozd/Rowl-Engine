@@ -385,8 +385,12 @@ RowlEngine_ResultCode RowlEngine_GetCharacterPresetListJson(
         const auto it = g_characterStates.find(handle);
         const CharacterRuntime& runtime =
             (it == g_characterStates.end()) ? empty : it->second;
-        return copyUtf8ToCaller(runtime.presets.presetListJson().dump(),
-                                buffer, bufferSize, outRequiredSize);
+        // Preset adı UTF-8 doğrulanmadan saklanır; strict dump fırlatınca
+        // liste sorgusu kalıcı 0 dönüyordu (replace emsali: logger.cpp).
+        return copyUtf8ToCaller(
+            runtime.presets.presetListJson().dump(
+                -1, ' ', false, nlohmann::json::error_handler_t::replace),
+            buffer, bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
@@ -407,8 +411,11 @@ RowlEngine_ResultCode RowlEngine_GetCharacterDrawListJson(
                            {"asset", item.asset},
                            {"opacity", item.opacity}});
         }
-        return copyUtf8ToCaller(arr.dump(), buffer, bufferSize,
-                                outRequiredSize);
+        // Asset yolu UTF-8 doğrulanmadan saklanır; strict dump fırlatınca
+        // draw-list sorgusu kalıcı 0 dönüyordu (replace emsali: logger.cpp).
+        return copyUtf8ToCaller(
+            arr.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
+            buffer, bufferSize, outRequiredSize);
     }, ROWL_RESULT_UNKNOWN_ERROR);
 }
 
