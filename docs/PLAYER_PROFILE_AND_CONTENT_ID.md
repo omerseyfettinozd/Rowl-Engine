@@ -129,7 +129,7 @@ profiles are a Faz 5 concern.
 
 The native engine now owns a profile store (`engine/src/state/player_profile.cpp`)
 that reads and writes the same `player-profile.json` keys as section 4, plus
-`game_id` and a reserved `unlocks` array. It loads when `SetProjectDirectory`
+`game_id` and `unlocks` (reserved array until D07-1, now the unlock records, section 11). It loads when `SetProjectDirectory`
 resolves the game data layout (per-game dir `.../games/<game-id>/profile`;
 `<project>/profile` beside the project-local saves for derived ids), marks dialogues read when
 they are presented in play state, and exposes `RowlEngine_Profile*`
@@ -226,3 +226,13 @@ parity, per-game location, single writer) is section 9.
   finds the read id and applies the stored volumes; a hand-written
   `"version": 99` profile stays byte-identical and is reported read-only; the
   launcher does not move the data dir.
+
+## 11. Unlocks (D07-1)
+
+The reserved `unlocks` field now has a schema: `{"cg": [ids], "music": [ids], "achievements":
+[{"id", "at"}]}` (ids `[a-z0-9_.-]{1,64}`, `at` a UTC ISO-8601 stamp, at most 1,024 records per
+kind). The profile stays `version: 1`; an empty set is still written as `[]`, and legacy / opaque
+forms read as empty with a diagnostic while unknown keys are kept. The catalog (`extras.json`), the
+triggers and the C API are in `docs/EXTRAS_UNLOCKS.md`. The managed store keeps `unlocks` as an
+opaque array **or object** on rewrite.
+

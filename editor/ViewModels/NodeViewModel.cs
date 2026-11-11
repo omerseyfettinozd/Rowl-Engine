@@ -213,10 +213,7 @@ namespace RowlEngine.Editor.ViewModels
             var newObj = CreateObject($"{source.Name} (Copy)");
             foreach (var comp in source.Components)
             {
-                var newComp = ComponentRegistry.Create(comp.TypeKey);
-                newComp.Deserialize(comp.Serialize().ToDictionary(
-                    pair => pair.Key,
-                    pair => (object?)pair.Value));
+                var newComp = ComponentRegistry.Clone(comp);
                 // A duplicated dialogue is new content: it must not reuse the
                 // source content_id (the validator rejects duplicates).
                 if (newComp is DialogueComponentViewModel copiedDialogue)

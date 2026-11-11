@@ -98,6 +98,14 @@ namespace RowlEngine.Editor.Native
         internal static extern ResultCode RowlEngine_ProfileSetPreferencesJson(
             IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string json);
 
+        // ── Unlockable content (CAPABILITY_EXTRAS_UNLOCKS = 268435456, D07-1/D07-3) ──
+        // Owner-thread API. The editor reads the catalog the engine actually loaded
+        // (parity check against the managed catalog rules); it never unlocks anything.
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetExtrasJson(
+            IntPtr handle, IntPtr buffer, uint bufferSize, out uint requiredSize);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ResultCode RowlEngine_ProfileMarkRead(
             IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string contentId);
@@ -240,6 +248,11 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ResultCode RowlEngine_IsTitleScreenActive(IntPtr handle, out int isActive);
 
+        // D03-1: replays only the voice clip of backlog row `index` (0 = oldest);
+        // never touches game state, variables, read marks or history.
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_ReplayBacklogVoice(IntPtr handle, uint index);
+
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern uint RowlEngine_GetChoiceCount(IntPtr handle);
 
@@ -368,6 +381,19 @@ namespace RowlEngine.Editor.Native
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         internal static extern ResultCode RowlEngine_StripMarkup(
             [MarshalAs(UnmanagedType.LPUTF8Str)] string? markupUtf8,
+            IntPtr buffer,
+            uint bufferSize,
+            out uint outRequiredSize);
+
+        // ── E2a transition repertoire (CAPABILITY_TRANSITION_REPERTOIRE) ──
+        //
+        // Handle-free pure helper: copies the transition kind names the
+        // native StartTransition accepts as a UTF-8 JSON string array.
+        // Caller-buffer contract is the ParseMarkup one (NULL/0 size query,
+        // BufferTooSmall + required size).
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern ResultCode RowlEngine_GetSupportedTransitionKindsJson(
             IntPtr buffer,
             uint bufferSize,
             out uint outRequiredSize);

@@ -75,8 +75,26 @@ public:
     /// carries the language, so stale entries could otherwise linger until
     /// the 16-entry ring evicts them.
     void invalidateShapeCache();
+    /// F2 (D-O4): the shape memo holds 16 texts; a choice menu of 17+ options drew each frame
+    /// from a cache that evicted every entry before it was used again (0.05 -> 3 ms per
+    /// step). Callers that know how many texts one frame uses grow it (never shrinks, capped).
+    void reserveShapeCache(std::size_t entries) const;
+    std::size_t shapeCacheCapacity() const { return m_shapeCacheCapacity; }
 
     size_t countRevealUnits(const std::string& markup, float fontSize) const;
+
+    /// F2 (D-O5): `text` cut to `maxWidth` with a trailing "…" (ellipsizeToWidth over this
+    /// renderer's own measurement), memoised per (text, size, width, text scale): a speaker
+    /// name that never fits used to be re-measured candidate by candidate on EVERY frame.
+    std::string ellipsizedToWidth(const std::string& text, float fontSize, float maxWidth);
+
+    /// F2 (D-O6): draws `shaped`, or - when the shaper produced no glyphs (the build without
+    /// text shaping: ROWL_ENABLE_TEXT_SHAPING=OFF returns reveal units but an empty glyph list)
+    /// - the plain `text` through renderText. renderShapedText alone drew nothing there.
+    void renderShapedOrPlainText(SDL_Surface* targetSurface, const Rowl::Text::ShapedText& shaped,
+                                 const std::string& text, float x, float y, float fontSize,
+                                 SDL_Color color, float maxWidth = 0.0f, float maxHeight = 0.0f,
+                                 const std::string& alignment = "Left");
 
     void renderShapedText(SDL_Surface* targetSurface,
                           const Rowl::Text::ShapedText& shaped,
@@ -115,6 +133,8 @@ private:
         std::shared_ptr<const Rowl::Text::ShapedText> layout;
     };
     mutable std::vector<ShapeCacheEntry> m_shapeCache;
+    mutable std::size_t m_shapeCacheCapacity = 16;
+    mutable std::unordered_map<std::string, std::string> m_ellipsisCache;
     Rowl::Text::TextShaper m_textShaper;
     bool m_loaded = false;
     float m_textScale = 1.0f;

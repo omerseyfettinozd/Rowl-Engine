@@ -419,8 +419,16 @@ ShapedText TextShaper::shapeMarkup(std::string_view markup,
                         paragraphBegin, paragraphEnd, fontSize, requested.language);
                     std::vector<float> scalarWidths(scalars.size(), 0.0f);
                     for (const auto& glyph : probe)
-                        if (glyph.scalar < scalarWidths.size())
-                            scalarWidths[glyph.scalar] += std::abs(glyph.advance);
+                        if (glyph.scalar < scalarWidths.size()) {
+                            // sarma da çizimdeki styleScale'i uygulamalı —
+                            // yoksa <size> segmentli satır maxWidth'ı taşar.
+                            const MarkupChar& glyphStyle =
+                                scalars[groups.find(glyph.scalar)].style;
+                            const float glyphScale = glyphStyle.hasSize
+                                ? sanitizedFontSize(glyphStyle.size) / fontSize : 1.0f;
+                            scalarWidths[glyph.scalar] +=
+                                std::abs(glyph.advance) * glyphScale;
+                        }
                     uint32_t lineBegin = paragraphBegin;
                     while (lineBegin < paragraphEnd) {
                         float width = 0.0f;

@@ -10,7 +10,13 @@
       <TextBlock Text="{l:T Player.Prefs.Title}" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" />
       <StackPanel Orientation="Horizontal" Spacing="8">
         <TextBlock Text="{l:T Player.Prefs.Language}" Width="140" VerticalAlignment="Center" />
-        <ComboBox ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding Profile.Language}" Width="200" />
+        <ComboBox ItemsSource="{Binding AvailableLanguages}" SelectedValueBinding="{Binding Code, x:DataType=vm:LanguageChoice}" SelectedValue="{Binding Profile.Language}" Width="200">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:LanguageChoice">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="8">
         <TextBlock Text="{l:T Player.Prefs.MasterVolume}" Width="140" VerticalAlignment="Center" />

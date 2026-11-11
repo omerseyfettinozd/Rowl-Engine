@@ -33,7 +33,21 @@ public sealed class PlayerSaveSlotEntry
     public string Label => $"Slot {Index + 1}";
     public bool Occupied => Metadata is not null;
     public string State => Occupied ? "Dolu" : "Boş";
-    public string SavedAt => Metadata?.SavedAt ?? string.Empty;
+    /// <summary>D-K2: disk stamp is ISO-8601 UTC; the player sees local time.</summary>
+    public string SavedAt => FormatLocal(Metadata?.SavedAt);
+
+    internal static string FormatLocal(string? iso)
+    {
+        if (string.IsNullOrEmpty(iso))
+            return string.Empty;
+        if (iso.EndsWith('Z') &&
+            DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset parsed))
+        {
+            return parsed.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return iso; // legacy / unparsable stamp: shown as stored
+    }
     public string Chapter => Metadata?.ChapterTitle ?? string.Empty;
     public string Summary => Metadata?.Summary ?? string.Empty;
     public bool HasThumbnailImage => ThumbnailPng is { Length: > 0 };

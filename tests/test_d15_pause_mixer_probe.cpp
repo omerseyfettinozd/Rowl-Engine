@@ -148,6 +148,16 @@ int main() {
 
     RowlEngine_SetPaused(h, 1);
     check(RowlEngine_IsPaused(h) == 1, "setup: SetPaused did not open menu");
+    // D05-2: the mixer rows live on the Preferences page now (pause main page:
+    // Devam, Kaydet, Yukle, Tercihler, ...). Tercihler is row 3; on the page
+    // Ana Ses/Muzik/SFX/Seslendirme are rows 0..3 and Geri (no value) is 11.
+    down(h, 3);
+    RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_CONFIRM);
+    {
+        const std::string json = RowlEngine_GetPauseMenuJson(h);
+        check(json.find("\"mode\":4") != std::string::npos && json.find("\"selected\":0") != std::string::npos,
+              "setup: Tercihler did not open on its first row");
+    }
 
     // ── Bacak A: okuma eşlemesi — JSON satır yüzdeleri kanalları tutar.
     {
@@ -159,24 +169,24 @@ int main() {
         check(json.find("75%") != std::string::npos, "A: sfx row != 75%");
         check(json.find("13%") != std::string::npos, "A: voice row != 13% (0.125)");
     }
-    TEST_PASS("A — okuma eslemesi 3/4/5/6 (JSON yuzdeleri)");
+    TEST_PASS("A — okuma eslemesi 3/4/5/6 (JSON yuzdeleri, Tercihler uzerinden)");
 
     // ── Bacak B: clamp [0,1] + değer-olmayan satır no-op.
     RowlEngine_SetMasterVolume(h, 1.0f);
-    down(h, 3);  // satır 3 (Ana Ses)
+    // sayfa satırı 0 (Ana Ses; menü satırı 3)
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
     check(RowlEngine_GetMasterVolume(h) == 1.0f, "B: upper clamp lost (master)");
     RowlEngine_SetSfxVolume(h, 0.0f);
-    down(h, 2);  // satır 5 (SFX)
+    down(h, 2);  // sayfa satırı 2 (SFX; menü satırı 5)
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_LEFT);
     check(RowlEngine_GetSfxVolume(h) == 0.0f, "B: lower clamp lost (sfx)");
-    up(h, 5);  // satır 0 (Devam Et) — değer satırı değil
+    up(h, 3);    // sayfa satırı 11 (Geri; 2 -> 1 -> 0 -> sarar) — değer satırı değil
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_LEFT);
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
-    check(RowlEngine_GetMasterVolume(h) == 1.0f, "B: row-0 LEFT/RIGHT moved master");
-    check(RowlEngine_GetSfxVolume(h) == 0.0f, "B: row-0 LEFT/RIGHT moved sfx");
-    check(RowlEngine_GetBgmVolume(h) == 0.25f, "B: row-0 LEFT/RIGHT moved bgm");
-    check(RowlEngine_GetVoiceVolume(h) == 0.125f, "B: row-0 LEFT/RIGHT moved voice");
+    check(RowlEngine_GetMasterVolume(h) == 1.0f, "B: Geri LEFT/RIGHT moved master");
+    check(RowlEngine_GetSfxVolume(h) == 0.0f, "B: Geri LEFT/RIGHT moved sfx");
+    check(RowlEngine_GetBgmVolume(h) == 0.25f, "B: Geri LEFT/RIGHT moved bgm");
+    check(RowlEngine_GetVoiceVolume(h) == 0.125f, "B: Geri LEFT/RIGHT moved voice");
     std::cout << "  clamp/invalid -> master=" << RowlEngine_GetMasterVolume(h)
               << " sfx=" << RowlEngine_GetSfxVolume(h) << std::endl;
     TEST_PASS("B — clamp + deger-olmayan satir no-op");
@@ -186,16 +196,16 @@ int main() {
     RowlEngine_SetBgmVolume(h, 0.5f);
     RowlEngine_SetSfxVolume(h, 0.5f);
     RowlEngine_SetVoiceVolume(h, 0.5f);
-    down(h, 3);  // satır 0 -> 3
+    down(h, 1);  // Geri (11) -> sayfa satırı 0 (sarar); menü satırı 3
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
     check(near(RowlEngine_GetMasterVolume(h), 0.55f), "C: row3 RIGHT != ~0.55");
-    down(h, 1);  // satır 4
+    down(h, 1);  // menü satırı 4
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
     check(near(RowlEngine_GetBgmVolume(h), 0.55f), "C: row4 RIGHT != ~0.55");
-    down(h, 1);  // satır 5
+    down(h, 1);  // menü satırı 5
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
     check(near(RowlEngine_GetSfxVolume(h), 0.55f), "C: row5 RIGHT != ~0.55");
-    down(h, 1);  // satır 6
+    down(h, 1);  // menü satırı 6
     RowlEngine_PauseMenuCommand(h, ROWL_PAUSE_MENU_RIGHT);
     check(near(RowlEngine_GetVoiceVolume(h), 0.55f), "C: row6 RIGHT != ~0.55");
     {

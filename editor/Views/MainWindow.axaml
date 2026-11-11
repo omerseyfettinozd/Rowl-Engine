@@ -210,6 +210,7 @@
                                     <MenuItem Header="{l:T Menu.ProjectList}" Command="{Binding OpenProjectHubCommand}"/>
                                     <MenuItem Header="{l:T Menu.LocalizationDesk}" Command="{Binding OpenLocalizationDeskCommand}"/>
                                 </MenuItem>
+                                <MenuItem x:Name="ExtrasCatalogMenuItem" Header="{l:T Menu.ExtrasCatalog}" Command="{Binding OpenExtrasCatalogCommand}"/>
                                 <Separator/>
                                 <MenuItem Header="{l:T Menu.Save}" InputGesture="Ctrl+S" Command="{Binding SaveProjectCommand}"/>
                                 <MenuItem Header="{l:T Menu.Undo}" InputGesture="Ctrl+Z" Command="{Binding UndoCommand}" IsEnabled="{Binding UndoRedo.CanUndo}"/>

@@ -77,8 +77,12 @@ constexpr std::size_t kRecoveryReserveBytes = 1024u * 1024u;
 // the environment boundary also prevents `_G.rowl = ...` from breaking the
 // component later in the same callback.
 static int lua_module_newindex(lua_State* state) {
-    const char* key = lua_tostring(state, 2);
-    if (key && std::string_view(key) == "rowl") return 0;
+    // lua_tostring sayı anahtarını YERİNDE string'e çevirir; "rowl"
+    // kapısı yalnız gerçek string anahtarda bakmalı, rawset özgün anahtarı görmeli.
+    if (lua_type(state, 2) == LUA_TSTRING) {
+        const char* key = lua_tostring(state, 2);
+        if (key && std::string_view(key) == "rowl") return 0;
+    }
     lua_rawset(state, 1);
     return 0;
 }
@@ -319,6 +323,7 @@ unsigned LuaSandbox::noteInstructionTrip() {
 
 void LuaSandbox::poisonSession(const std::string& reason) {
     m_limitTripped = true;
+    m_sessionPoisoned = true;
     m_lastError = "Lua sandbox session poisoned: " + reason + " (until clearVariables())";
     m_lastConditionPhase = ConditionPhase::Runtime;
     ROWL_LOG_ERROR(m_lastError);
@@ -369,6 +374,7 @@ bool LuaSandbox::initialize() {
     // Include those live bytes before switching to the quota allocator.
     m_bytesAllocated = luaMemoryBytes(m_luaState);
     m_limitTripped = false;
+    m_sessionPoisoned = false;
     // B7 (#22/#24/#27/#31): fresh-session accounting. Budgets and poison live
     // per lua_State, so a reused object must not inherit the old session's.
     m_variablesBytes = 0;
@@ -455,23 +461,36 @@ void LuaSandbox::sweepStrayGlobals() {
     // Only sandbox-owned names survive a session boundary; lua_next cannot
     // tolerate mutation mid-iteration, so collect first, then clear.
     std::vector<std::string> strayGlobals;
+    // string olmayan anahtarlar da oturum sınırını aşar (sayı/tablo
+    // anahtarlı strays); anahtarı registry'de tut, iterasyondan sonra ham sil.
+    std::vector<int> strayOtherKeys;
     lua_pushglobaltable(m_luaState);
+    const int globalsIndex = lua_gettop(m_luaState);
     lua_pushnil(m_luaState);
-    while (lua_next(m_luaState, -2) != 0) {
+    while (lua_next(m_luaState, globalsIndex) != 0) {
         if (lua_type(m_luaState, -2) == LUA_TSTRING) {
             if (const char* name = lua_tostring(m_luaState, -2)) {
                 if (m_initialGlobals.find(name) == m_initialGlobals.end()) {
                     strayGlobals.emplace_back(name);
                 }
             }
+        } else {
+            lua_pushvalue(m_luaState, -2);
+            strayOtherKeys.push_back(luaL_ref(m_luaState, LUA_REGISTRYINDEX));
         }
         lua_pop(m_luaState, 1);
     }
-    lua_pop(m_luaState, 1);
     for (const auto& name : strayGlobals) {
         lua_pushnil(m_luaState);
         lua_setglobal(m_luaState, name.c_str());
     }
+    for (const int keyRef : strayOtherKeys) {
+        lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, keyRef);
+        lua_pushnil(m_luaState);
+        lua_rawset(m_luaState, globalsIndex);
+        luaL_unref(m_luaState, LUA_REGISTRYINDEX, keyRef);
+    }
+    lua_pop(m_luaState, 1); // globals
 }
 
 void LuaSandbox::bindEngineApis() {
@@ -796,6 +815,7 @@ void LuaSandbox::repairGlobals() {
 }
 
 bool LuaSandbox::setVariable(const std::string& key, const std::string& value) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (Rowl::Scripting::isReservedVariableName(key)) {
         ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
@@ -838,8 +858,10 @@ bool LuaSandbox::setVariable(const std::string& key, const std::string& value) {
     // past the cap the write is rejected instead of growing unboundedly.
     // Embedded NULs are rejected too: lua_pushstring would truncate them and
     // leave the map and the globals split-brained on the same key.
+    // denetim yalnız anahtarda kalmıştı; değer de aynı kapıdan geçer.
     if (key.size() > kMaxVariableKeyBytes || value.size() > kMaxVariableValueBytes ||
-        key.size() != std::strlen(key.c_str())) {
+        key.size() != std::strlen(key.c_str()) ||
+        value.size() != std::strlen(value.c_str())) {
         ROWL_LOG_WARN("Lua Sandbox rejected oversized variable: '" + key + "'");
         return false;
     }
@@ -922,6 +944,7 @@ std::string LuaSandbox::getVariable(const std::string& key) const {
 }
 
 bool LuaSandbox::setGlobalNumber(const std::string& key, double value) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (Rowl::Scripting::isReservedVariableName(key)) {
         ROWL_LOG_WARN("Lua Sandbox rejected reserved variable name: '" + key + "'");
@@ -1041,6 +1064,13 @@ void LuaSandbox::rollbackConditionVariables(
 
 bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    // A condition is pure (its writes are rolled back), so it must not look like a change to
+    // anything caching condition results by revision().
+    struct RevisionKeep {
+        uint64_t& value;
+        uint64_t saved;
+        ~RevisionKeep() { value = saved; }
+    } revisionKeep{m_revision, m_revision};
     m_lastError.clear();
     m_lastConditionPhase = ConditionPhase::None;
     // Fail-closed: an uninitialized or broken sandbox must never open a
@@ -1123,6 +1153,15 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
     // Zararsız ve idempotent: metatable yoksa tekrarı no-op. dtor'daki temizlik
     // diğer çıkış yolları (sözdizimi hatası, erken dönüşler) için duruyor.
     d07_clearGlobalTableMetatable(m_luaState);
+    // F2 (B-10): a condition has its OWN budget. Running out of it makes THAT condition false
+    // (with the warning below) and nothing else: the trip is not carried into the session, so
+    // one slow or mistyped condition no longer turns every later condition false. A tight
+    // catch-and-respin inside the one run still escalates to a real poison (m_sessionPoisoned),
+    // which only clearVariables() lifts.
+    if (!m_sessionPoisoned) {
+        m_limitTripped = false;
+        m_tripStreak = 0;
+    }
     if (callStatus != LUA_OK) {
         std::string err = takeLuaError(m_luaState);
         lua_pop(m_luaState, 1);
@@ -1143,6 +1182,7 @@ bool LuaSandbox::evaluateCondition(const std::string& conditionExpr) {
 }
 
 void LuaSandbox::clearVariables() {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (m_luaState) {
         const RecoveryScope recovery(this);
@@ -1171,6 +1211,7 @@ void LuaSandbox::clearVariables() {
     m_scriptVariables.clear();
     // A1 (H24): a new session boundary lifts the instruction-limit poison.
     m_limitTripped = false;
+    m_sessionPoisoned = false;
     // B7: ...together with every other per-session budget (a reused object
     // must not inherit the old session's streak, deadline, or map bytes).
     m_variablesBytes = 0;
@@ -1180,6 +1221,7 @@ void LuaSandbox::clearVariables() {
 }
 
 bool LuaSandbox::executeString(const std::string& scriptCode) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (!m_initialized || !m_luaState) {
         m_lastError = "Lua sandbox is not initialized; cannot execute script";
@@ -1235,6 +1277,7 @@ bool LuaSandbox::executeString(const std::string& scriptCode) {
 }
 
 bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scriptCode) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_lastError.clear();
     m_lastConditionPhase = ConditionPhase::None;
@@ -1262,18 +1305,24 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
     // Each component owns an environment. It inherits only the sandbox's safe
     // globals, keeps _G local, and hides the metatable so one component cannot
     // mutate another component's lookup path.
-    lua_newtable(m_luaState);                         // env
-    const int environmentIndex = lua_gettop(m_luaState);
-    lua_pushvalue(m_luaState, environmentIndex);
-    lua_setfield(m_luaState, environmentIndex, "_G");
-    lua_newtable(m_luaState);                         // metatable
-    lua_pushglobaltable(m_luaState);
-    lua_setfield(m_luaState, -2, "__index");
-    lua_pushcfunction(m_luaState, lua_module_newindex);
-    lua_setfield(m_luaState, -2, "__newindex");
-    lua_pushboolean(m_luaState, 0);
-    lua_setfield(m_luaState, -2, "__metatable");
-    lua_setmetatable(m_luaState, environmentIndex);
+    // kota tavandayken lua_newtable/setfield interning
+    // nullptr döndürüp pcall dışında panic ile süreci öldürür; rezerv karşılar.
+    int environmentIndex = 0;
+    {
+        const RecoveryScope recovery(this);
+        lua_newtable(m_luaState);                         // env
+        environmentIndex = lua_gettop(m_luaState);
+        lua_pushvalue(m_luaState, environmentIndex);
+        lua_setfield(m_luaState, environmentIndex, "_G");
+        lua_newtable(m_luaState);                         // metatable
+        lua_pushglobaltable(m_luaState);
+        lua_setfield(m_luaState, -2, "__index");
+        lua_pushcfunction(m_luaState, lua_module_newindex);
+        lua_setfield(m_luaState, -2, "__newindex");
+        lua_pushboolean(m_luaState, 0);
+        lua_setfield(m_luaState, -2, "__metatable");
+        lua_setmetatable(m_luaState, environmentIndex);
+    }
 
     resetInstructionCounter();
     const int loadStatus = luaL_loadbufferx(m_luaState, scriptCode.data(), scriptCode.size(),
@@ -1333,6 +1382,7 @@ bool LuaSandbox::loadModule(const std::string& moduleId, const std::string& scri
 bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
                                             const std::string& functionName,
                                             double deltaTime) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_lastError.clear();
     m_lastConditionPhase = ConditionPhase::None;
@@ -1352,8 +1402,13 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
         return false;
     }
 
-    lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
-    lua_getfield(m_luaState, -1, functionName.c_str());
+    {
+        // yeni functionName interning'i kota tavandayken
+        // pcall dışında panic'e gider; okuma rezerv altında kalır.
+        const RecoveryScope recovery(this);
+        lua_rawgeti(m_luaState, LUA_REGISTRYINDEX, module->second); // env
+        lua_getfield(m_luaState, -1, functionName.c_str());
+    }
     if (lua_isnil(m_luaState, -1)) {
         lua_pop(m_luaState, 2);
         return true;
@@ -1434,6 +1489,7 @@ bool LuaSandbox::callOptionalModuleFunction(const std::string& moduleId,
 }
 
 bool LuaSandbox::unloadModule(const std::string& moduleId) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     const auto module = m_modules.find(moduleId);
     if (module == m_modules.end()) return false;
@@ -1443,6 +1499,7 @@ bool LuaSandbox::unloadModule(const std::string& moduleId) {
 }
 
 void LuaSandbox::clearModules() {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (m_luaState) {
         for (const auto& [moduleId, reference] : m_modules) {
@@ -1459,6 +1516,7 @@ std::size_t LuaSandbox::getModuleCount() const {
 }
 
 bool LuaSandbox::callOptionalFunction(const std::string& functionName, double deltaTime) {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (!m_initialized || !m_luaState || functionName.empty()) return false;
     // B7 (#26): poison gate before the no-op fast-path (see
@@ -1521,6 +1579,7 @@ bool LuaSandbox::callOptionalFunction(const std::string& functionName, double de
 }
 
 void LuaSandbox::shutdown() {
+    ++m_revision;  // F2: choice-layout cache key (see revision())
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     if (!m_initialized) return;
 
@@ -1557,6 +1616,7 @@ void LuaSandbox::shutdown() {
     m_deadlineArmed = false;
     m_lastConditionPhase = ConditionPhase::None;
     m_limitTripped = false;
+    m_sessionPoisoned = false;
     m_initialized = false;
     ROWL_LOG_INFO("Lua Environment Shutdown Complete.");
 }

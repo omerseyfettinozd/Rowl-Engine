@@ -31,6 +31,18 @@ size_t countAlphaPixels(SDL_Surface* surface) {
     return count;
 }
 
+// Pixels that still carry the fill colour (opaque and bright) -- the halo is black.
+size_t countBrightPixels(SDL_Surface* surface) {
+    if (!surface || !surface->pixels) return 0;
+    size_t count = 0;
+    for (int y = 0; y < surface->h; ++y) {
+        auto* row = static_cast<uint8_t*>(surface->pixels) + y * surface->pitch;
+        for (int x = 0; x < surface->w; ++x)
+            if (row[x * 4 + 3] >= 200 && row[x * 4] >= 200) ++count;
+    }
+    return count;
+}
+
 size_t countScalars(const std::string& utf8) {
     size_t count = 0;
     size_t index = 0;
@@ -113,12 +125,19 @@ void test_accessibility() {
         renderer->renderText(contrast, "Ag", 100.0f, 20.0f, 48.0f, white);
         const size_t plainPixels = countAlphaPixels(plain);
         const size_t contrastPixels = countAlphaPixels(contrast);
+        // F2 B-4: the fill must survive the halo (it used to come out black: halo and fill were
+        // blended per glyph pixel, so the next pixel's halo buried the previous fill).
+        const size_t plainBright = countBrightPixels(plain);
+        const size_t contrastBright = countBrightPixels(contrast);
         SDL_DestroySurface(plain);
         SDL_DestroySurface(contrast);
         if (plainPixels == 0) accessibilityFail("baseline render produced no pixels");
         if (contrastPixels <= plainPixels)
             accessibilityFail("high-contrast halo added no coverage: plain=" +
                 std::to_string(plainPixels) + " contrast=" + std::to_string(contrastPixels));
+        if (plainBright == 0 || contrastBright * 10 < plainBright * 9)
+            accessibilityFail("high-contrast text lost its fill colour: plain bright=" +
+                std::to_string(plainBright) + " contrast bright=" + std::to_string(contrastBright));
     }
 
     // ── Reduced motion: shake suppression on Camera2D ────────────────

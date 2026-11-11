@@ -59,7 +59,7 @@ void test_game_state() {
             chainState = GameState::createNextState(chainState, 2 + step);
             std::vector<DialogueHistoryEntry> entries;
             for (size_t k = 0; k < kPerStep; ++k, ++serial) {
-                entries.push_back({serial + 1, "spk", "line" + std::to_string(serial), true, ""});
+                entries.push_back({serial + 1, "spk", "line" + std::to_string(serial), true, "", ""});
             }
             chainState = GameState::withDialogueHistory(chainState, entries);
         }
@@ -69,7 +69,7 @@ void test_game_state() {
              at = json.find("\"dialogue\":", at + 1)) {
             ++dialogueKeys;
         }
-        const size_t rootSize = chainState->dialogueHistory->size();
+        const size_t rootSize = chainState->dialogueHistory.size();
         // Root spells out its backlog once; each link only its trimmed head
         // (<= kPerStep entries per step back). Old behaviour: ~5 * rootSize.
         const size_t bound = rootSize + GameState::kMaxSerializedHistoryEntries *
@@ -89,13 +89,13 @@ void test_game_state() {
                              const char* label) {
             for (size_t depth = 0; depth <= GameState::kMaxSerializedHistoryEntries; ++depth) {
                 if (!x || !y || x->stepId != y->stepId || x->activeNodeId != y->activeNodeId ||
-                    x->dialogueHistory->size() != y->dialogueHistory->size()) {
+                    x->dialogueHistory.size() != y->dialogueHistory.size()) {
                     std::cerr << label << ": link mismatch at depth " << depth << std::endl;
                     exit(1);
                 }
-                for (size_t k = 0; k < x->dialogueHistory->size(); ++k) {
-                    const auto& e = (*x->dialogueHistory)[k];
-                    const auto& f = (*y->dialogueHistory)[k];
+                for (size_t k = 0; k < x->dialogueHistory.size(); ++k) {
+                    const auto& e = x->dialogueHistory[k];
+                    const auto& f = y->dialogueHistory[k];
                     if (e.nodeId != f.nodeId || e.dialogue != f.dialogue || e.speaker != f.speaker ||
                         e.read != f.read || e.contentId != f.contentId) {
                         std::cerr << label << ": backlog mismatch at depth " << depth << std::endl;
@@ -205,14 +205,13 @@ void test_game_state() {
     TEST_PASS("GameState JSON Serialization & Deserialization");
 
     const auto withHistory = Rowl::State::GameState::withDialogueHistory(s2, {
-        {101, "Evelyn", "First remembered line", true, ""},
-        {102, "Mina", "Second remembered line", true, ""},
+        {101, "Evelyn", "First remembered line", true, "", ""},
+        {102, "Mina", "Second remembered line", true, "", ""},
     });
     const auto restoredHistory = Rowl::State::GameState::deserializeJson(withHistory->serializeJson());
-    if (!restoredHistory || !restoredHistory->dialogueHistory ||
-        restoredHistory->dialogueHistory->size() != 2 ||
-        restoredHistory->dialogueHistory->at(1).speaker != "Mina" ||
-        restoredHistory->dialogueHistory->at(1).dialogue != "Second remembered line") {
+    if (!restoredHistory || restoredHistory->dialogueHistory.size() != 2 ||
+        restoredHistory->dialogueHistory.at(1).speaker != "Mina" ||
+        restoredHistory->dialogueHistory.at(1).dialogue != "Second remembered line") {
         std::cerr << "GameState dialogue history persistence mismatch" << std::endl;
         exit(1);
     }
@@ -222,24 +221,22 @@ void test_game_state() {
     // without the key decode to "" and stay loadable, while hostile ids are
     // rejected instead of persisted.
     const auto withIds = Rowl::State::GameState::withDialogueHistory(s2, {
-        {201, "Evelyn", "Tracked line", true, "11111111-2222-3333-4444-555555555555"},
-        {202, "Mina", "Legacy line", true, ""},
+        {201, "Evelyn", "Tracked line", true, "11111111-2222-3333-4444-555555555555", ""},
+        {202, "Mina", "Legacy line", true, "", ""},
     });
     const auto restoredIds = Rowl::State::GameState::deserializeJson(withIds->serializeJson());
-    if (!restoredIds || !restoredIds->dialogueHistory ||
-        restoredIds->dialogueHistory->size() != 2 ||
-        restoredIds->dialogueHistory->at(0).contentId !=
+    if (!restoredIds || restoredIds->dialogueHistory.size() != 2 ||
+        restoredIds->dialogueHistory.at(0).contentId !=
             "11111111-2222-3333-4444-555555555555" ||
-        !restoredIds->dialogueHistory->at(1).contentId.empty()) {
+        !restoredIds->dialogueHistory.at(1).contentId.empty()) {
         std::cerr << "GameState dialogue history content_id round-trip mismatch" << std::endl;
         exit(1);
     }
     const auto legacyHistory = Rowl::State::GameState::deserializeJson(
         R"({"version":3,"step_id":1,"active_node_id":201,"variables":{},"dialogue_history":[
             {"node_id":201,"speaker":"Evelyn","dialogue":"Old line","read":true}]})");
-    if (!legacyHistory || !legacyHistory->dialogueHistory ||
-        legacyHistory->dialogueHistory->size() != 1 ||
-        !legacyHistory->dialogueHistory->at(0).contentId.empty()) {
+    if (!legacyHistory || legacyHistory->dialogueHistory.size() != 1 ||
+        !legacyHistory->dialogueHistory.at(0).contentId.empty()) {
         std::cerr << "Legacy history entries must decode with an empty content_id" << std::endl;
         exit(1);
     }
@@ -354,7 +351,7 @@ void test_game_state() {
     const auto v2State = Rowl::State::GameState::deserializeJson(
         R"({"version":2,"step_id":1,"active_node_id":101,"variables":{}})");
     if (!legacyState || !v2State || legacyState->bgmPlaying || !legacyState->activeBgm.empty() ||
-        !v2State->dialogueHistory || !v2State->dialogueHistory->empty()) {
+        !v2State->dialogueHistory.empty()) {
         std::cerr << "Legacy GameState save compatibility mismatch" << std::endl;
         exit(1);
     }

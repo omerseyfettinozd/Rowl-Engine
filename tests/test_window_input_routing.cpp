@@ -153,7 +153,7 @@ void test_window_input_routing() {
         using Event = Rowl::Platform::RuntimeInputEvent;
         using Type = Rowl::Platform::RuntimeInputEvent::Type;
         auto expect = [&](uint32_t key, Type type, int32_t slot = 0) {
-            Event event{Type::Advance};
+            Event event = Rowl::Platform::makeRuntimeInput(Type::Advance);
             event.slot = -1;
             if (!Rowl::Render::Window::mapKeyToRuntimeInput(key, event) ||
                 event.type != type || event.slot != slot) {
@@ -177,9 +177,14 @@ void test_window_input_routing() {
         expect(SDLK_0, Type::SelectSlot, 0);
         expect(SDLK_3, Type::SelectSlot, 3);
         expect(SDLK_9, Type::SelectSlot, 9);
-        Event unmapped{Type::Advance};
+        // D04-1: A = Auto, S = Skip toggle, Ctrl held = Skip.
+        expect(SDLK_A, Type::ToggleAuto);
+        expect(SDLK_S, Type::ToggleSkip);
+        expect(SDLK_LCTRL, Type::SkipHold);
+        expect(SDLK_RCTRL, Type::SkipHold);
+        Event unmapped = Rowl::Platform::makeRuntimeInput(Type::Advance);
         if (Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_F1, unmapped) ||
-            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_A, unmapped)) {
+            Rowl::Render::Window::mapKeyToRuntimeInput(SDLK_Q, unmapped)) {
             std::cerr << "MS-6: unrelated keys must not map to player actions" << std::endl;
             exit(1);
         }
@@ -267,6 +272,74 @@ void test_window_input_routing_release_motion_wheel_text() {
         }
     }
 
+    // 1b. D04-1: OS key repeat must not re-toggle Auto/Skip (A, S, Ctrl); the
+    // first press maps, and other keys (Space) keep their repeat behavior.
+    {
+        auto press = [&](SDL_Keycode key, bool repeat) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.key = key;
+            event.key.repeat = repeat;
+            event.key.windowID = wid;
+            pushOrDie(event, "KEY_DOWN");
+            seen.clear();
+            step();
+        };
+        struct Case { SDL_Keycode key; Type type; const char* name; };
+        for (const Case& c : {Case{SDLK_A, Type::ToggleAuto, "A"}, Case{SDLK_S, Type::ToggleSkip, "S"},
+                              Case{SDLK_LCTRL, Type::SkipHold, "LCtrl"}, Case{SDLK_RCTRL, Type::SkipHold, "RCtrl"}}) {
+            press(c.key, false);
+            if (!containsType(c.type)) {
+                std::cerr << "D04-1: first press of " << c.name << " must reach the handler" << std::endl;
+                exit(1);
+            }
+            press(c.key, true);
+            if (containsType(c.type)) {
+                std::cerr << "D04-1: a repeated " << c.name << " must not reach the handler" << std::endl;
+                exit(1);
+            }
+        }
+        // F2 (D-O1/D-D4) updates the former "Space keeps its repeat" lock on purpose: a
+        // repeating Enter/Space/digit confirmed the menu the previous press had just opened
+        // (end of story -> title -> New Game) and a held digit picked the n-th option of every
+        // following choice menu. Only the four arrows repeat; every other key is one press.
+        struct Rep { SDL_Keycode key; Type type; const char* name; bool repeats; };
+        for (const Rep& r : {Rep{SDLK_SPACE, Type::Advance, "Space", false},
+                             Rep{SDLK_RETURN, Type::Advance, "Enter", false},
+                             Rep{SDLK_KP_ENTER, Type::Advance, "KP Enter", false},
+                             Rep{SDLK_1, Type::SelectSlot, "1", false},
+                             Rep{SDLK_KP_2, Type::SelectSlot, "KP 2", false},
+                             Rep{SDLK_ESCAPE, Type::PauseToggle, "Esc", false},
+                             Rep{SDLK_BACKSPACE, Type::Rewind, "Backspace", false},
+                             Rep{SDLK_F5, Type::QuickSave, "F5", false},
+                             Rep{SDLK_UP, Type::MenuUp, "Up", true},
+                             Rep{SDLK_DOWN, Type::MenuDown, "Down", true},
+                             Rep{SDLK_LEFT, Type::MenuLeft, "Left", true},
+                             Rep{SDLK_RIGHT, Type::MenuRight, "Right", true}}) {
+            press(r.key, false);
+            if (!containsType(r.type)) {
+                std::cerr << "F2: first press of " << r.name << " must reach the handler" << std::endl;
+                exit(1);
+            }
+            press(r.key, true);
+            if (containsType(r.type) != r.repeats) {
+                std::cerr << "F2: a repeated " << r.name
+                          << (r.repeats ? " must keep repeating" : " must not reach the handler") << std::endl;
+                exit(1);
+            }
+        }
+        // D-D5: the numpad digits map like the top row (KP_0 = 0 ... KP_9 = 9).
+        for (int digit = 0; digit <= 9; ++digit) {
+            Rowl::Platform::RuntimeInputEvent mapped{};
+            const SDL_Keycode key = digit == 0 ? SDLK_KP_0 : static_cast<SDL_Keycode>(SDLK_KP_1 + digit - 1);
+            if (!Rowl::Render::Window::mapKeyToRuntimeInput(static_cast<uint32_t>(key), mapped) ||
+                mapped.type != Type::SelectSlot || mapped.slot != digit) {
+                std::cerr << "F2: numpad digit " << digit << " is not mapped to SelectSlot " << digit << std::endl;
+                exit(1);
+            }
+        }
+    }
+
     // 2. BUTTON_UP left: PointerUp with position.
     {
         SDL_Event event{};
@@ -301,6 +374,38 @@ void test_window_input_routing_release_motion_wheel_text() {
         }
     }
 
+    // 3b. D03-2: BUTTON_DOWN right is SecondaryClick (closes the backlog), never
+    // PointerDown; left stays PointerDown.
+    {
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.button = SDL_BUTTON_RIGHT;
+        event.button.windowID = wid;
+        event.button.x = 12.0f;
+        event.button.y = 34.0f;
+        pushOrDie(event, "BUTTON_DOWN/right");
+        seen.clear();
+        step();
+        bool secondary = false;
+        for (const auto& e : seen) {
+            if (e.type == Type::SecondaryClick && std::abs(e.x - 12.0f) < 0.001f && std::abs(e.y - 34.0f) < 0.001f) {
+                secondary = true;
+            }
+        }
+        if (!secondary || containsType(Type::PointerDown)) {
+            std::cerr << "Right BUTTON_DOWN must produce SecondaryClick (and no PointerDown)" << std::endl;
+            exit(1);
+        }
+        event.button.button = SDL_BUTTON_LEFT;
+        pushOrDie(event, "BUTTON_DOWN/left");
+        seen.clear();
+        step();
+        if (!containsType(Type::PointerDown) || containsType(Type::SecondaryClick)) {
+            std::cerr << "Left BUTTON_DOWN must stay PointerDown (no SecondaryClick)" << std::endl;
+            exit(1);
+        }
+    }
+
     // 4. MOUSE_MOTION: hover position through the input channel.
     {
         SDL_Event event{};
@@ -313,6 +418,49 @@ void test_window_input_routing_release_motion_wheel_text() {
         step();
         if (!contains(Type::PointerMotion, 30.0f, 40.0f, 0, "")) {
             std::cerr << "Synthetic MOUSE_MOTION was not consciously consumed" << std::endl;
+            exit(1);
+        }
+    }
+
+    // 4b. F2 (D-O3): a burst of motions in one poll reaches the handler as ONE motion (the last
+    // position), and a click right behind a motion still sees that motion first.
+    {
+        for (int i = 0; i < 6; ++i) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_MOUSE_MOTION;
+            event.motion.windowID = wid;
+            event.motion.x = 50.0f + static_cast<float>(i);
+            event.motion.y = 60.0f;
+            pushOrDie(event, "MOUSE_MOTION burst");
+        }
+        seen.clear();
+        step();
+        size_t motions = 0;
+        for (const auto& event : seen) {
+            if (event.type == Type::PointerMotion) ++motions;
+        }
+        if (motions != 1 || !contains(Type::PointerMotion, 55.0f, 60.0f, 0, "")) {
+            std::cerr << "F2: a motion burst must be delivered once, at its last position (" << motions
+                      << " delivered)" << std::endl;
+            exit(1);
+        }
+        SDL_Event move{};
+        move.type = SDL_EVENT_MOUSE_MOTION;
+        move.motion.windowID = wid;
+        move.motion.x = 70.0f;
+        move.motion.y = 80.0f;
+        pushOrDie(move, "MOUSE_MOTION before click");
+        SDL_Event press{};
+        press.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        press.button.button = SDL_BUTTON_LEFT;
+        press.button.windowID = wid;
+        press.button.x = 70.0f;
+        press.button.y = 80.0f;
+        pushOrDie(press, "BUTTON_DOWN after motion");
+        seen.clear();
+        step();
+        if (seen.size() < 2 || seen[0].type != Type::PointerMotion || seen[1].type != Type::PointerDown) {
+            std::cerr << "F2: the hover move must reach the handler before the click that follows it" << std::endl;
             exit(1);
         }
     }

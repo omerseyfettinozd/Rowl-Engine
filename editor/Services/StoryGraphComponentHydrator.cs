@@ -8,7 +8,14 @@ namespace RowlEngine.Editor.Services;
 /// <summary>Creates an editor component from its persisted graph representation.</summary>
 internal static class StoryGraphComponentHydrator
 {
-    public static bool TryCreate(JsonElement componentJson, out NodeComponentViewModel? component, out string? unknownType)
+    /// <param name="preserveUnknown">
+    /// True for a graph document being opened: a component type without an editor view
+    /// model becomes an <see cref="UnknownComponentViewModel"/> that keeps its raw data (and
+    /// still reports the type in <paramref name="unknownType"/>), so a save never deletes it.
+    /// False (node-library templates): such a type is skipped and reported.
+    /// </param>
+    public static bool TryCreate(JsonElement componentJson, out NodeComponentViewModel? component, out string? unknownType,
+        bool preserveUnknown = false)
     {
         component = null;
         unknownType = null;
@@ -22,11 +29,19 @@ internal static class StoryGraphComponentHydrator
         catch (KeyNotFoundException)
         {
             unknownType = typeKey;
-            return false;
+            if (!preserveUnknown) return false;
+            var kept = new UnknownComponentViewModel(typeKey);
+            ReadEnvelope(componentJson, kept);
+            var rawValues = new Dictionary<string, object?>();
+            if (componentJson.TryGetProperty("data", out var rawData) && rawData.ValueKind == JsonValueKind.Object)
+                foreach (var value in rawData.EnumerateObject())
+                    rawValues[value.Name] = value.Value;
+            kept.Deserialize(rawValues);
+            component = kept;
+            return true;
         }
 
-        if (componentJson.TryGetProperty("id", out var id)) component.ComponentId = id.GetString() ?? component.ComponentId;
-        if (componentJson.TryGetProperty("enabled", out var enabled)) component.IsEnabled = enabled.GetBoolean();
+        ReadEnvelope(componentJson, component);
         if (componentJson.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
         {
             var values = new Dictionary<string, object?>();
@@ -42,5 +57,11 @@ internal static class StoryGraphComponentHydrator
             component.Deserialize(values);
         }
         return true;
+    }
+
+    private static void ReadEnvelope(JsonElement componentJson, NodeComponentViewModel component)
+    {
+        if (componentJson.TryGetProperty("id", out var id)) component.ComponentId = id.GetString() ?? component.ComponentId;
+        if (componentJson.TryGetProperty("enabled", out var enabled)) component.IsEnabled = enabled.GetBoolean();
     }
 }

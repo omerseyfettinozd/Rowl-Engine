@@ -47,6 +47,11 @@ public:
     static std::shared_ptr<const GameState> rewind(
         const std::shared_ptr<const GameState>& current, uint64_t steps);
 
+    /// F1 (A-1): node-granular rewind (GameState::rewindNodes). nullptr when
+    /// there is no earlier node.
+    static std::shared_ptr<const GameState> rewindNodes(
+        const std::shared_ptr<const GameState>& current, uint64_t nodes);
+
     bool saveSlot(const std::shared_ptr<const GameState>& state, int32_t slotIndex) const;
     SessionLoadResult loadSlotDetailed(int32_t slotIndex) const;
     std::shared_ptr<const GameState> loadSlot(int32_t slotIndex) const;

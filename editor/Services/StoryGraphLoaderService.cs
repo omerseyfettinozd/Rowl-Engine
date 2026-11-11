@@ -20,6 +20,11 @@ public sealed class StoryGraphLoadResult
 
 public static class StoryGraphLoaderService
 {
+    // A type without an editor view model is kept verbatim (UnknownComponentViewModel) and
+    // written back unchanged; the log line tells the author the editor cannot edit it.
+    private static string KeptUnknownWarning(string type, ulong nodeId) =>
+        $"Unknown component type '{type}' in Node #{nodeId}: kept as-is (the editor cannot edit it).";
+
     public static StoryGraphLoadResult Load(JsonDocument document, bool ensureDefaultObjects = true)
     {
         var result = new StoryGraphLoadResult();
@@ -72,13 +77,11 @@ public static class StoryGraphLoaderService
                         {
                             foreach (var compJson in compsArray.EnumerateArray())
                             {
-                                if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
+                                if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType, preserveUnknown: true))
                                 {
                                     frameObj.AddComponent(component!);
-                                }
-                                else if (unknownType is not null)
-                                {
-                                    result.Warnings.Add($"Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
+                                    if (unknownType is not null)
+                                        result.Warnings.Add(KeptUnknownWarning(unknownType, nodeId));
                                 }
                             }
                         }
@@ -89,15 +92,13 @@ public static class StoryGraphLoaderService
                 {
                     foreach (var compJson in compsArray.EnumerateArray())
                     {
-                        if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType))
+                        if (StoryGraphComponentHydrator.TryCreate(compJson, out var component, out var unknownType, preserveUnknown: true))
                         {
                             string objName = component!.DisplayName;
                             var frameObj = node.CreateObject(objName);
                             frameObj.AddComponent(component);
-                        }
-                        else if (unknownType is not null)
-                        {
-                            result.Warnings.Add($"Unknown component type '{unknownType}' in Node #{nodeId}, skipping.");
+                            if (unknownType is not null)
+                                result.Warnings.Add(KeptUnknownWarning(unknownType, nodeId));
                         }
                     }
                 }

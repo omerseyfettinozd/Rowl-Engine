@@ -161,6 +161,23 @@ typedef struct RowlEngine_ApiVersion {
 /* D02: native title screen (RowlEngine_OpenTitleScreen / IsTitleScreenActive;
  * pause-menu mode 3 = title, 4 = preferences). Additive. */
 #define ROWL_ENGINE_CAPABILITY_TITLE_SCREEN UINT64_C(33554432)
+/* D03-1: backlog rows carry their voice clip ("voice" in the history JSON);
+ * RowlEngine_ReplayBacklogVoice replays only that clip; D03-2 adds the native
+ * backlog screen (RowlEngine_OpenBacklog). Additive. */
+#define ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY UINT64_C(67108864)
+/* D04-1: player-driven Auto and read-aware Skip (RowlEngine_SetAutoMode /
+ * SetSkipActive / SetSkipPolicy / SetAutoDelay / GetPlayerDriverStateJsonUtf8).
+ * Additive. */
+#define ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP UINT64_C(134217728)
+/* D07-1: unlockable content - the extras.json catalog (CG gallery, music room,
+ * achievements), the profile `unlocks` records, the "unlock" node component and
+ * RowlEngine_GetExtrasJson / ProfileUnlock / ProfileIsUnlocked. Additive. */
+#define ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS UINT64_C(268435456)
+/* T1: the player-interface theme - Assets/json/ui_theme.json (colours, border
+ * widths, text sizes, fonts of the menus / Ekstralar / toast / AUTO-SKIP badges
+ * plus project-wide dialogue and choice defaults) and RowlEngine_GetUiThemeJson /
+ * ReloadUiTheme / SetUiThemeJson. Additive. */
+#define ROWL_ENGINE_CAPABILITY_UI_THEME UINT64_C(536870912)
 
 /** Current additive C API version. This query does not require an engine handle. */
 ROWL_API RowlEngine_ResultCode RowlEngine_GetApiVersion(
@@ -288,6 +305,93 @@ ROWL_API RowlEngine_ResultCode RowlEngine_ProfileGetStatusJson(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
     uint32_t* outRequiredSize);
 
+/* ── Unlockable content (ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS, D07-1) ─────
+ * The game declares WHAT can be unlocked in Assets/json/extras.json (CG
+ * gallery, music room, achievements; loaded by RowlEngine_SetProjectDirectory,
+ * missing file = no extras). The player profile records WHAT the player has
+ * unlocked (`unlocks` in player-profile.json). The engine unlocks on a real
+ * node entry (never on load / rewind / scene restore): a gallery image shown as
+ * background or character sprite, a music item played as the node's bgm_track,
+ * and the explicit {"type":"unlock","data":{"kind","id"}} component. Unlocks
+ * never change the story state (variables, saves, read marks, history, audio).
+ * Threading and the read-only/unmounted rules are those of the profile API;
+ * before RowlEngine_Init every function here returns ROWL_RESULT_STATE_ERROR.
+ * `kind` is "cg", "music" or "achievement". */
+
+/** Catalog + per-item state as JSON: {"format","loaded","language",
+ *  "profile_status","diagnostics":[..],"gallery":[{"id","title","image",
+ *  "thumbnail","unlocked"}],"music":[{"id","title","track","unlocked"}],
+ *  "achievements":[{"id","title","description","hidden","unlocked","at"}],
+ *  "counts":{"gallery"|"music"|"achievements":{"total","unlocked"}},
+ *  "pending_notices":[{"kind","id"}]}. Titles follow the player UI language
+ *  ("tr" / "en"); "at" is the UTC ISO-8601 unlock time or null.
+ *  "pending_notices" lists achievements unlocked that the player has not yet
+ *  been shown: the native toast (D07-2) takes each one off the queue when it
+ *  starts showing it, and "toast" ({"kind","id","visible","remaining_seconds"}
+ *  or null) is the notice currently on screen. Same caller-buffer contract
+ *  as RowlEngine_GetSaveDirectoryUtf8. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetExtrasJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Unlocks an item (tool / test / host hook). NULL or unknown `kind`, a
+ *  malformed id, or an id that is not in the catalog of that kind:
+ *  ROWL_RESULT_INVALID_ARGUMENT (nothing is written). Already unlocked: OK.
+ *  Read-only / unmounted profile: ROWL_RESULT_STATE_ERROR. A full kind (1,024
+ *  records): ROWL_RESULT_VALIDATION_ERROR. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileUnlock(
+    RowlEngineHandle handle, const char* kind, const char* id);
+
+/** *outIsUnlocked = 1 when the profile records the id, else 0 (also for an id
+ *  the catalog does not know). NULL kind/id/out or an unknown kind:
+ *  ROWL_RESULT_INVALID_ARGUMENT. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ProfileIsUnlocked(
+    RowlEngineHandle handle, const char* kind, const char* id, int32_t* outIsUnlocked);
+
+/** D07-2: opens the title screen's "Ekstralar" root page (Galeri / Muzik Odasi /
+ *  Basarimlar / Geri; pause-menu modes 6 = root, 7 = gallery, 8 = music room,
+ *  9 = achievements). Opens the title screen first when it is not up. The
+ *  state is the pause-menu JSON: "mode", "rows" and an "extras" object (page,
+ *  selected, scroll, total, counter; gallery "cells" / "viewing"; music
+ *  "items" / "playing"; achievement "items" with description and date). A
+ *  locked gallery cell carries no image path. Input is the pause-menu command
+ *  funnel (UP/DOWN/LEFT/RIGHT/BACK/CONFIRM) plus RowlEngine_PauseMenuClick.
+ *  Viewing and music playback change no variable, save slot, read mark,
+ *  history row, unlock or GameState. ROWL_RESULT_OK (also when already open);
+ *  STATE_ERROR before RowlEngine_Init and when extras.json lists no item;
+ *  INVALID_HANDLE; WRONG_THREAD. Needs ROWL_ENGINE_CAPABILITY_EXTRAS_UNLOCKS. */
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenExtras(RowlEngineHandle handle);
+
+/* ── Player-interface theme (ROWL_ENGINE_CAPABILITY_UI_THEME, T1) ──────────
+ * The game restyles its engine-drawn player UI in Assets/json/ui_theme.json
+ * (loaded by RowlEngine_SetProjectDirectory; missing file = the built-in look,
+ * which is also what every missing key means). Precedence for the dialogue box
+ * and choice buttons: key written in the node component > theme > built-in.
+ * Format: docs/PLAYER_UI_THEME.md. Before RowlEngine_Init every function here
+ * returns ROWL_RESULT_STATE_ERROR. */
+
+/** The theme in force as JSON: {"format":1,"loaded","source","diagnostics":[..],
+ *  "theme":{menu,extras,toast,badges,scene,story,fonts: every key, resolved},
+ *  "high_contrast":{..}|null}. "loaded" = a usable ui_theme.json was read;
+ *  "source" = the VFS path, "(inline)" for SetUiThemeJson, or "". Same
+ *  caller-buffer contract as RowlEngine_GetExtrasJson. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetUiThemeJson(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize,
+    uint32_t* outRequiredSize);
+
+/** Re-reads ui_theme.json from the project's VFS (editor live preview after a
+ *  save), applies it and invalidates the cached frame: the next frame is in the
+ *  new colours. A missing file restores the built-in look. */
+ROWL_API RowlEngine_ResultCode RowlEngine_ReloadUiTheme(RowlEngineHandle handle);
+
+/** Installs a ui_theme.json document without touching any file (editor preview
+ *  of unsaved edits). NULL: ROWL_RESULT_INVALID_ARGUMENT. A document that is
+ *  not usable (not a JSON object, wrong "format", over 256 KiB):
+ *  ROWL_RESULT_VALIDATION_ERROR and the current theme stays. A usable one is
+ *  installed even when single values were rejected (see "diagnostics"). */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetUiThemeJson(
+    RowlEngineHandle handle, const char* themeJson);
+
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 
 /**
@@ -388,6 +492,26 @@ ROWL_API int RowlEngine_InitStandalone(RowlEngineHandle handle,
  * blocking contract unchanged.
  */
 ROWL_API void RowlEngine_Run(RowlEngineHandle handle);
+
+/**
+ * Host hook for the blocking loop: called on the loop thread after every
+ * successful frame step while the engine is still running (not after quit),
+ * with the clamped frame time in seconds. Must not block, must not throw and
+ * must not call Run/Shutdown/Destroy; the update-thread rules of the other
+ * entry points apply (prefetch pumps, reads).
+ */
+typedef void (*RowlEngine_FrameCallbackFn)(RowlEngineHandle handle, float deltaSeconds,
+                                           void* userData);
+
+/**
+ * RowlEngine_Run with a per-frame host hook (D06-3: the packaged player
+ * drives asset prefetch from it). Identical contract to RowlEngine_Run - the
+ * same foreign-thread/offscreen refusals and the same exception abort - and
+ * a null callback behaves exactly like RowlEngine_Run.
+ */
+ROWL_API void RowlEngine_RunWithFrameCallback(RowlEngineHandle handle,
+                                              RowlEngine_FrameCallbackFn callback,
+                                              void* userData);
 
 /**
  * D3 (B1d #151): administrative ownership recovery for a handle whose owner
@@ -1209,6 +1333,20 @@ ROWL_API const char* RowlEngine_GetDialogueHistoryJsonWithLength(RowlEngineHandl
 ROWL_API RowlEngine_ResultCode RowlEngine_GetDialogueHistoryJsonUtf8(
     RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
 
+/**
+ * D03-1 (ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY): plays ONLY the voice clip of
+ * backlog row `index` (0 = oldest row of RowlEngine_GetDialogueHistoryJson) on
+ * the Voice channel, cutting any previous Voice clip. A pure audio action: the
+ * game state, story cursor, step id, variables, read marks, history, save
+ * slots and node-entry effects (variables, sfx, scripts, transitions) are
+ * never touched or re-run.
+ * ROWL_RESULT_OK; STATE_ERROR before RowlEngine_Init; INVALID_ARGUMENT for an
+ * index past the history; FILE_NOT_FOUND when the row has no voice or the clip
+ * could not be started; INVALID_HANDLE; WRONG_THREAD.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_ReplayBacklogVoice(
+    RowlEngineHandle handle, uint32_t index);
+
 /* ── Save / Load Slots & History Rewind ───────────────────────────────────── */
 
 /** Result-coded save entry point for new hosts.
@@ -1241,6 +1379,18 @@ ROWL_API int RowlEngine_DeleteSaveSlot(RowlEngineHandle handle, int32_t slotInde
 /** Rewinds the game state by the specified number of steps (default 1). Returns 1 on success, 0 on failure.
  * Requires a prior RowlEngine_Init (D1/B1b): pre-init rewind returns 0 with StateError. */
 ROWL_API int RowlEngine_Rewind(RowlEngineHandle handle, uint32_t steps);
+
+/** F1 (additive): node-granular rewind - the player's "back" action. Rewinds
+ * by `nodes` NODE visits (not state links): a node's entry can write several
+ * links (variable / script / audio commits); this lands on the LAST link of the
+ * previous node, i.e. the state after all of that node's entry effects
+ * (variables, music, backlog line), so one call = one node back.
+ * RowlEngine_Rewind(steps) keeps its raw state-link meaning for hosts that
+ * address individual links. Also ends Auto for the session. Returns 1 on
+ * success, 0 when there is no earlier node (the first node, or a loaded
+ * chain without one) or on failure; same init/rollback contract as
+ * RowlEngine_Rewind. Hosts detect it via the symbol (no capability bit). */
+ROWL_API int RowlEngine_RewindNodes(RowlEngineHandle handle, uint32_t nodes);
 
 /** Returns the current history step ID. */
 ROWL_API uint64_t RowlEngine_GetCurrentStepId(RowlEngineHandle handle);
@@ -1299,6 +1449,63 @@ ROWL_API int RowlEngine_IsPaused(RowlEngineHandle handle);
  */
 ROWL_API RowlEngine_ResultCode RowlEngine_OpenTitleScreen(RowlEngineHandle handle);
 
+/**
+ * D03-2 (ROWL_ENGINE_CAPABILITY_BACKLOG_REPLAY): opens the native dialogue
+ * backlog ("Gecmis") over the frozen story, exactly like the player's B key /
+ * mouse-wheel-up. The page is a pause-menu mode (RowlEngine_GetPauseMenuJson:
+ * mode 5, a "backlog" object with total / selected / scroll / entries[] of
+ * speaker, dialogue, has_voice) driven by RowlEngine_PauseMenuCommand
+ * (UP/DOWN move, CONFIRM replays the selected row's voice clip when it has
+ * one, BACK closes). Opened here, BACK returns straight to the story; opened
+ * from the pause menu's "Gecmis" row (or while the menu is up), BACK returns
+ * to the pause main page. Read-only: variables, step id, history, read marks
+ * and save slots never change.
+ * ROWL_RESULT_OK (also when it is already open); STATE_ERROR before
+ * RowlEngine_Init and on the title screen; INVALID_HANDLE; WRONG_THREAD.
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_OpenBacklog(RowlEngineHandle handle);
+
+/* ── Player Auto / Skip (D04-1, ROWL_ENGINE_CAPABILITY_PLAYER_AUTO_SKIP) ───────
+ * The player's own drivers, independent of the author's per-line auto_advance
+ * flag (which is unchanged). All state is session-only; the player (A / S /
+ * Ctrl keys) uses the same engine paths. Every call: STATE_ERROR before
+ * RowlEngine_Init, INVALID_HANDLE, WRONG_THREAD.
+ *
+ * Auto: once the line is fully shown it waits auto_delay + characters * 0.04 /
+ * text-speed seconds (clamped to [0.8, 30]; the node's own voice clip is
+ * waited out too, at most 30 s in total) and then advances like a click. It
+ * idles while a choice menu is up, the game is paused or a transition runs.
+ * Skip: advances one node per step (at least 0.05 s apart) while the lines obey
+ * the policy; it stops by itself at a choice menu, at an unread line under
+ * read_only, at the end of the chain, and on pause / title / backlog / load /
+ * rewind / manual advance. Skip takes priority over Auto.
+ */
+
+/** enabled != 0 turns Auto on, 0 off. Does not touch the player profile. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetAutoMode(RowlEngineHandle handle, int enabled);
+
+/** active != 0 starts Skip, 0 stops it. Starting while the policy is off or the
+ *  pause menu / title / backlog is up is refused: ROWL_RESULT_STATE_ERROR and
+ *  nothing changes. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetSkipActive(RowlEngineHandle handle, int active);
+
+/** policy: 0 = off, 1 = read_only (the default), 2 = all. Anything else:
+ *  ROWL_RESULT_INVALID_ARGUMENT. Switching to off also stops a running Skip. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetSkipPolicy(RowlEngineHandle handle, int policy);
+
+/** Auto's base delay in seconds, clamped to [0, 10] (default 2). NaN/Inf:
+ *  ROWL_RESULT_INVALID_ARGUMENT, nothing changes. */
+ROWL_API RowlEngine_ResultCode RowlEngine_SetAutoDelay(RowlEngineHandle handle, float seconds);
+
+/** Caller-buffer JSON {"auto":bool,"skip_active":bool,
+ *  "skip_policy":"off"|"read_only"|"all","auto_delay":number,
+ *  "line_read_before":bool,"auto_wait_remaining":number}. line_read_before =
+ *  every line of the current node had already been read when it was first
+ *  presented (fail-closed: a line without a content id counts as unread).
+ *  Same buffer contract as RowlEngine_GetSaveDirectoryUtf8. */
+ROWL_API RowlEngine_ResultCode RowlEngine_GetPlayerDriverStateJsonUtf8(
+    RowlEngineHandle handle, char* buffer, uint32_t bufferSize, uint32_t* outRequiredSize);
+
 /** *outActive = 1 while the title screen is active, else 0. NULL outActive:
  *  ROWL_RESULT_INVALID_ARGUMENT. */
 ROWL_API RowlEngine_ResultCode RowlEngine_IsTitleScreenActive(
@@ -1321,7 +1528,8 @@ enum RowlPauseMenuCommand {
 ROWL_API void RowlEngine_PauseMenuCommand(RowlEngineHandle handle, int command);
 
 /**
- * Pause-menu snapshot JSON: open, mode (0=main,1=save,2=load), selected row,
+ * Pause-menu snapshot JSON: open, mode (0=main,1=save,2=load,3=title,
+ * 4=preferences,5=backlog), selected row,
  * confirm_quit arm, quick_slot, title, hint, and rows[] with label/value.
  * Same ownership rules as RowlEngine_GetDialogueHistoryJson.
  */
@@ -1566,6 +1774,26 @@ ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapterIndexJson(
 /** Appends one chapter file (editor LoadChapterFile schema); re-feeding a chapter replaces it. */
 ROWL_API RowlEngine_ResultCode RowlEngine_AppendChapterFileJson(
     RowlEngineHandle handle, const char* chapterJsonUtf8);
+/**
+ * Feeds the chapter loader from the ACTIVE VFS (a packaged game or loose
+ * Assets), the standalone player's counterpart of the editor's chapter feed:
+ * reads `<chaptersDir>/chapter_index.json` (null/empty = "json/chapters"),
+ * then `<chaptersDir>/<chapter id>.json` for every chapter the index lists
+ * (the editor's file-name rule: characters illegal in file names become '_').
+ * outFedFiles (may be null) receives how many payloads the loader accepted.
+ *
+ * Unreadable or invalid chapter files are skipped and logged (the rest still
+ * feed). Returns OK when every listed chapter was fed and the fed node set
+ * equals the loaded story graph. FILE_NOT_FOUND when the project has no chapter index (a normal condition:
+ * the single implicit chapter / the graph's own chapter list is used, the
+ * loader stays untouched). PARSE_ERROR/VALIDATION_ERROR for a broken index.
+ * VALIDATION_ERROR also when the fed node set differs from the loaded story
+ * graph (a stale split): the loader is cleared again so prefetch falls back to
+ * the graph itself, and the difference is logged. Requires RowlEngine_Init
+ * and a loaded story graph (STATE_ERROR before Init).
+ */
+ROWL_API RowlEngine_ResultCode RowlEngine_FeedChaptersFromVfs(
+    RowlEngineHandle handle, const char* chaptersDirUtf8, int32_t* outFedFiles);
 /** Marks one chapter resident (widens the window, active unchanged). Unknown id -> INVALID_ARGUMENT. */
 ROWL_API RowlEngine_ResultCode RowlEngine_LoadChapter(
     RowlEngineHandle handle, const char* chapterIdUtf8);

@@ -172,6 +172,16 @@ if(ROWL_BUILD_RUNTIME_TESTS)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 60
         )
+        # D06-3: bolunmus bolum dosyalari ile tam graf sapmasi paketleme
+        # aninda net uyari verir (chapter-drift); paket yine yazilir.
+        add_test(
+            NAME rowl_package_chapter_consistency_tests
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_package_chapter_consistency.py
+        )
+        set_tests_properties(rowl_package_chapter_consistency_tests PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 60
+        )
         # W8-c bulgu-1 kilidi: expansion-ratio gate probu (pack RAW-karari +
         # verifier 2048x-forge reddi). D18b-ii blogu emsali; package_* icinde
         # alfabetik (determinism < ratio_gate). zstd'siz yorumlayicida yalniz
@@ -380,6 +390,19 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             TIMEOUT 120
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # T1: Assets/json/ui_theme.json packs into the .rowlpkg and the packaged game
+        # applies it (a bad value keeps its default + diagnostic; no file = built-in look).
+        add_test(
+            NAME rowl_ui_theme_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_ui_theme_packaged.py
+                $<TARGET_FILE:RowlEngineCore>
+                ${CMAKE_SOURCE_DIR}/samples/first_light
+        )
+        set_tests_properties(rowl_ui_theme_packaged PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 120
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
         # D01d: two packaged games (same sample, different ids) driven through
         # the real player: distinct ids/data dirs, read state + preferences
         # persist per game, future-version profile stays read-only/byte-identical.
@@ -391,6 +414,19 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
                 ${CMAKE_SOURCE_DIR}/samples/second_signal
         )
         set_tests_properties(rowl_packaged_game_isolation PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            TIMEOUT 180
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+        )
+        # D06-3: paketli/gevsek oyuncu bolum dosyalarini kendi dosyalarindan
+        # besler ve varliklari isitir (prefetch); bayat bolme yok sayilir.
+        add_test(
+            NAME rowl_player_chapter_prefetch_packaged
+            COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_player_chapter_prefetch_packaged.py
+                $<TARGET_FILE:rowl_player>
+                $<TARGET_FILE:RowlEngineCore>
+        )
+        set_tests_properties(rowl_player_chapter_prefetch_packaged PROPERTIES
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             TIMEOUT 180
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
@@ -408,6 +444,26 @@ if(ROWL_BUILD_RUNTIME_TESTS AND TARGET rowl_player)
             # Offscreen smoke frame: must initialise with no display server.
             ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
         )
+        # D-K1 (Asama D kabul yolculugu): paketli kayip_tablo, editorsuz; gercek SDL
+        # tus/fare olaylariyla ("Yeni Oyun" -> secimler -> kayit -> yeniden baslat ->
+        # devam -> gecmis -> tercih -> auto/skip -> rewind -> son -> basarim -> Ekstralar).
+        # SDL olaylari ctypes ile SDL_PushEvent'e itilir: yalniz Linux (SDL3 .so, dummy
+        # video); SDL3 kutuphanesi bulunamazsa test 77 ile SKIP doner.
+        if(UNIX AND NOT APPLE)
+            add_test(
+                NAME rowl_d_acceptance_journey
+                COMMAND ${Python3_EXECUTABLE} -u ${CMAKE_SOURCE_DIR}/tests/test_d_acceptance_journey.py
+                    $<TARGET_FILE:rowl_player>
+                    $<TARGET_FILE:RowlEngineCore>
+                    ${CMAKE_SOURCE_DIR}/samples/kayip_tablo
+            )
+            set_tests_properties(rowl_d_acceptance_journey PROPERTIES
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                TIMEOUT 300
+                SKIP_RETURN_CODE 77
+                ENVIRONMENT "SDL_AUDIODRIVER=dummy;SDL_VIDEODRIVER=dummy"
+            )
+        endif()
     endif()
 
     # A real SDL window is needed to exercise SDL's GPU render-state path.  Keep

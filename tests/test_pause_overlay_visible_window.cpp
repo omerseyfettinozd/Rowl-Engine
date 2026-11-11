@@ -68,8 +68,8 @@ void test_pause_overlay_visible_window() {
     view.title = "Paused";
     view.hint = "Esc to resume";
     for (const char* label : {"Resume", "Save Game", "Load Game"})
-        view.rows.push_back({label, "", false});
-    view.rows.push_back({"Music", "80%", true});
+        view.rows.push_back(Rowl::Core::makePauseRow(label, ""));
+    view.rows.push_back(Rowl::Core::makePauseRow("Music", "80%", true));
     view.selected = 1;
 
     drawOnce(window, view);

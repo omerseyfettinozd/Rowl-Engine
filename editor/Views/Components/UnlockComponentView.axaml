@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:RowlEngine.Editor.Services.Strings"
+             xmlns:comp="using:RowlEngine.Editor.ViewModels.Components"
+             x:Class="RowlEngine.Editor.Views.Components.UnlockComponentView"
+             x:DataType="comp:UnlockComponentViewModel">
+  <Border Classes="card" ClipToBounds="True" Margin="0,4">
+    <StackPanel>
+      <!-- Bileşen kartı başlığı (diğer kartlarla aynı kalıp): onay kutusu | ad (yıldız sütun, kırpılır) | Ayar | "..." menüsü. -->
+      <Border Background="{DynamicResource CardHeaderBackground}" Padding="8,6">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="2">
+          <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" ToolTip.Tip="{l:T Common.Enable.Tip}" MinWidth="0" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"/>
+          <ToggleButton Grid.Column="1" Classes="header" IsChecked="{Binding IsExpanded}" ToolTip.Tip="{l:T Common.ExpandCollapse.Tip}"
+                        Background="Transparent" BorderThickness="0" Padding="4,2" MinWidth="0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" VerticalAlignment="Center">
+            <TextBlock Classes="cardTitle" Text="{l:T Component.Unlock.Title}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{l:T Component.Unlock.Title}"/>
+          </ToggleButton>
+          <ToggleButton Grid.Column="2" Classes="compact" IsChecked="{Binding IsExpanded}" Content="{l:T Common.Settings}" VerticalAlignment="Center"/>
+          <Button Grid.Column="3" Classes="compact" Content="..." ToolTip.Tip="{l:T Inspector.Components.Actions.Tip}" VerticalAlignment="Center">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{l:T Common.MoveUp.Tip}" Command="{Binding MoveUpCommand}"/>
+                <MenuItem Header="{l:T Common.MoveDown.Tip}" Command="{Binding MoveDownCommand}"/>
+                <Separator/>
+                <MenuItem Header="{l:T Common.Delete}" Command="{Binding RemoveSelfCommand}"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+      <StackPanel IsVisible="{Binding IsExpanded}" Spacing="8" Margin="8,6">
+
+        <!-- Tür: CG / Müzik / Başarım -->
+        <StackPanel Spacing="2">
+          <TextBlock Text="{l:T Component.Unlock.Kind.Label}" Classes="body" />
+          <ComboBox x:Name="KindPicker"
+                    ItemsSource="{x:Static comp:UnlockComponentViewModel.KindOptions}"
+                    SelectedItem="{Binding SelectedKindOption}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="comp:UnlockKindOption">
+                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <!-- Kimlik: katalogdan seçilir; katalog yoksa serbest metin -->
+        <StackPanel Spacing="2">
+          <TextBlock Text="{l:T Component.Unlock.Id.Label}" Classes="body" />
+          <ComboBox x:Name="IdPicker"
+                    IsVisible="{Binding HasCatalogIds}"
+                    ItemsSource="{Binding IdOptions}"
+                    SelectedItem="{Binding SelectedIdOption}"
+                    PlaceholderText="{l:T Component.Unlock.Id.Placeholder}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="comp:UnlockIdOption">
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBox x:Name="IdText"
+                   IsVisible="{Binding UsesFreeText}"
+                   Text="{Binding UnlockId}"
+                   Watermark="{l:T Component.Unlock.Id.Watermark}" />
+          <TextBlock IsVisible="{Binding UsesFreeText}"
+                     Text="{l:T Component.Unlock.NoCatalog.Hint}"
+                     Classes="muted" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+          <Button x:Name="OpenCatalogButton" Classes="text" HorizontalAlignment="Left" Padding="0,2"
+                  Content="{l:T Component.Unlock.OpenCatalog}"/>
+          <TextBlock IsVisible="{Binding IdNotInCatalog}"
+                     Text="{l:T Component.Unlock.NotInCatalog.Warning}"
+                     Foreground="{DynamicResource ErrorBrush}" FontSize="{DynamicResource FontSizeBody}" TextWrapping="Wrap" />
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

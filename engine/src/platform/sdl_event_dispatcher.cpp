@@ -66,6 +66,9 @@ std::optional<uint32_t> targetWindowId(const SDL_Event& event) {
         case SDL_EVENT_WINDOW_RESIZED:
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+        // F1 (A-9): the window lost focus - held keys (Ctrl) never see their
+        // KEY_UP, the engine must end the Skip-hold itself.
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
             return event.window.windowID;
         default:
             return std::nullopt;

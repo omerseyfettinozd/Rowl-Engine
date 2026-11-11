@@ -44,6 +44,14 @@ std::shared_ptr<const GameState> SessionPersistence::rewind(
     return target;
 }
 
+std::shared_ptr<const GameState> SessionPersistence::rewindNodes(
+    const std::shared_ptr<const GameState>& current, uint64_t nodes) {
+    if (!current || nodes == 0) return nullptr;
+    auto target = GameState::rewindNodes(current, nodes);
+    if (!target || target == current) return nullptr;
+    return target;
+}
+
 void SessionPersistence::setSaveDirectory(std::filesystem::path saveDirectory) {
     m_saveDirectory = saveDirectory.empty() ? "saves" : std::move(saveDirectory);
 }

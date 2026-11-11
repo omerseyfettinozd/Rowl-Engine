@@ -50,7 +50,9 @@ bool readFloat(const nlohmann::json& ev, const char* key, float& out) {
     if (it == ev.end()) return true;  // yoksa varsayılan
     if (!it->is_number()) return false;
     const double value = it->get<double>();
-    if (!std::isfinite(value)) return false;
+    // Aralık dışı double→float dönüşümü UB (1e300 inf'e taşıyordu);
+    // büyüklük sınırı engine.cpp kMaxComponentNumericMagnitude emsali.
+    if (!std::isfinite(value) || std::fabs(value) > 1'000'000.0) return false;
     out = static_cast<float>(value);
     return true;
 }
@@ -94,12 +96,17 @@ bool parseInputAction(const nlohmann::json& ev, InputAction& action) {
     }
     if (t == "choice") {
         if (!readId(ev, "optionId", "id", action.id)) return false;
+        // Ne kimlik ne index varsa seçim değil sessiz ilerleme olurdu; hep-ya-hiç
+        // sözleşmesi gereği eksik alan tüm grubu reddeder.
+        if (action.id.empty() && !ev.contains("index")) return false;
         action.kind = action.id.empty() ? Kind::ChoiceIndex : Kind::ChoiceId;
         return readCount(ev, "index", action.count);
     }
     if (t == "choice_id") {
         action.kind = Kind::ChoiceId;
-        return readId(ev, "id", "optionId", action.id);
+        if (!readId(ev, "id", "optionId", action.id)) return false;
+        // Boş kimlik applyInputAction'da sessizce yutuluyordu; reddet.
+        return !action.id.empty();
     }
     if (t == "advance" || t == "next") {
         action.kind = Kind::Advance;
@@ -263,13 +270,16 @@ ROWL_API int RowlEngine_QueryWorldJson(
         }
         // Story Choices
         nlohmann::json choicesArray = nlohmann::json::array();
-        for (const auto& chBtn : engine->getActiveChoiceButtons()) {
+        // D-K3: bounds are the drawn / hit-tested geometry (fitted to the text
+        // scale); "focused" is additive: the option holding keyboard/hover focus.
+        for (const auto& chBtn : engine->getLaidOutChoiceButtons()) {
             choicesArray.push_back({
                 {"id", chBtn.optionId},
                 {"text", chBtn.text},
                 {"bounds", {
                     {"x", chBtn.x}, {"y", chBtn.y}, {"w", chBtn.width}, {"h", chBtn.height}
-                }}
+                }},
+                {"focused", chBtn.focused}
             });
         }
         story["choices"] = choicesArray;
@@ -293,9 +303,9 @@ ROWL_API int RowlEngine_QueryWorldJson(
                 cur = cur->previousState;
             }
 
-            if (gs->dialogueHistory) {
+            {
                 nlohmann::json historyArr = nlohmann::json::array();
-                const auto& hist = *gs->dialogueHistory;
+                const auto& hist = gs->dialogueHistory;
                 size_t startIdx = hist.size() > 5 ? hist.size() - 5 : 0;
                 for (size_t i = startIdx; i < hist.size(); ++i) {
                     historyArr.push_back({
@@ -548,7 +558,9 @@ ROWL_API int RowlEngine_QueryVfsStatusJson(
             };
         }
 
-        std::string jsonStr = root.dump(2);
+        // Mount kaynağı/paket adı ham dosya sistemi baytlarından gelir; strict
+        // dump geçersiz UTF-8'de fırlatıp tüm VFS tanısını kaybettirirdi.
+        std::string jsonStr = root.dump(2, ' ', false, nlohmann::json::error_handler_t::replace);
         int requiredSize = static_cast<int>(jsonStr.size() + 1);
 
         if (!outBuffer || bufferCap <= 0) {

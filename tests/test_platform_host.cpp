@@ -132,7 +132,7 @@ void test_platform_host() {
         exit(1);
     }
 
-    host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+    host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
     engine.step(1.0f / 60.0f);
     if (engine.getCurrentNodeId() != 702) {
         std::cerr << "PlatformHost input was not dispatched to the runtime" << std::endl;
@@ -141,7 +141,7 @@ void test_platform_host() {
 
     engine.resetToStartNode();
     host->lifecycle = Rowl::Platform::LifecycleState::Suspended;
-    host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::Advance});
+    host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::Advance));
     engine.step(1.0f / 60.0f);
     if (engine.getCurrentNodeId() != 701 || !engine.getAudio()->isOutputSuspended()) {
         std::cerr << "Suspended lifecycle did not pause runtime work and audio" << std::endl;
@@ -174,8 +174,8 @@ void test_platform_host() {
             std::cerr << "Title screen did not open" << std::endl;
             exit(1);
         }
-        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::PauseToggle});
-        host->input.push_back({Rowl::Platform::RuntimeInputEvent::Type::MenuBack});
+        host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::PauseToggle));
+        host->input.push_back(Rowl::Platform::makeRuntimeInput(Rowl::Platform::RuntimeInputEvent::Type::MenuBack));
         engine.step(1.0f / 60.0f);
         if (!engine.isTitleScreenActive() || !engine.isPaused() ||
             engine.getCurrentNodeId() != nodeBefore) {

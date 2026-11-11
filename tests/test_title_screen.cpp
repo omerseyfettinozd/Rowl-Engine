@@ -14,7 +14,7 @@
  *  5. Tercihler: metin hizi / ses degisimi player profile'a yazilir (title
  *     ve duraklatma menusu); sayfa Geri ile title'a doner.
  *  6. Yuva satirinda tarih + ozet (detail), secili yuvanin kucuk resmi
- *     (selected_has_thumbnail); "dolu"/"bos" degerleri korunur.
+ *     (selected_has_thumbnail); "dolu"/"boş" degerleri korunur.
  *
  * Bilerek-boz: ensureSlotCache'te saved_at karsilastirmasini '<' yapmak 3'u,
  * titleBack'in kok sayfada setPaused(false) cagirmasi 1'i, Preferences
@@ -147,6 +147,10 @@ void corrupt(const fs::path& file) {
 void test_title_screen() {
     TEST_SECTION("Native title screen (D02)");
 
+    // D-K2: slot dates are shown in local time; pin UTC so the fixed
+    // "2026-02-02 09:30" style expectations below hold on any machine.
+    ScopedTimeZone utcZone("UTC");
+
     const fs::path root = fs::temp_directory_path() / "rowl_title_screen";
     std::error_code ec;
     fs::remove_all(root, ec);
@@ -187,8 +191,8 @@ void test_title_screen() {
         const json m = menu(h);
         req(m["rows"].size() == 5, "title must have 5 rows");
         req(m["title"] == "Kayip Tablo Test", "title row text is the game name: " + m["title"].dump());
-        req(m["rows"][0]["label"] == "Yeni Oyun" && m["rows"][4]["label"] == "Cikis", "title labels");
-        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayit yok",
+        req(m["rows"][0]["label"] == "Yeni Oyun" && m["rows"][4]["label"] == "Çıkış", "title labels");
+        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayıt yok",
             "Continue must be disabled without saves");
         req(m["continue_slot"].get<int>() == -1, "continue_slot must be -1");
         req(m["selected"].get<int>() == 0, "New Game is preselected without saves");
@@ -284,17 +288,17 @@ void test_title_screen() {
         req(m["rows"].size() == 10, "load page lists 10 slots");
         req(m["rows"][3]["value"] == "bozuk", "corrupt slot value is bozuk");
         req(m["rows"][5]["value"] == "dolu", "valid slot value stays dolu");
-        req(m["rows"][0]["value"] == "bos", "empty slot value stays bos");
+        req(m["rows"][0]["value"] == "boş", "empty slot value stays bos");
     }
     // 4. Load page behaviours.
     selectRow(h, 0);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
     expectTitle(h, 2, "empty slot");
-    req(menu(h)["hint"] == "bos yuva", "empty slot hint");
+    req(menu(h)["hint"] == "boş yuva", "empty slot hint");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
     expectTitle(h, 2, "corrupt slot");
-    req(menu(h)["hint"] == "bozuk kayit", "corrupt slot hint");
+    req(menu(h)["hint"] == "bozuk kayıt", "corrupt slot hint");
     expectNode(h, 2, "no load happened");
     cmd(h, ROWL_PAUSE_MENU_BACK);
     expectTitle(h, 3, "back from load page");
@@ -315,7 +319,7 @@ void test_title_screen() {
     {
         const json m = menu(h);
         req(m["continue_slot"].get<int>() == -1, "no valid save left");
-        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayit yok",
+        req(m["rows"][1]["enabled"] == false && m["rows"][1]["value"] == "kayıt yok",
             "Continue disabled when every save is corrupt");
     }
     selectRow(h, 1);
@@ -329,7 +333,13 @@ void test_title_screen() {
     expectTitle(h, 4, "preferences page");
     {
         const json m = menu(h);
-        req(m["rows"].size() == 6 && m["rows"][4]["label"] == "Metin Hizi" && m["rows"][5]["label"] == "Geri",
+        // F2 (B-13): this game declares no locales, so there is no "Dil" row to switch; the rows
+        // below it moved up by one (Metin Boyutu is row 7, Geri row 10).
+        req(m["rows"].size() == 11 && m["rows"][4]["label"] == "Metin Hızı" &&
+                m["rows"][5]["label"] == "Otomatik Hızı" && m["rows"][6]["label"] == "Atlama" &&
+                m["rows"][7]["label"] == "Metin Boyutu" &&
+                m["rows"][8]["label"] == "Yüksek Kontrast" && m["rows"][9]["label"] == "Hareketi Azalt" &&
+                m["rows"][10]["label"] == "Geri",
             "preferences rows");
     }
     selectRow(h, 4);
@@ -348,8 +358,8 @@ void test_title_screen() {
     expectTitle(h, 3, "back from preferences");
     selectRow(h, 3);
     cmd(h, ROWL_PAUSE_MENU_CONFIRM);
-    selectRow(h, 5);
-    cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri
+    selectRow(h, 10);
+    cmd(h, ROWL_PAUSE_MENU_CONFIRM);  // Geri (row 10 now that this game has no Dil row, F2)
     expectTitle(h, 3, "Geri row");
     TEST_PASS("Title preferences persist volume/text speed; Back and Geri return to the title");
 
@@ -357,7 +367,9 @@ void test_title_screen() {
     RowlEngine_SetPaused(h, 0);
     expectClosed(h, "host override");
     RowlEngine_SetPaused(h, 1);
-    selectRow(h, 7);
+    selectRow(h, 3);  // D05-2: pause main -> Tercihler (the speed row lives there)
+    cmd(h, ROWL_PAUSE_MENU_CONFIRM);
+    selectRow(h, 4);
     cmd(h, ROWL_PAUSE_MENU_RIGHT);
     req(profile(h)["text_speed_multiplier"].get<double>() == 1.5, "pause menu text speed persisted");
     TEST_PASS("Pause-menu text speed also persists into the profile");
@@ -410,23 +422,25 @@ void test_title_screen() {
     }
     TEST_PASS("Offscreen pause overlay redraws on a clean story frame");
 
-    // Pause menu "Ana Menu" (row 8): two-step back to the title. An exit
-    // confirmation armed on row 9 must not carry over to a click on row 8
+    // Pause menu "Ana Menü" (row 5, D05-2): two-step back to the title. An exit
+    // confirmation armed on row 6 must not carry over to a click on row 5
     // (it used to: one click then skipped the confirmation).
     {
         cmd(h, ROWL_PAUSE_MENU_BACK);  // load page -> main pause page
-        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 10, "pause main has 10 rows");
-        req(menu(h)["rows"][8]["label"] == "Ana Menu" && menu(h)["rows"][9]["label"] == "Cikis",
-            "Ana Menu sits before Cikis");
-        selectRow(h, 9);
+        req(menu(h)["mode"].get<int>() == 0 && menu(h)["rows"].size() == 7, "pause main has 7 rows");
+        req(menu(h)["rows"][3]["label"] == "Tercihler" && menu(h)["rows"][4]["label"] == "Geçmiş" &&
+                menu(h)["rows"][5]["label"] == "Ana Menü" && menu(h)["rows"][6]["label"] == "Çıkış",
+            "Tercihler, Gecmis, Ana Menu, Cikis close the main page");
+        selectRow(h, 6);
         cmd(h, ROWL_PAUSE_MENU_CONFIRM);
         req(menu(h)["confirm_quit"] == true && menu(h)["confirm_title"] == false, "exit armed");
-        const float row8Y = Rowl::Core::PauseMenuLayout::kRowY0 +
-                            8 * (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
+        const float row9Y = Rowl::Core::PauseMenuLayout::kRowY0 +
+                            Rowl::Core::PauseMenuLayout::kMainTitleRow *
+                                (Rowl::Core::PauseMenuLayout::kRowH + Rowl::Core::PauseMenuLayout::kRowGap) +
                             Rowl::Core::PauseMenuLayout::kRowH * 0.5f;
         // The engine surface is 320x180: map the 1920x1080 virtual point.
         constexpr float kToPhysical = 320.0f / 1920.0f;
-        req(RowlEngine_PointerDown(h, 960.0f * kToPhysical, row8Y * kToPhysical) == 1,
+        req(RowlEngine_PointerDown(h, 960.0f * kToPhysical, row9Y * kToPhysical) == 1,
             "paused click is consumed by the menu");
         req(!titleActive(h), "a click on Ana Menu used the exit row's armed confirmation");
         req(menu(h)["confirm_title"] == true && menu(h)["confirm_quit"] == false,
@@ -440,6 +454,29 @@ void test_title_screen() {
         req(RowlEngine_IsRunning(h) == 1, "Ana Menu must not quit");
     }
     TEST_PASS("Pause menu Ana Menu returns to the title after a two-step confirm");
+
+    // D-K2: the disk stamp stays UTC; the player sees local time (slot row,
+    // "Devam Et" line, achievement date).
+    {
+        ScopedTimeZone istanbul("Europe/Istanbul");  // +03, no DST
+        const std::string slotText = Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00Z");
+        req(slotText == "2026-10-25 01:30", "Istanbul slot time is local: " + slotText);
+        req(Rowl::Core::utcIsoToLocalText("2026-10-24T22:30:00Z", true) == "2026-10-25",
+            "Istanbul achievement date rolls over midnight");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T22:30Z") == "2026-10-25 01:30" &&
+                Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00.250Z") == "2026-10-25 01:30",
+            "seconds-less and fractional stamps convert too");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T12:34:56") == "2026-10-24 12:34" &&
+                Rowl::Core::utcIsoToLocalText("2026-10-24T12:34:56", true) == "2026-10-24" &&
+                Rowl::Core::pauseSlotDateText("garbage") == "garbage" &&
+                Rowl::Core::pauseSlotDateText("") == "",
+            "Z-less / unparsable stamps keep the legacy truncated display");
+        ScopedTimeZone utc("UTC");
+        req(Rowl::Core::pauseSlotDateText("2026-10-24T22:30:00Z") == "2026-10-24 22:30" &&
+                Rowl::Core::utcIsoToLocalText("2026-10-24T22:30:00Z", true) == "2026-10-24",
+            "UTC zone: same as the old display");
+    }
+    TEST_PASS("D-K2: UTC disk stamps display in local time, legacy stamps unchanged");
 
     RowlEngine_Shutdown(h);
     RowlEngine_Destroy(h);

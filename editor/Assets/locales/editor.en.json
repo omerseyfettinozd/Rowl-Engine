@@ -213,6 +213,15 @@
     "Component.Audio.Title": {
       "text": "Audio"
     },
+    "Component.Audio.Voice.Label": {
+      "text": "Voice line (dialogue recording)"
+    },
+    "Component.Audio.Voice.Preview.Tip": {
+      "text": "Play / stop voice line preview"
+    },
+    "Component.Audio.Voice.Watermark": {
+      "text": "e.g. ayse_01.ogg"
+    },
     "Component.Audio.Volume.Label": {
       "text": "Volume"
     },
@@ -501,6 +510,30 @@
     "Component.Condition.DisplayName": {
       "text": "Condition (Lua)"
     },
+    "Component.Condition.Title": {
+      "text": "Condition (Lua)"
+    },
+    "Component.Condition.Expression.Label": {
+      "text": "Expression (Lua)"
+    },
+    "Component.Condition.Expression.Watermark": {
+      "text": "e.g. gold >= 10"
+    },
+    "Component.Condition.Target.Label": {
+      "text": "If the condition is false, go to"
+    },
+    "Component.Condition.Target.None": {
+      "text": "— (the node still plays)"
+    },
+    "Component.Condition.Target.Missing.Option": {
+      "text": "node missing"
+    },
+    "Component.Condition.Target.Missing.Warning": {
+      "text": "This node does not exist: when the condition is false the node still plays."
+    },
+    "Component.Condition.Hint": {
+      "text": "When false, the node is not played and play moves to the target."
+    },
     "Component.Dialogue.Align.Label": {
       "text": "Alignment"
     },
@@ -681,6 +714,45 @@
     "Component.Transition.Kind": {
       "text": "Transition type"
     },
+    "Component.Transition.Kind.crossfade": {
+      "text": "Crossfade"
+    },
+    "Component.Transition.Kind.dissolve": {
+      "text": "Dissolve"
+    },
+    "Component.Transition.Kind.fade_black": {
+      "text": "Fade to black"
+    },
+    "Component.Transition.Kind.fade_color": {
+      "text": "Fade to color"
+    },
+    "Component.Transition.Kind.fade_white": {
+      "text": "Fade to white"
+    },
+    "Component.Transition.Kind.iris_in": {
+      "text": "Iris in"
+    },
+    "Component.Transition.Kind.iris_out": {
+      "text": "Iris out"
+    },
+    "Component.Transition.Kind.push_down": {
+      "text": "Push down"
+    },
+    "Component.Transition.Kind.push_left": {
+      "text": "Push left"
+    },
+    "Component.Transition.Kind.push_right": {
+      "text": "Push right"
+    },
+    "Component.Transition.Kind.push_up": {
+      "text": "Push up"
+    },
+    "Component.Transition.Kind.wipe_left": {
+      "text": "Wipe left"
+    },
+    "Component.Transition.Kind.wipe_right": {
+      "text": "Wipe right"
+    },
     "Component.Transition.Post.Label": {
       "text": "Post-process color tint &amp; vignette"
     },
@@ -707,6 +779,84 @@
     },
     "Component.Variable.DisplayName": {
       "text": "Variable Modifier"
+    },
+    "Component.Variable.Title": {
+      "text": "Variable Modifier"
+    },
+    "Component.Variable.Key.Label": {
+      "text": "Key"
+    },
+    "Component.Variable.Key.Watermark": {
+      "text": "e.g. gold"
+    },
+    "Component.Variable.Key.Empty.Warning": {
+      "text": "The key is empty: this component does nothing."
+    },
+    "Component.Variable.Operation.Label": {
+      "text": "Operation"
+    },
+    "Component.Variable.Operation.set": {
+      "text": "Set"
+    },
+    "Component.Variable.Operation.add": {
+      "text": "Add"
+    },
+    "Component.Variable.Value.Label": {
+      "text": "Value"
+    },
+    "Component.Variable.Value.Watermark": {
+      "text": "e.g. 10"
+    },
+    "Component.Variable.Add.Invalid.Warning": {
+      "text": "Add needs a finite number."
+    },
+    "Component.Variable.Hint": {
+      "text": "Applied once when the node is entered (not on rewind or replay)."
+    },
+    "Component.Unlock.DisplayName": {
+      "text": "Unlockable Content"
+    },
+    "Component.Unlock.Title": {
+      "text": "Unlockable Content"
+    },
+    "Component.Unlock.Kind.Label": {
+      "text": "Kind"
+    },
+    "Component.Unlock.Kind.cg": {
+      "text": "Image (CG)"
+    },
+    "Component.Unlock.Kind.music": {
+      "text": "Music"
+    },
+    "Component.Unlock.Kind.achievement": {
+      "text": "Achievement"
+    },
+    "Component.Unlock.Id.Label": {
+      "text": "Id"
+    },
+    "Component.Unlock.Id.Placeholder": {
+      "text": "Pick from the catalog"
+    },
+    "Component.Unlock.Id.Watermark": {
+      "text": "e.g. bogaz_ay"
+    },
+    "Component.Unlock.NotInCatalog": {
+      "text": "not in catalog"
+    },
+    "Component.Unlock.NotInCatalog.Warning": {
+      "text": "This id is not in the catalog: nothing unlocks in the game."
+    },
+    "Component.Unlock.NoCatalog.Hint": {
+      "text": "No catalog item of this kind; type the id by hand. Catalog: Tools > Extras catalog."
+    },
+    "Component.Unlock.OpenCatalog": {
+      "text": "Open the extras catalog"
+    },
+    "Component.Unknown.DisplayName": {
+      "text": "Unknown component"
+    },
+    "Component.Unknown.Hint": {
+      "text": "This version cannot edit this component. It is kept as it is and written back on save."
     },
     "Dialog.Confirm.Cancel": {
       "text": "Cancel"
@@ -1076,6 +1226,9 @@
     },
     "Inspector.Components.Add.Transition": {
       "text": "Scene Transition"
+    },
+    "Inspector.Components.Add.Unlock": {
+      "text": "Unlockable content"
     },
     "Inspector.Components.CountSuffix": {
       "text": "active"
@@ -1839,6 +1992,9 @@
     "Menu.Windows": {
       "text": "Tools"
     },
+    "Menu.ExtrasCatalog": {
+      "text": "Extras catalog"
+    },
     "Node.Add": {
       "text": "+ Node"
     },
@@ -2051,6 +2207,9 @@
     },
     "Player.Prefs.Language": {
       "text": "Language:"
+    },
+    "Player.Prefs.LanguageDefault": {
+      "text": "Game default"
     },
     "Player.Prefs.MasterVolume": {
       "text": "Master:"
@@ -2573,6 +2732,141 @@
     },
     "Workspace.Pin.Tip": {
       "text": "Pin panel (can't be moved by its header)"
+    },
+    "Extras.Window.Title": {
+      "text": "Extras catalog"
+    },
+    "Extras.Header.Eyebrow": {
+      "text": "UNLOCKABLE CONTENT"
+    },
+    "Extras.Header.Hint": {
+      "text": "Gallery pictures, music room tracks and achievements. Players unlock them while playing; the list is written to Assets/json/extras.json."
+    },
+    "Extras.Tab.Gallery": {
+      "text": "Gallery"
+    },
+    "Extras.Tab.Music": {
+      "text": "Music room"
+    },
+    "Extras.Tab.Achievements": {
+      "text": "Achievements"
+    },
+    "Extras.Btn.Add": {
+      "text": "Add"
+    },
+    "Extras.Btn.Remove": {
+      "text": "Remove"
+    },
+    "Extras.Btn.Up": {
+      "text": "Up"
+    },
+    "Extras.Btn.Down": {
+      "text": "Down"
+    },
+    "Extras.Btn.Save": {
+      "text": "Save"
+    },
+    "Extras.Btn.Reload": {
+      "text": "Reload"
+    },
+    "Extras.Btn.Close": {
+      "text": "Close"
+    },
+    "Extras.Btn.Pick": {
+      "text": "Pick..."
+    },
+    "Extras.Field.Id": {
+      "text": "Id"
+    },
+    "Extras.Field.Id.Hint": {
+      "text": "a-z, 0-9, _ . - and at most 64 characters; unique in its list."
+    },
+    "Extras.Field.TitleTr": {
+      "text": "Title (Turkish)"
+    },
+    "Extras.Field.TitleEn": {
+      "text": "Title (English)"
+    },
+    "Extras.Field.DescriptionTr": {
+      "text": "Description (Turkish)"
+    },
+    "Extras.Field.DescriptionEn": {
+      "text": "Description (English)"
+    },
+    "Extras.Field.Image": {
+      "text": "Image"
+    },
+    "Extras.Field.Image.Watermark": {
+      "text": "e.g. bogaz_gunduz.jpg"
+    },
+    "Extras.Field.Thumbnail": {
+      "text": "Thumbnail (optional)"
+    },
+    "Extras.Field.Thumbnail.Watermark": {
+      "text": "empty: the image itself"
+    },
+    "Extras.Field.Track": {
+      "text": "Track"
+    },
+    "Extras.Field.Track.Watermark": {
+      "text": "e.g. audio/nocturne.ogg"
+    },
+    "Extras.Field.Hidden": {
+      "text": "Hidden (name and description stay veiled until unlocked)"
+    },
+    "Extras.Status.Saved": {
+      "text": "Saved."
+    },
+    "Extras.Status.Dirty": {
+      "text": "There are unsaved changes."
+    },
+    "Extras.Status.Issues": {
+      "text": "{0} problem(s); fix them to save."
+    },
+    "Extras.Status.SaveFailed": {
+      "text": "Could not save: {0}"
+    },
+    "Extras.Load.TooLarge": {
+      "text": "extras.json is larger than 256 KiB; the game ignores the whole file. Shrink it by hand."
+    },
+    "Extras.Load.NotJson": {
+      "text": "extras.json is not a valid JSON object; the game ignores it. Fix it by hand."
+    },
+    "Extras.Load.NoFormat": {
+      "text": "extras.json does not declare \"format\": 1; the game ignores it. Fix it by hand."
+    },
+    "Extras.Load.Unreadable": {
+      "text": "extras.json could not be read."
+    },
+    "Extras.Note.Dropped": {
+      "text": "{0} entries are not objects and cannot be shown; they are dropped on save."
+    },
+    "Extras.Issue.InvalidId": {
+      "text": "Invalid id: a-z, 0-9, _ . - and 1-64 characters."
+    },
+    "Extras.Issue.DuplicateId": {
+      "text": "This id is already in the list."
+    },
+    "Extras.Issue.MissingImage": {
+      "text": "No image chosen."
+    },
+    "Extras.Issue.MissingTrack": {
+      "text": "No track chosen."
+    },
+    "Extras.Issue.UnsafePath": {
+      "text": "Unusable path (absolute, contains '..', or over 260 bytes)."
+    },
+    "Extras.Issue.TextTooLong": {
+      "text": "Text is over 512 bytes."
+    },
+    "Extras.Issue.WrongType": {
+      "text": "This field has the wrong type in the file; enter it again."
+    },
+    "Extras.Issue.TooManyItems": {
+      "text": "The list holds more than 256 items."
+    },
+    "Extras.Issue.FileTooLarge": {
+      "text": "The catalog exceeds the 256 KiB limit."
     }
   }
 }

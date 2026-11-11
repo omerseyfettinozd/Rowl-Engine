@@ -585,7 +585,13 @@ public sealed partial class InspectorSceneViewModel : ViewModelBase, IDisposable
     public string TransitionKind
     {
         get => Transition?.Kind ?? string.Empty;
-        set { if (Transition is not null) Transition.Kind = value; }
+        set
+        {
+            // The card list shows four kinds only. For any other kind (wipe_right,
+            // dissolve, ...) the ListBox reports an empty selection; writing that
+            // back would erase the node's transition kind (D06-2).
+            if (Transition is not null && !string.IsNullOrEmpty(value)) Transition.Kind = value;
+        }
     }
 
     public TransitionLength Length

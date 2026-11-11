@@ -313,17 +313,32 @@ set(ROWL_ENGINE_SOURCES
     src/core/chapter_loader.cpp
     src/core/engine.cpp
     src/core/engine_pause_mixer.cpp  # D15: pause-menu/mixer dörtlüsü (davranışsız taşıma)
+    src/core/engine_pause_prefs.cpp  # D05-2: Tercihler sayfasi erisilebilirlik + dil satirlari
     src/core/engine_title_menu.cpp  # D02: native title screen / Devam Et / Tercihler
+    src/core/player_ui_strings.cpp  # D05-1: oyuncu menu yazi tablosu (tr/en)
+    src/core/engine_backlog.cpp     # D03-2: oyuncuda Gecmis (backlog) ekrani
+    src/core/engine_player_drivers.cpp  # D04-1: oyuncu Otomatik / Atla surucusu
+    src/core/engine_node_conditions.cpp  # D06-1: dugum 'condition' bileseni (giriste degerlendir / hedefe yonlendir)
+    src/core/engine_choice_focus.cpp  # D-K3: secim menusunde klavye / fare odagi + sigdirilmis dugme yerlesimi
+    src/core/engine_extras_menu.cpp  # D07-2: Ekstralar sayfalari (galeri / muzik odasi / basarimlar) + basarim bildirimi
+    src/core/engine_extras.cpp  # D07-1: acilabilir icerik (CG galerisi / muzik odasi / basarimlar) katalogu + giris acilislari
+    src/core/menu_layout.cpp  # T2b: ui_theme screens.<page>.layout -> kontrol edilmis MenuLayout
+    src/core/engine_ui_theme.cpp  # T1: oyuncu arayuzu temasi (ui_theme.json) + diyalog/secim varsayilanlari
     src/core/engine_pause_menu.cpp  # W8-d(1): pause-menu state-machine + view/JSON (davranışsız taşıma)
     src/core/engine_render_facade.cpp  # W8-d(3): texture-cache/last-frame Engine facade'u (additive)
     src/core/engine_parity_presenter.cpp  # Dilim-7 parity (P1-C): salt-okunur slot/backlog/semantik sunum (additive)
     # Rendering
     src/render/window.cpp
     src/render/window_input.cpp  # W8-d(2): keymap + pollEvents (davranışsız taşıma)
+    src/render/window_extras_overlay.cpp  # D07-2: galeri izgarasi / tam ekran gorunum / basarim bildirimi cizimi
+    src/render/window_skin.cpp  # T2: skin cizimi (9-dilim, doku, ...), imlec, devam gostergesi
     src/render/window_pause_overlay.cpp  # W8-d(2): pause overlay (davranışsız taşıma)
+    src/render/window_story_frame.cpp  # F2 (B-1): menusuz hikaye karesi (kayit kucuk resmi)
     src/render/window_font_resolve.cpp  # W8-d(4): font-cozumleme uc kademesi (saf taşıma)
     src/render/window_texture_cache.cpp  # A3-tur5: texture-cache bölünmesi
     src/render/window_text_fallback.cpp  # D10: font-fallback/MSDF çekirdek bölünmesi
+    src/render/ui_text_fit.cpp  # D-K3: saf etiket / secenek yerlesim kararlari
+    src/render/window_choice_layout.cpp  # D-K3: etiket + secenek yerlesiminin Window baglantisi
     src/render/gpu_truetype_text.cpp     # A11: GPU yolunda TrueType metin yedeği
     src/render/window_msdf_shaped.cpp  # D11: şekilli-MSDF plan/çizim bölünmesi
     src/render/camera2d.cpp
@@ -338,6 +353,7 @@ set(ROWL_ENGINE_SOURCES
     src/state/game_state.cpp
     src/state/save_durability.cpp
     src/state/save_metadata.cpp
+    src/state/save_slot_preview.cpp
     src/state/session_persistence.cpp
     # Scripting
     src/scripting/lua_sandbox.cpp
@@ -354,6 +370,8 @@ set(ROWL_ENGINE_SOURCES
     src/platform/game_identity.cpp
     src/state/game_data_layout.cpp
     src/state/player_profile.cpp
+    src/state/extras_catalog.cpp  # D07-1: extras.json ayristiricisi
+    src/state/ui_theme.cpp        # T1: ui_theme.json ayristiricisi
     src/platform/mobile_input.cpp
     src/platform/sdl_event_dispatcher.cpp
     src/platform/sdl_subsystem_lease.cpp
@@ -393,6 +411,8 @@ set(ROWL_ENGINE_SOURCES
     src/c_api_game_identity.cpp
     src/c_api_game_data.cpp
     src/c_api_profile.cpp
+    src/c_api_extras.cpp  # D07-1: GetExtrasJson / ProfileUnlock / ProfileIsUnlocked
+    src/c_api_ui_theme.cpp  # T1: GetUiThemeJson / ReloadUiTheme / SetUiThemeJson
     src/c_api_thread_contract_guard.cpp  # D14: legacy-mixer checked loud varyantlar
     src/c_api_observability.cpp          # AI Full-Observability log pipe & query
 )

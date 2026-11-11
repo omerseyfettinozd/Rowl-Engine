@@ -531,7 +531,7 @@ void test_native_c_api() {
         };
         nlohmann::json menu = menuJson();
         if (!menu["open"].get<bool>() || menu["mode"].get<int>() != 0 ||
-            menu["selected"].get<int>() != 0 || menu["rows"].size() != 10 ||
+            menu["selected"].get<int>() != 0 || menu["rows"].size() != 7 ||
             menu["rows"][0]["label"].get<std::string>() != "Devam Et") {
             std::cerr << "MS-6: freshly opened menu snapshot mismatch" << std::endl;
             exit(1);
@@ -559,7 +559,7 @@ void test_native_c_api() {
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_CONFIRM);
         menu = menuJson();
         if (menu["mode"].get<int>() != 1 || menu["rows"].size() != 10 ||
-            menu["title"].get<std::string>() != "Kayit Yuvasi Sec") {
+            menu["title"].get<std::string>() != "Kayıt Yuvası Seç") {
             std::cerr << "MS-6: save slot page did not open" << std::endl;
             exit(1);
         }
@@ -572,7 +572,7 @@ void test_native_c_api() {
         }
         menu = menuJson();
         if (menu["rows"][1]["value"].get<std::string>() != "dolu" ||
-            menu["rows"][2]["value"].get<std::string>() != "bos") {
+            menu["rows"][2]["value"].get<std::string>() != "boş") {
             std::cerr << "MS-6: slot occupancy did not refresh in the menu" << std::endl;
             exit(1);
         }
@@ -580,18 +580,33 @@ void test_native_c_api() {
             std::cerr << "MS-6: menu save must stay paused" << std::endl;
             exit(1);
         }
-        // Back -> main page, selection reset.
+        // Back -> main page. F2 (D-D2) replaces the MS-6 "selection reset" lock on purpose: the cursor
+        // lands on the row that opened the page (Oyunu Kaydet = 1), like Tercihler and the title.
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_BACK);
         menu = menuJson();
-        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 0) {
-            std::cerr << "MS-6: Back did not return to the main page" << std::endl;
+        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 1) {
+            std::cerr << "MS-6: Back did not return to the main page (on the Kaydet row)" << std::endl;
             exit(1);
         }
-        // Down x3 -> Master volume; Left/Right adjust in 0.05 steps.
+        // D05-2: the pause main page has no value rows any more. Down x3 ->
+        // "Tercihler", Confirm -> the Preferences page, whose first row is the
+        // master volume; Left/Right adjust in 0.05 steps.
         const float masterBefore = RowlEngine_GetMasterVolume(handle);
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
-        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
+        menu = menuJson();
+        if (menu["selected"].get<int>() != 3 ||
+            menu["rows"][3]["label"].get<std::string>() != "Tercihler") {
+            std::cerr << "MS-6: pause main page has no Tercihler row at 3" << std::endl;
+            exit(1);
+        }
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_CONFIRM);
+        menu = menuJson();
+        if (menu["mode"].get<int>() != 4 || menu["selected"].get<int>() != 0 ||
+            menu["rows"][0]["label"].get<std::string>() != "Ana Ses") {
+            std::cerr << "MS-6: Tercihler did not open the preferences page" << std::endl;
+            exit(1);
+        }
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_LEFT);
         if (std::abs(RowlEngine_GetMasterVolume(handle) - (masterBefore - 0.05f)) > 0.001f) {
             std::cerr << "MS-6: master volume did not step down" << std::endl;
@@ -602,21 +617,28 @@ void test_native_c_api() {
             std::cerr << "MS-6: master volume did not step back up" << std::endl;
             exit(1);
         }
-        // Down x4 more -> text speed row (7); Left steps 1.00x -> 0.75x.
+        // Down x4 more -> text speed row (4); Left steps 1.00x -> 0.75x.
         for (int i = 0; i < 4; ++i) RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_DOWN);
         menu = menuJson();
-        if (menu["selected"].get<int>() != 7 ||
-            menu["rows"][7]["value"].get<std::string>() != "1.00x") {
+        if (menu["selected"].get<int>() != 4 ||
+            menu["rows"][4]["value"].get<std::string>() != "1.00x") {
             std::cerr << "MS-6: text-speed row mismatch" << std::endl;
             exit(1);
         }
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_LEFT);
         menu = menuJson();
-        if (menu["rows"][7]["value"].get<std::string>() != "0.75x") {
+        if (menu["rows"][4]["value"].get<std::string>() != "0.75x") {
             std::cerr << "MS-6: text speed did not step to 0.75x" << std::endl;
             exit(1);
         }
         RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_RIGHT);
+        // Back -> the main page again, on its Tercihler row.
+        RowlEngine_PauseMenuCommand(handle, ROWL_PAUSE_MENU_BACK);
+        menu = menuJson();
+        if (menu["mode"].get<int>() != 0 || menu["selected"].get<int>() != 3) {
+            std::cerr << "MS-6: Back from preferences did not return to the pause main page" << std::endl;
+            exit(1);
+        }
         // Pointer parity: click row 0 (resume) middle band -> resumes.
         // Row 0 spans virtual y [290, 346); click its center.
         if (RowlEngine_PointerDown(handle, 960.0f, 318.0f) != 1 ||
@@ -641,7 +663,7 @@ void test_native_c_api() {
         // Up from row 0 wraps to the last row (exit).
         RowlEngine_PauseMenuCommand(quitHandle, ROWL_PAUSE_MENU_UP);
         nlohmann::json quitMenu = nlohmann::json::parse(RowlEngine_GetPauseMenuJson(quitHandle));
-        if (quitMenu["selected"].get<int>() != 9) {
+        if (quitMenu["selected"].get<int>() != 6) {
             std::cerr << "MS-6: menu selection did not wrap to exit" << std::endl;
             exit(1);
         }

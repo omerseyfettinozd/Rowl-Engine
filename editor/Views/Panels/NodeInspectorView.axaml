@@ -335,6 +335,9 @@
                                 <Button Content="{l:T Inspector.Components.Add.Transition}" Classes="ghost"
                                         Command="{Binding AddComponentByTypeCommand}" CommandParameter="transition"
                                         HorizontalAlignment="Stretch"/>
+                                <Button Content="{l:T Inspector.Components.Add.Unlock}" Classes="ghost"
+                                        Command="{Binding AddComponentByTypeCommand}" CommandParameter="unlock"
+                                        HorizontalAlignment="Stretch"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>

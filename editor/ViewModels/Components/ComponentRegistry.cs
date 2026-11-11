@@ -22,6 +22,7 @@ namespace RowlEngine.Editor.ViewModels.Components
             ["script"] = () => new ScriptComponentViewModel(),
             ["camera"] = () => new CameraComponentViewModel(),
             ["transition"] = () => new TransitionComponentViewModel(),
+            ["unlock"] = () => new UnlockComponentViewModel(),
             // Backward-compatible aliases
             ["speaker"] = () => new DialogueComponentViewModel(),
             ["dialogue_box"] = () => new DialogueComponentViewModel(),
@@ -40,9 +41,25 @@ namespace RowlEngine.Editor.ViewModels.Components
         }
 
         /// <summary>
+        /// Copies a component (new component id, same type and data). A component type the
+        /// editor does not know (<see cref="UnknownComponentViewModel"/>) is copied verbatim
+        /// instead of throwing, so duplicating a node never drops it.
+        /// </summary>
+        public static NodeComponentViewModel Clone(NodeComponentViewModel source)
+        {
+            if (source is UnknownComponentViewModel unknown)
+                return unknown.CloneComponent();
+            var copy = Create(source.TypeKey);
+            copy.Deserialize(source.Serialize().ToDictionary(
+                pair => pair.Key,
+                pair => (object?)pair.Value));
+            return copy;
+        }
+
+        /// <summary>
         /// Returns primary registered component type keys (excluding aliases).
         /// </summary>
-        public static IReadOnlyList<string> AvailableTypes => new[] { "dialogue", "background", "character", "audio", "choice", "variable", "condition", "script", "camera", "transition" };
+        public static IReadOnlyList<string> AvailableTypes => new[] { "dialogue", "background", "character", "audio", "choice", "variable", "condition", "script", "camera", "transition", "unlock" };
 
         /// <summary>
         /// Returns display info (typeKey, displayName, icon) for primary registered types.

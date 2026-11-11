@@ -1,12 +1,24 @@
 #include "rowl/core/story_graph_parser.hpp"
 
+#include "rowl/core/logger.hpp"
+#include "rowl/scripting/reserved_names.hpp"
+
 #include <algorithm>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace Rowl::Core {
 
 namespace {
+
+// Same ceilings the saved-variable map applies (game_state.cpp), so a declared
+// variable can always be saved.
+constexpr std::size_t kMaxDeclaredVariables = 10000;
+constexpr std::size_t kMaxDeclaredVariableNameBytes = 256;
+constexpr std::size_t kMaxDeclaredVariableValueBytes = 64 * 1024;
 
 StoryGraphParseResult validationFailure(std::string message) {
     return StoryGraphParseResult::failure(
@@ -31,6 +43,42 @@ bool appendComponent(const nlohmann::json& componentJson, StoryNode& node,
     if (componentJson.contains("data")) component.data = componentJson["data"];
     node.components.push_back(std::move(component));
     return true;
+}
+
+// F2 (D-O7): two options of one node with the same option_id used to share ONE identity: focus
+// (kept by id) stuck on the first copy and digit 2 picked the first again. The second and
+// later copies get "<id>#<n>" (in the choice component AND on the n-th edge carrying that id,
+// so each button still leads where its own edge points) and the node warns once.
+void dedupeOptionIds(StoryNode& node) {
+    std::unordered_map<std::string, int> seen;
+    std::vector<std::string> renamed;
+    for (auto& component : node.components) {
+        if (component.type != "choice" || !component.data.is_object()) continue;
+        auto options = component.data.find("options");
+        if (options == component.data.end() || !options->is_array()) continue;
+        for (auto& option : *options) {
+            if (!option.is_object()) continue;
+            const auto idIt = option.find("option_id");
+            if (idIt == option.end() || !idIt->is_string()) continue;
+            const std::string id = idIt->get<std::string>();
+            if (id.empty()) continue;
+            const int count = ++seen[id];
+            if (count <= 1) continue;
+            option["option_id"] = id + "#" + std::to_string(count);
+            renamed.push_back(id);
+        }
+    }
+    if (renamed.empty()) return;
+    std::unordered_map<std::string, int> edgeSeen;
+    for (auto& edge : node.nextNodes) {
+        if (edge.optionId.empty()) continue;
+        const int count = ++edgeSeen[edge.optionId];
+        if (count > 1 && seen.contains(edge.optionId)) edge.optionId += "#" + std::to_string(count);
+    }
+    std::string list;
+    for (const std::string& id : renamed) list += (list.empty() ? "'" : ", '") + id + "'";
+    ROWL_LOG_WARN("Story graph node #" + std::to_string(node.id) + " repeats option_id " + list +
+                  "; the repeats were renamed '<id>#2', '<id>#3' ... so every option is its own choice");
 }
 
 } // namespace
@@ -198,6 +246,7 @@ StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
                 if (nextId != 0) node.nextNodes.push_back({nextId, "", ""});
             }
 
+            dedupeOptionIds(node);
             parsedNodes.emplace(node.id, std::move(node));
         }
 
@@ -214,6 +263,37 @@ StoryGraphParseResult StoryGraphParser::parse(std::string_view jsonContent) {
             // appended groups/subgraphs/chapters, so references stay valid.
             if (!validateGraphStructure(result.document, structureError)) {
                 return validationFailure(structureError);
+            }
+        }
+        if (data.contains("variables")) {
+            // F2 (B-7): project-level variable declarations.
+            const auto& declared = data["variables"];
+            if (!declared.is_object()) {
+                return validationFailure("Story graph variables must be an object; rejected");
+            }
+            if (declared.size() > kMaxDeclaredVariables) {
+                return validationFailure("Story graph declares too many variables; rejected");
+            }
+            for (const auto& item : declared.items()) {
+                const std::string& name = item.key();
+                if (name.empty() || name.size() > kMaxDeclaredVariableNameBytes) {
+                    return validationFailure("Story graph declares a variable with an invalid name; rejected");
+                }
+                if (Rowl::Scripting::isReservedVariableName(name)) {
+                    return validationFailure("Story graph variable '" + name +
+                                             "' is a reserved engine name; rejected");
+                }
+                std::string value;
+                if (item.value().is_string()) value = item.value().get<std::string>();
+                else if (item.value().is_number() || item.value().is_boolean()) value = item.value().dump();
+                else {
+                    return validationFailure("Story graph variable '" + name +
+                                             "' must be a string, number or boolean; rejected");
+                }
+                if (value.size() > kMaxDeclaredVariableValueBytes) {
+                    return validationFailure("Story graph variable '" + name + "' is too long; rejected");
+                }
+                result.document.variables.emplace_back(name, std::move(value));
             }
         }
         for (const auto& [nodeId, node] : parsedNodes) {

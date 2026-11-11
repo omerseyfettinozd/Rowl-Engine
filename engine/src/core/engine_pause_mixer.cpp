@@ -20,6 +20,7 @@
 #include "rowl/audio/audio_engine.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace Rowl::Core {
 
@@ -49,8 +50,53 @@ void Engine::setPauseMenuVolume(int row, float volume) {
     if (mixerRow) commitMixerVolumesToGameState();
 }
 
+float Engine::pauseMenuFraction(int row) const {
+    if (row >= 3 && row <= 6) return std::clamp(pauseMenuVolume(row), 0.0f, 1.0f);
+    if (row == 7) return std::clamp((m_textSpeedMultiplier - 0.25f) / 3.75f, 0.0f, 1.0f);
+    if (row == 8) return std::clamp(m_autoDelay / 10.0f, 0.0f, 1.0f);
+    return -1.0f;
+}
+
+void Engine::pauseMenuSetFraction(int row, float fraction) {
+    if (!std::isfinite(fraction)) return;
+    fraction = std::clamp(fraction, 0.0f, 1.0f);
+    if (row >= 3 && row <= 6) {
+        setPauseMenuVolume(row, std::round(fraction * 100.0f) / 100.0f);
+    } else if (row == 7) {
+        setTextSpeedMultiplier(0.25f + std::round(fraction * 15.0f) * 0.25f);  // the keys' 0.25 steps
+    } else if (row == 8) {
+        setAutoDelay(std::round(fraction * 20.0f) * 0.5f);                      // the keys' 0.5 s steps
+    } else {
+        return;
+    }
+    persistPauseMenuPreference(row);
+    m_pauseConfirmQuit = false;
+}
+
+void Engine::sliderDragTo(float physicalX) {
+    if (m_sliderDragRow < 0 || !m_window || !std::isfinite(physicalX)) return;
+    float vx = 0.0f, vy = 0.0f;
+    bool bezel = false;
+    // A drag may leave the canvas sideways: clamp into it instead of dropping the event.
+    m_window->mapPhysicalToVirtual(physicalX, 0.0f, 1920, 1080, vx, vy, bezel);
+    if (bezel) vx = physicalX < static_cast<float>(m_window->getWidth()) * 0.5f ? 0.0f : 1920.0f;
+    pauseMenuSetFraction(m_sliderDragRow, activeMenuLayout().sliderFractionAt(vx));
+}
+
 void Engine::pauseMenuAdjustSelected(int direction) {
-    // D02: the preferences page (title) maps its rows onto main rows 3..7.
+    // D02: the preferences page maps its rows onto value rows 3..7 (D04-2: 8/9
+    // for auto-delay / skip-mode, D05-2: 10..13 language / text size / contrast /
+    // motion); the pause main page has none since D05-2.
+    if (isExtrasMode(m_pauseMode)) {  // D07-2: gallery grid / viewer stepping
+        extrasAdjust(direction);
+        return;
+    }
+    if (m_pauseMode == PauseMenuMode::SaveSlots || m_pauseMode == PauseMenuMode::LoadSlots) {
+        // T2b: Left / Right turn the slot page (a card grid steps along its line instead).
+        if (activeMenuLayout().cards) slotCardsMove(direction, 0);
+        else slotPageMove(direction);
+        return;
+    }
     if (m_pauseMode != PauseMenuMode::Main && m_pauseMode != PauseMenuMode::Preferences) return;
     const int row = pauseMenuValueRow();
     if (row >= 3 && row <= 6) {
@@ -58,6 +104,37 @@ void Engine::pauseMenuAdjustSelected(int direction) {
         persistPauseMenuPreference(row);
     } else if (row == 7) {
         setTextSpeedMultiplier(m_textSpeedMultiplier + direction * 0.25f);
+        persistPauseMenuPreference(row);
+    } else if (row == 8) {
+        // D04-2: auto-advance delay, 0.5 s steps, clamped to [0, 10] by the setter.
+        setAutoDelay(m_autoDelay + direction * 0.5f);
+        persistPauseMenuPreference(row);
+    } else if (row == 9) {
+        // D04-2: skip mode cycles Okunan -> Hepsi -> Kapali (Left reverses).
+        static constexpr SkipPolicy kCycle[] = {SkipPolicy::ReadOnly, SkipPolicy::All, SkipPolicy::Off};
+        int index = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (kCycle[i] == m_skipPolicy) index = i;
+        }
+        setSkipPolicy(kCycle[(index + (direction > 0 ? 1 : 2)) % 3]);
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceLanguageRow + 3) {
+        // D05-2: cycles the game's locales; persists itself on a real change.
+        cyclePreferenceLanguage(direction);
+    } else if (row == PauseMenuLayout::kPreferenceTextScaleRow + 3) {
+        // D05-2: 100% -> 125% -> 150% (wraps, Left reverses), applied live.
+        static constexpr float kScales[] = {1.0f, 1.25f, 1.5f};
+        int index = 0;
+        for (int i = 1; i < 3; ++i) {
+            if (std::fabs(textScale() - kScales[i]) < std::fabs(textScale() - kScales[index])) index = i;
+        }
+        setTextScale(kScales[(index + (direction > 0 ? 1 : 2)) % 3]);
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceContrastRow + 3) {
+        setHighContrast(!highContrast());  // D05-2: either direction toggles
+        persistPauseMenuPreference(row);
+    } else if (row == PauseMenuLayout::kPreferenceMotionRow + 3) {
+        setReducedMotion(!reducedMotion());
         persistPauseMenuPreference(row);
     }
     m_pauseConfirmQuit = false;

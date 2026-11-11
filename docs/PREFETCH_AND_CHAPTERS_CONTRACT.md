@@ -63,8 +63,11 @@ Per story node, the union of every component key the engine already reads
 - `character` `voice_blip` / typewriter sounds → voice;
 - `dialogue.custom_box_texture` → image; `dialogue` typewriter /
   `voice_blip` sounds → voice;
-- `audio.bgm_track` → bgm; `audio.sfx_track` → sfx; forward-compat
-  `audio.voice_track` → voice, `audio.ambience_track` → ambience;
+- `audio.bgm_track` → bgm; `audio.sfx_track` → sfx; `audio.voice_track` →
+  voice (played by the engine since D03; editor field since D06-2);
+  `audio.ambience_track` → ambience (**unused**: nothing plays a per-node
+  ambience track and there is no editor field - it is collected only because
+  `testAssetCollection` locks 16 assets; see `CAPABILITY_MATRIX.md`);
 - `choice` options `normal_image` / `background_image` → image.
 
 Collection dedups within a node and (via `collectDocumentAssets`) across
@@ -173,3 +176,50 @@ coordinator (`EditorPlayModeCoordinator.StartPlayModeAsync` →
 standalone window is deferred to a follow-up slice. The coordinator call
 itself has no headless seam test (`EngineHost` is concrete and live init
 needs native), so it is covered by code review + this contract note.
+
+## 8. Packaged player wiring (D06-3)
+
+The native player (`RowlGame`, `engine/src/player/main.cpp`) now prefetches.
+Everything is a warm-up: the driver reads the engine and the VFS, never story
+state, saves, history or audio, so the play flow is byte-identical with or
+without it (locked by `tests/test_chapter_boundary_persistence.cpp`, which
+compares the observation record of three runs).
+
+- **Where:** `engine/include/rowl/player/chapter_prefetch_driver.hpp`
+  (`Rowl::Player::ChapterPrefetchDriver`, header-only, exported C API only, so
+  the hidden-visibility player and the tests share one definition).
+- **Feed:** after the story graph is loaded, `attach()` calls
+  `RowlEngine_FeedChaptersFromVfs(handle, NULL, &fed)`. It reads
+  `json/chapters/chapter_index.json` and `json/chapters/<chapter id>.json`
+  (editor file-name rule; the portable `_`-substituted name is the fallback)
+  from the **active VFS** - package or loose Assets, the same code path.
+  `FILE_NOT_FOUND` is the normal answer for a project that was never split: the
+  loader stays untouched and prefetch uses the graph's own chapter list (or the
+  single implicit chapter). A broken index is `PARSE_ERROR` / `VALIDATION_ERROR`.
+- **Stale split (F8):** the player plays the full graph
+  (`json/full_story_graph.json`); chapter files only feed prefetch. After
+  feeding, the fed node-id set must equal the graph's node-id set; otherwise the
+  call returns `VALIDATION_ERROR`, logs the difference and **clears the loader**,
+  so prefetch falls back to the graph. `tools/package_assets.py` reports the
+  same difference at pack time as `[Packer][WARN][chapter-drift]` (also
+  `chapter-unreadable`, `chapter-index-missing`); the package is still written and
+  the chapter files stay in it.
+- **Per frame:** `RowlEngine_RunWithFrameCallback` (additive; same guards as
+  `RowlEngine_Run`, the hook runs after each successful step on the loop thread
+  and a throwing hook aborts the run like a throwing step, #123) calls
+  `onFrame`. The driver starts a window when the story's chapter changes
+  (`RowlEngine_PrefetchChapterAssets(currentChapter, 0)`: this chapter + the
+  next) or, for a story without chapters, on every node change (current node +
+  successors), then pumps `RowlEngine_PumpPrefetch(h, 2 ms)` until the queue is
+  complete or paused on the byte budget. Refused windows and failed calls are
+  logged once and swallowed.
+- **Limits that remain:** a pump checks the deadline between assets, so one very
+  large asset can still overrun the 2 ms slice; the window trigger itself runs
+  one synchronous ~4 ms pump (`RowlEngine_PrefetchChapterAssets`). The loader's
+  residency window is not moved by play (only the prefetch window follows the
+  story); chapter files are not used to play.
+- **Evidence:** `rowl_player_chapter_prefetch_packaged` (packaged and loose,
+  consistent / stale / absent split, through the real player),
+  `test_chapter_boundary_persistence.cpp` (driver on and off, the boundary
+  through save / load / rewind, stale split, `RunWithFrameCallback` in a real
+  loop), `rowl_package_chapter_consistency_tests`.

@@ -2,7 +2,7 @@
  * test_game_data_layout.cpp — D01b: per-game data layout + legacy save migration.
  *
  * Two game ids never share a data dir; ids are validated as path components;
- * the legacy <project>/saves/*.json copy is copy-only, idempotent, per-game
+ * the legacy <project>/saves/ JSON copy is copy-only, idempotent, per-game
  * wins, partial failure is reported and never loses data; a read-only install
  * dir no longer refuses the mount; an unwritable user-data dir falls back to
  * the legacy dir with a diagnostic. XDG_DATA_HOME always points at a temp dir.

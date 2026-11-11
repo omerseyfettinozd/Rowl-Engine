@@ -3,6 +3,7 @@
 #include "rowl/core/story_graph.hpp"
 
 #include <functional>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -219,7 +220,24 @@ bool parseGraphStructure(const nlohmann::json& data, StoryGraphDocument& documen
                             "' order must be an integer; rejected";
                     return false;
                 }
-                chapter.order = item.at("order").get<int>();
+                // get<int>() aralik denetlemez (unsigned 2^32 sessizce 0 olur):
+                // deger once int araligina sigdigi icin dogrulanir.
+                const nlohmann::json& orderValue = item.at("order");
+                constexpr int64_t kOrderMin = (std::numeric_limits<int>::min)();
+                constexpr int64_t kOrderMax = (std::numeric_limits<int>::max)();
+                const int64_t rawOrder = orderValue.is_number_unsigned()
+                                             ? static_cast<int64_t>(orderValue.get<uint64_t>())
+                                             : orderValue.get<int64_t>();
+                const bool orderOutOfRange =
+                    orderValue.is_number_unsigned()
+                        ? orderValue.get<uint64_t>() > static_cast<uint64_t>(kOrderMax)
+                        : (rawOrder < kOrderMin || rawOrder > kOrderMax);
+                if (orderOutOfRange) {
+                    error = "Story graph chapter '" + chapter.id +
+                            "' order is out of range; rejected";
+                    return false;
+                }
+                chapter.order = static_cast<int>(rawOrder);
             }
             if (item.contains("start_node_id")) {
                 if (!item.at("start_node_id").is_number_unsigned() ||

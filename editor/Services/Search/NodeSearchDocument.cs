@@ -134,8 +134,10 @@ public sealed class NodeSearchDocument
                 case AudioComponentViewModel audio:
                     Add(assets, audio.BgmTrack);
                     Add(assets, audio.SfxTrack);
+                    Add(assets, audio.VoiceTrack);
                     if (!string.IsNullOrWhiteSpace(audio.BgmTrack) ||
-                        !string.IsNullOrWhiteSpace(audio.SfxTrack))
+                        !string.IsNullOrWhiteSpace(audio.SfxTrack) ||
+                        !string.IsNullOrWhiteSpace(audio.VoiceTrack))
                         hasAudioTrack = true;
                     break;
                 case TransitionComponentViewModel:

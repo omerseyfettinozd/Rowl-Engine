@@ -103,6 +103,10 @@ public:
     ConditionPhase getLastConditionPhase() const { return m_lastConditionPhase; }
 
     const std::unordered_map<std::string, std::string>& getAllVariables() const { return m_scriptVariables; }
+    /// F2 (D-O3): bumps on every operation that can change what a condition sees (variable
+    /// writes, script / module runs, session clears); evaluateCondition itself leaves it
+    /// untouched. Lets the engine cache condition results between such operations.
+    uint64_t revision() const noexcept { return m_revision; }
     void clearVariables();
 
     bool isInitialized() const { return m_initialized; }
@@ -229,6 +233,11 @@ private:
     bool m_initialized = false;
     // A1: instruction-limit poison (H24) + allocation quota (H25) state.
     bool m_limitTripped = false;
+    // F2 (B-10): set only by poisonSession (a tight catch-and-respin streak inside ONE run).
+    // A plain instruction-limit trip sets m_limitTripped alone; a story CONDITION that trips
+    // is false and nothing more (its own budget), so it must be told apart from a poison.
+    bool m_sessionPoisoned = false;
+    uint64_t m_revision = 0;
     std::size_t m_bytesAllocated = 0;
     // #28: true while post-pcall recovery runs (see RecoveryScope).
     bool m_inRecovery = false;

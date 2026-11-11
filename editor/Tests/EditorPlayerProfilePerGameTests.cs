@@ -332,6 +332,74 @@ public sealed class EditorPlayerProfilePerGameTests : IDisposable
         Assert.True(JsonNode.DeepEquals(after, again));
     }
 
+    // D07-1: the native store writes `unlocks` as an object; the managed mirror stays opaque.
+    private const string NativeUnlocksObject = """
+        {"cg": ["bogaz_ay", "atolye"], "music": ["nokturn"],
+         "achievements": [{"id": "ilk_son", "at": "2026-10-24T19:30:00Z"}],
+         "future_kind": [{"k": 1, "nested": [true, null]}]}
+        """;
+
+    [Fact]
+    public void Managed_Save_PreservesObjectUnlocks_WrittenByNative()
+    {
+        string dir = Path.Combine(_scratch, "objectunlocks");
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, PlayerProfileStore.FileName);
+        File.WriteAllText(path, "{\"version\": 1, \"game_id\": \"5a3c9e10-2b64-4f7d-8a15-9c0d1e2f3a4b\", \"language\": \"en\", \"unlocks\": "
+            + NativeUnlocksObject + "}");
+        var expected = JsonNode.Parse(NativeUnlocksObject);
+
+        var loop = PlayerLoopService.Load(dir);
+        Assert.Equal(PlayerProfileLoadStatus.Loaded, loop.LoadStatus);
+        Assert.True(string.IsNullOrEmpty(loop.LoadDiagnostic), "an object unlocks must load without a note: " + loop.LoadDiagnostic);
+        loop.Profile.MasterVolume = 0.2f;
+        Assert.Null(loop.SavePreferences());
+
+        var after = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.True(JsonNode.DeepEquals(expected, after["unlocks"]), "object unlocks must round-trip: " + after["unlocks"]);
+        Assert.Equal(0.2, (double)after["master_volume"]!, 3);
+
+        // A second rewrite is stable.
+        Assert.Null(loop.SavePreferences());
+        var again = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.True(JsonNode.DeepEquals(after, again));
+
+        // Wrong-typed unlocks (neither array nor object) still reset with a note.
+        File.WriteAllText(path, "{\"version\": 1, \"unlocks\": \"cg_1\"}");
+        var reset = PlayerProfileStore.Load(dir);
+        Assert.Equal(PlayerProfileLoadStatus.Loaded, reset.Status);
+        Assert.Contains("unlocks", reset.Diagnostic ?? string.Empty);
+        Assert.Empty(reset.Profile.Unlocks is null ? new JsonArray() : reset.Profile.Unlocks.AsArray());
+    }
+
+    [Fact]
+    public void Native_Rewrite_KeepsObjectUnlocks_AndManagedReadsThemBack()
+    {
+        Assert.True(NativeProfileUsable(), "native player-profile capability is required");
+        string uuid = NewUuid();
+        string root = NewProject(uuid);
+        string dir = GameProfileDir(uuid);
+        var seeded = new PlayerProfile { GameId = uuid, MasterVolume = 0.45f };
+        seeded.Unlocks = JsonNode.Parse(NativeUnlocksObject);
+        Assert.Null(PlayerProfileStore.Save(dir, seeded));
+
+        using (var host = Mount(root))
+        {
+            var loop = Open(host, root, NewGlobalDir());
+            Assert.Equal(PlayerProfileLoadStatus.Loaded, loop.LoadStatus);
+            loop.Profile.MasterVolume = 0.5f;
+            Assert.Null(loop.SavePreferences());
+        }
+
+        var after = JsonNode.Parse(File.ReadAllText(Path.Combine(dir, PlayerProfileStore.FileName)))!.AsObject();
+        Assert.Equal(0.5, (double)after["master_volume"]!, 3);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(NativeUnlocksObject), after["unlocks"]),
+            "the native store keeps the unlock records and unknown inner keys: " + after["unlocks"]);
+        var managed = PlayerProfileStore.Load(dir, uuid);
+        Assert.Equal(PlayerProfileLoadStatus.Loaded, managed.Status);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(NativeUnlocksObject), managed.Profile.Unlocks));
+    }
+
     [Fact]
     public void Managed_Save_WithoutUnlocks_WritesEmptyArray_AsNativeDoes()
     {
@@ -421,7 +489,10 @@ public sealed class EditorPlayerProfilePerGameTests : IDisposable
         Assert.Equal(uuid, (string?)after["game_id"]);
         Assert.Equal(0.5, (double)after["master_volume"]!, 3);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("{\"a\":[1,2,3]}"), after["future_flag"]));
-        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("[\"cg_1\"]"), after["unlocks"]));
+        // D07-1: the pre-D07 opaque array has no meaning in the unlock schema; the native store
+        // reads it as empty (with a diagnostic) and rewrites the v1 empty shape. Object-form
+        // unlocks round-trip in Native_Rewrite_KeepsObjectUnlocks_AndManagedReadsThemBack.
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("[]"), after["unlocks"]));
     }
 
     // ── Read-only profiles stay untouched ──────────────────────────────────

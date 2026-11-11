@@ -323,6 +323,95 @@ def build_game_identity_bytes(game_id, name):
     return (json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
 
 
+CHAPTERS_DIR = "json/chapters"
+CHAPTER_INDEX_NAME = "chapter_index.json"
+FULL_GRAPH_PATH = "json/full_story_graph.json"
+
+
+def _node_ids(document):
+    """Node ids of a story graph / chapter document as comparable strings."""
+    nodes = document.get("nodes") if isinstance(document, dict) else None
+    if not isinstance(nodes, list):
+        return None
+    return {str(node.get("id")) for node in nodes if isinstance(node, dict) and "id" in node}
+
+
+def check_chapter_consistency(input_dir):
+    """D06-3 (kesif F8): bolunmus proje (json/chapters/*) ile tam graf sapmasi.
+
+    Editorun "Bolumlere bol" komutu json/chapters/ altina bir indeks + bolum
+    dosyalari yazar; tam graf (json/full_story_graph.json) sonradan degisirse
+    ikisi ayrisir. Oyuncu tam grafi oynar; bolum dosyalari yalniz prefetch'i
+    besler ve sapma varsa motor onlari yok sayar (RowlEngine_FeedChaptersFromVfs).
+    Burada ayni sapma pakete girmeden ONCE net bir uyari olarak soylenir
+    ([Packer][WARN][chapter-drift]); paket yine yazilir (bolum dosyalari
+    prefetch icin pakette kalir, oyun akisi grafiktedir). Bolme yoksa sessiz.
+    Dondurulen: uyari kodlari listesi (test icin).
+    """
+    chapters_dir = os.path.join(input_dir, *CHAPTERS_DIR.split("/"))
+    if not os.path.isdir(chapters_dir):
+        return []
+    warnings = []
+
+    def warn(code, detail):
+        warnings.append(code)
+        print(f"[Packer][WARN][{code}] {CHAPTERS_DIR}: {detail}", file=sys.stderr)
+
+    def load(path):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (OSError, ValueError) as error:
+            return error
+
+    index_path = os.path.join(chapters_dir, CHAPTER_INDEX_NAME)
+    if not os.path.isfile(index_path):
+        warn("chapter-index-missing",
+             f"{CHAPTER_INDEX_NAME} is missing; the player ignores these chapter files")
+        return warnings
+    graph_path = os.path.join(input_dir, *FULL_GRAPH_PATH.split("/"))
+    if not os.path.isfile(graph_path):
+        return warnings  # no full graph to compare with (other tools' concern)
+
+    index = load(index_path)
+    graph = load(graph_path)
+    if isinstance(index, Exception) or not isinstance(index, dict):
+        warn("chapter-unreadable", f"{CHAPTER_INDEX_NAME} is not a readable JSON object")
+        return warnings
+    if isinstance(graph, Exception):
+        return warnings
+    graph_ids = _node_ids(graph)
+    if graph_ids is None:
+        return warnings
+
+    chapter_ids = set()
+    for name in sorted(os.listdir(chapters_dir)):
+        if not name.endswith(".json") or name == CHAPTER_INDEX_NAME:
+            continue
+        document = load(os.path.join(chapters_dir, name))
+        ids = None if isinstance(document, Exception) else _node_ids(document)
+        if ids is None:
+            warn("chapter-unreadable", f"{name} is not a readable chapter file (no nodes[])")
+            continue
+        chapter_ids |= ids
+
+    only_graph = sorted(graph_ids - chapter_ids)
+    only_chapters = sorted(chapter_ids - graph_ids)
+    if only_graph or only_chapters:
+        def sample(ids):
+            return ", ".join(ids[:5]) + (", ..." if len(ids) > 5 else "")
+        parts = []
+        if only_graph:
+            parts.append(f"{len(only_graph)} graph node(s) missing from the chapter files ({sample(only_graph)})")
+        if only_chapters:
+            parts.append(f"{len(only_chapters)} chapter-file node(s) not in the graph ({sample(only_chapters)})")
+        warn("chapter-drift",
+             "chapter files disagree with json/full_story_graph.json: " + "; ".join(parts) +
+             ". The player plays the full graph and ignores these chapter files - "
+             "re-split the chapters in the editor")
+    return warnings
+
+
 def pack_directory(input_dir, output_pkg, game_id=None, game_name=""):
     input_dir = os.path.realpath(input_dir)
     output_pkg = os.path.abspath(output_pkg)
@@ -334,6 +423,7 @@ def pack_directory(input_dir, output_pkg, game_id=None, game_name=""):
     file_list, issues = collect_files(input_dir)
     if issues:
         raise PackError(issues)
+    check_chapter_consistency(input_dir)
 
     synthetic = {}
     if game_id is not None:
