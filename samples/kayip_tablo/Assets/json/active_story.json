@@ -1,13 +1,13 @@
 {
   "format_version": 2,
-  "node_id": 1,
+  "node_id": 8,
   "components": [
     {
       "type": "background",
-      "id": "bg1c",
+      "id": "bg8c",
       "enabled": true,
       "data": {
-        "texture": "bogaz_gunduz.jpg",
+        "texture": "atolye.jpg",
         "x": 0,
         "y": 0,
         "width": 1920,
@@ -20,75 +20,41 @@
       }
     },
     {
-      "type": "variable",
-      "id": "var1ipucu0",
+      "type": "character",
+      "id": "ch8Agopc",
       "enabled": true,
       "data": {
-        "key": "ipucu",
-        "value": "0",
-        "operation": "set"
-      }
-    },
-    {
-      "type": "variable",
-      "id": "var1leyla_guven1",
-      "enabled": true,
-      "data": {
-        "key": "leyla_guven",
-        "value": "0",
-        "operation": "set"
-      }
-    },
-    {
-      "type": "variable",
-      "id": "var1kaba2",
-      "enabled": true,
-      "data": {
-        "key": "kaba",
-        "value": "0",
-        "operation": "set"
-      }
-    },
-    {
-      "type": "variable",
-      "id": "var1carsi_gidildi3",
-      "enabled": true,
-      "data": {
-        "key": "carsi_gidildi",
-        "value": "0",
-        "operation": "set"
-      }
-    },
-    {
-      "type": "variable",
-      "id": "var1kosk_gidildi4",
-      "enabled": true,
-      "data": {
-        "key": "kosk_gidildi",
-        "value": "0",
-        "operation": "set"
-      }
-    },
-    {
-      "type": "audio",
-      "id": "aud1",
-      "enabled": true,
-      "data": {
-        "dsp_filter": "Normal",
-        "bgm_track": "audio/gymnopedie1.ogg",
-        "sfx_track": "",
-        "volume": 1,
-        "bgm_transition": "crossfade",
-        "bgm_transition_duration_seconds": 1.5
+        "sprite": "agop.png",
+        "layers": {
+          "body": "agop.png",
+          "face": "",
+          "outfit": "",
+          "accessory": ""
+        },
+        "expressions": [],
+        "position": "Left",
+        "x": 80,
+        "y": 345,
+        "width": 360,
+        "height": 450,
+        "scale": 1,
+        "scale_x": 1,
+        "scale_y": 1,
+        "rotation": 0,
+        "maintain_aspect_ratio": true,
+        "voice_blip_sound": "",
+        "voice_blip_pitch": 1,
+        "voice_blip_variance": 0.08,
+        "voice_blip_cadence": 1
       }
     },
     {
       "type": "dialogue",
-      "id": "dlg1c",
+      "id": "dlg8c",
       "enabled": true,
       "data": {
-        "speaker": "Anlatıcı",
-        "dialogue": "İstanbul, Temmuz 1894. Boğaz’ın üstünde ince bir sıcak pus asılı, Pera’nın yokuşlarında martılar çığlık çığlığa.",
+        "speaker": "Usta Agop",
+        "dialogue": "Selim… Sen mi aldın? Doğruyu söyle oğlum. Şaka yapıyorsan, bu şaka bana çok pahalıya patlar.",
         "x": 80,
         "y": 820,
         "width": 1760,
@@ -109,7 +75,7 @@
         "font_size": 26,
         "speaker_font_size": 22,
         "text_color": "#F3EBDD",
-        "speaker_color": "#6F675B",
+        "speaker_color": "#A5661A",
         "text_alignment": "Left",
         "box_opacity": 0.9,
         "box_color": "#14110D",
@@ -117,13 +83,13 @@
         "border_thickness": 2,
         "corner_radius": 10,
         "custom_box_texture": "",
-        "content_id": "1aba00c8-6686-59e5-b5d4-765acd5d6f58"
+        "content_id": "f2fad2aa-f55b-5203-bb2d-b11e6a510f47"
       }
     }
   ],
-  "speaker": "Anlatıcı",
-  "dialogue": "İstanbul, Temmuz 1894. Boğaz’ın üstünde ince bir sıcak pus asılı, Pera’nın yokuşlarında martılar çığlık çığlığa.",
-  "background": "bogaz_gunduz.jpg",
+  "speaker": "Usta Agop",
+  "dialogue": "Selim… Sen mi aldın? Doğruyu söyle oğlum. Şaka yapıyorsan, bu şaka bana çok pahalıya patlar.",
+  "background": "atolye.jpg",
   "background_x": 0,
   "background_y": 0,
   "background_width": 1920,
@@ -132,12 +98,12 @@
   "background_parallax_x": 1,
   "background_parallax_y": 1,
   "background_opacity": 1,
-  "character": "",
-  "character_pos": "Right",
-  "character_x": 1440,
-  "character_y": 340,
+  "character": "agop.png",
+  "character_pos": "Left",
+  "character_x": 80,
+  "character_y": 345,
   "character_width": 360,
-  "character_height": 540,
+  "character_height": 450,
   "character_scale": 1,
   "dialogue_box_x": 80,
   "dialogue_box_y": 820,
